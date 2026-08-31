@@ -100,6 +100,6 @@ Same primitive powers `/profiles`' "search by test names" mode: resolve each inp
 
 ## Setup Needed From You
 
-- A Supabase project (or let me know if you want me to walk you through creating one) and its connection env vars.
+- ~~A Supabase project and its connection env vars~~ — done. Connected to the `AVMLabs / Chat Web App` project (`jboiysqdtvmtqvufbwlt`), keys in `.env.local` (gitignored), connection verified.
 - A Vercel project/account for deployment.
 - Confirmation on the Excel schema and the 5 flagged assumptions above.
