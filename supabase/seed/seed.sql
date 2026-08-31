@@ -1,0 +1,3 @@
+-- Dev/test seed data for local Supabase.
+-- Intentionally empty until schema migrations exist (Phase 1) — do not add
+-- hardcoded production test/pricing data here or anywhere in the app.

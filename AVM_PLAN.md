@@ -23,40 +23,40 @@ This is a greenfield project (empty directory, no existing code to reuse), so th
 
 ## Data Model (Supabase Postgres)
 
+Superseded/refined by the user's detailed structure message (service_type is now an explicit pricing dimension alongside location, not just a boolean attribute; pricing is temporal; TAT is stored as verified free text rather than value+unit):
+
 - `locations` — id, code (DXB/RUH/KHJ/BHR), name, currency, active
-- `tests` — id, test_code (unique), test_name, category, sample_type, notes, active
-- `aliases` — id, entity_type ('test'|'profile'), entity_id, alias_text (generic table, covers both test-name aliases like "insulin resistance"→Insulin PP, and profile aliases)
-- `test_location_attributes` — id, test_id, location_id, price, tat_value, tat_unit, in_house (bool), outsourced_partner, available, unique(test_id, location_id)
-- `profiles` — id, profile_code, profile_name, description, active
-- `profile_tests` — profile_id, test_id (join table)
-- `profile_location_prices` — id, profile_id, location_id, price, available, unique(profile_id, location_id)
-- `price_list_imports` — id, location_id, uploaded_by, file_name, uploaded_at, status (staged/validated/failed/activated), validation_report (jsonb)
-- `price_list_staging_rows` — id, import_id, raw_row (jsonb), parsed fields, row_status, error_messages
-- `price_list_versions` — id, location_id, version_number, import_id, activated_at, activated_by, active (bool) — only one active per location
-- `price_list_version_items` — id, version_id, test_id, price, tat_value, tat_unit, in_house, outsourced_partner, available (immutable snapshot for rollback/diff)
+- `tests` — id, code (unique), official_name, category, description, active, created_at, updated_at
+- `test_aliases` — id, test_id, alias, alias_type, created_at (admin-curated mappings, e.g. "insulin resistance" → Insulin PP)
+- `test_components` — id, test_id, component_test_id (a test composed of other tests, e.g. a bundled panel)
+- `test_prices` — id, test_id, location_id, service_type ('in_house'|'outsource'), price (integer minor units), currency, tat_text, availability, effective_from, effective_to, version_id, created_at, updated_at — unique(test_id, location_id, service_type, effective range)
+- `profiles` — id, code, name, description, active
+- `profile_tests` — id, profile_id, test_id, required (join table)
+- `profile_prices` — id, profile_id, location_id, service_type, price, currency, tat_text, availability — fixed bundle price, not computed from components
+- `price_list_versions` — id, version_number, location_id, service_type, original_filename, status ('staging'|'validated'|'approved'|'active'|'archived'|'failed'|'rolled_back'), created_by, created_at, activated_at — only one **active** version per (location, service_type)
+- `price_list_staging_rows` — id, version_id, raw_row (jsonb), parsed fields, row_status, error_messages
 - `admin_profiles` — user_id (FK to Supabase Auth), name, role
 - `workspace_access_tokens` — id, token_hash, created_by, active (the shared agent link; admin can view/regenerate it)
 
 All DB access happens server-side (Server Actions / Route Handlers) using the Supabase service role — the browser never talks to Supabase directly — so RLS complexity is minimized while still keeping pricing data off the client except through vetted server logic.
 
+Domain types mirroring this schema are already scaffolded in `/types` (test.ts, price.ts, profile.ts, location.ts, quotation.ts, import.ts, auth.ts); central enums live in `lib/constants` (locations, service-types, availability).
+
 ## Proposed Excel Schema (needs your sign-off before Phase 6)
 
-**Price list file (one workbook per location):**
+**Price list file (one workbook per location + service type):**
 | Column | Required | Notes |
 |---|---|---|
 | Test Code | Yes | matches existing code, or new → flagged "NEW TEST" for admin confirmation |
 | Test Name | Yes | |
 | Category | No | |
-| Sample Type | No | |
 | Price | Yes | numeric |
-| TAT Value | Yes | numeric |
-| TAT Unit | Yes | Hours / Days |
-| In-House or Outsourced | Yes | enum |
-| Outsourced Partner | If outsourced | |
+| TAT | Yes | free text, e.g. "24 hours", "Same day" |
+| Service Type | Yes | in_house / outsource |
 | Available | Yes | Yes / No |
 | Notes | No | |
 
-**Profiles file (one workbook per location):**
+**Profiles file (one workbook per location + service type):**
 | Column | Required |
 |---|---|
 | Profile Code | Yes |
@@ -67,26 +67,28 @@ All DB access happens server-side (Server Actions / Route Handlers) using the Su
 
 ## Validation Rules (Upload → Staging → Validate)
 
-- Required columns/values present and correctly typed; TAT Unit and In-House/Available are valid enums; Outsourced Partner required when Outsourced.
-- No duplicate Test Codes within one file.
-- Any error → whole import marked **failed**, nothing touches live data.
-- Preview/diff screen shows: new tests (need explicit "create" confirmation), price/TAT/availability changes (old → new, % change flagged e.g. >20%), unchanged rows.
-- **Activate** runs as one Postgres transaction: snapshot current active attributes into `price_list_version_items` → apply staged changes → flip `price_list_versions.active` → mark import activated. Any failure rolls back the whole transaction; live data is untouched.
-- **Rollback** restores a prior version's snapshot the same transactional way — itself recorded as a new version, so history is append-only and nothing is destructively rewritten.
+Critical errors block the import outright; warnings require explicit admin review before confirming:
+
+- **Errors**: missing required column, missing/duplicate test code, missing/invalid price, invalid currency, invalid service type, invalid location, invalid TAT, invalid availability.
+- **Warnings**: new test detected (needs "create" confirmation), large price-change (e.g. >20%), unexpected row-count change vs. the last active version.
+- Any error → whole import marked **failed**, nothing touches live data; the previously active version remains active.
+- Preview/diff screen shows: new tests, changed rows (old → new price/TAT/availability), unchanged rows.
+- **Activate** runs as one Postgres transaction: snapshot the current active version's rows → apply staged changes as the new active version for that (location, service_type) → archive the previous version → mark import activated. Any failure rolls back the whole transaction.
+- **Rollback** restores a prior version the same transactional way — itself recorded as a new version (status `rolled_back` retired, new version `active`), so history is append-only and nothing is destructively rewritten.
 
 ## Search / Alias Matching
 
-`searchTests(query, locationId)`:
-1. Check `aliases` for a match against the query (handles "insulin resistance" → Insulin PP once admin-configured).
-2. Trigram similarity (`pg_trgm`) against test_name/test_code for typo tolerance.
+`searchTests(query, locationId, serviceType)`:
+1. Check `test_aliases` for a match against the query (handles "insulin resistance" → Insulin PP once admin-configured).
+2. Trigram similarity (`pg_trgm`) against official_name/code for typo tolerance.
 3. Rank: exact code/name > alias match > trigram similarity score.
-4. Join to `test_location_attributes` for the selected location; return only real DB rows (name, code, price, TAT, in-house, availability) — never generated text.
+4. Join to `test_prices` for the selected location + service type; return only real DB rows (name, code, price, TAT, availability) — never generated text.
 
-Same primitive powers `/profiles`' "search by test names" mode: resolve each input to test_id(s), rank profiles by count of `profile_tests` overlap with the resolved set.
+Same primitive powers `/profiles`' "search by test names" mode: resolve each input to test_id(s), rank profiles by count of `profile_tests` overlap with the resolved set (see `lib/profiles/calculate-profile-match.ts`, already implemented — pure algorithm, no DB dependency).
 
 ## Phased Build (each phase ends in something runnable/testable)
 
-0. **Scaffold** — Next.js (TS, App Router, Tailwind) + shadcn/ui + Supabase client + exceljs installed; folder structure for `/workspace`, `/profiles`, `/admin`. Verify: app boots, Supabase connection healthy.
+0. **Scaffold** — Next.js (TS, App Router, Tailwind) + shadcn/ui + Supabase client + exceljs installed. Full production folder structure in place: `(auth)/login`, `(dashboard)/{dashboard,workspace,profiles,updates,admin/*}`, `api/*` route stubs, `components/{layout,workspace,profiles,admin,ui}`, `lib/{supabase,auth,search,pricing,profiles,excel,imports,whatsapp,database,validation,constants,utils}`, `types/*`, `tests/{unit,integration,fixtures}`. Real (non-stub) pieces built now because they're pure structure/math, not business data: Supabase clients (browser/server/service-role/middleware), constants (locations/service-types/availability), money arithmetic, profile-match ranking algorithm, domain types, Sidebar/Topbar nav shell. Everything else is a typed placeholder pending its phase. **Open question**: the purpose of `/dashboard` (distinct from `/workspace`) and `/updates` isn't defined yet — flagged for you, not guessed. Verify: app boots, builds, lints clean; Supabase connection healthy once a project is connected.
 1. **Schema & seed** — all tables above via migrations; seed 4 locations + a handful of sample tests/aliases/prices/profiles for dev. Verify: tables + seed visible in Supabase Studio.
 2. **Auth** — Supabase Auth admin login gating `/admin`; shared-link token gating `/workspace` + `/profiles`. Verify: access blocked/allowed correctly in both directions.
 3. **Search engine** — `searchTests` server function (alias + trigram ranking). Verify against seeded data incl. the "insulin resistance" example and a deliberate typo.
