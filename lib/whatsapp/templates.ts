@@ -1,7 +1,19 @@
 /**
- * TODO: Message templates the generator fills with verified data (no free text).
- * Placeholder only — not implemented yet (see AVM_PLAN.md).
+ * Static WhatsApp message wording. generate-response.ts fills these with
+ * verified DB fields (test name/code, price, TAT, availability) — the
+ * templates themselves never carry placeholder or invented data.
  */
-export function templates(): never {
-  throw new Error("Not implemented: templates");
-}
+export const WHATSAPP_TEMPLATES = {
+  intro: "Hi! Here are the details for your requested tests:",
+  lineItem: (
+    index: number,
+    name: string,
+    code: string,
+    price: string,
+    tat: string,
+    availability: string
+  ) => `${index}. ${name} (${code})\n   Price: ${price}\n   TAT: ${tat}\n   Availability: ${availability}`,
+  total: (amount: string) => `Total: ${amount}`,
+  outro: "Please let us know if you'd like to proceed with booking.",
+  empty: "No tests have been added to this quotation yet.",
+} as const;

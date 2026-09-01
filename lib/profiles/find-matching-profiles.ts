@@ -1,7 +1,65 @@
+import "server-only";
+import { listActiveProfilesWithTests } from "@/lib/database/profiles";
+import { getProfilePricing } from "./profile-pricing";
+import { calculateProfileMatch, rankProfileMatches } from "./calculate-profile-match";
+import type { ServiceType } from "@/lib/constants/service-types";
+import type { ProfileSuggestion } from "@/types/profile";
+
 /**
- * TODO: Query profiles containing any of the given test ids, for ranking.
- * Placeholder only — not implemented yet (see AVM_PLAN.md).
+ * Query profiles containing any of the given test ids, ranked by match
+ * (see calculate-profile-match.ts), joined to real current pricing for the
+ * requested location + service type. Used by the Support Workspace's
+ * profile-suggestions panel (rank from the currently selected tests) and
+ * by /profiles' "search by test names" mode (rank from resolved test ids).
  */
-export function findMatchingProfiles(): never {
-  throw new Error("Not implemented: findMatchingProfiles");
+export async function findMatchingProfiles(
+  testIds: string[],
+  locationId: string,
+  serviceType: ServiceType
+): Promise<ProfileSuggestion[]> {
+  if (testIds.length === 0) return [];
+
+  const profiles = await listActiveProfilesWithTests();
+
+  const matches = rankProfileMatches(
+    profiles.map(({ profile, testIds: profileTestIds }) =>
+      calculateProfileMatch(testIds, { profileId: profile.id, profileTestIds })
+    )
+  ).filter((match) => match.matchedCount > 0);
+
+  if (matches.length === 0) return [];
+
+  const profileById = new Map(profiles.map(({ profile }) => [profile.id, profile]));
+  const pricingByProfileId = await getProfilePricing(
+    matches.map((match) => match.profileId),
+    locationId,
+    serviceType
+  );
+
+  const suggestions: ProfileSuggestion[] = [];
+  for (const match of matches) {
+    const profile = profileById.get(match.profileId);
+    const price = pricingByProfileId.get(match.profileId);
+    // A matched profile with no current price at this location/service
+    // type isn't shown — never backfilled with placeholder data.
+    if (!profile || !price) continue;
+
+    suggestions.push({
+      profileId: profile.id,
+      code: profile.code,
+      name: profile.name,
+      description: profile.description,
+      matchedTestIds: match.matchedTestIds,
+      matchedCount: match.matchedCount,
+      requestedCount: match.requestedCount,
+      profileTestCount: match.profileTestCount,
+      matchPercentage: match.matchPercentage,
+      price: { amount: price.price, currency: price.currencyCode },
+      tatText: price.tatText,
+      availability: price.availability,
+      serviceType: price.serviceType,
+    });
+  }
+
+  return suggestions;
 }
