@@ -4,9 +4,10 @@ import { createServerClient } from "@supabase/ssr";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
- * Cookie-aware Supabase client, scoped to the current admin's session.
- * Uses the public anon key (safe to expose) — auth/session only, RLS-bound.
- * This is what admin sign-in / sign-out and "who am I" checks go through.
+ * Cookie-aware Supabase client, scoped to the current signed-in user's
+ * session (support or admin). Uses the public anon key (safe to expose) —
+ * auth/session only, RLS-bound. This is what sign-in/sign-out and "who am I"
+ * checks go through.
  *
  * For all actual data access (tests, pricing, imports), use
  * createAdminClient() from ./admin instead.

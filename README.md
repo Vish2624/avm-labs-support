@@ -38,16 +38,18 @@ components/
 
 lib/
   supabase/                # client.ts (browser), server.ts (auth session), admin.ts
-                            # (service-role — all data access), middleware.ts
+                            # (service-role — all data access), middleware.ts (session refresh + role)
+  auth/                    # auth.ts (getCurrentUser/signOut), permissions.ts (requireUser/requireAdmin)
   constants/                # LocationCode, ServiceType, AvailabilityStatus — single source
                             # of truth for these unions; actual records still come from the DB
   pricing/money.ts          # safe integer minor-unit arithmetic — no floating point
   profiles/calculate-profile-match.ts  # profile-ranking algorithm (implemented, pure)
   search/ excel/ imports/ whatsapp/ database/ validation/  # placeholders pending their phase
 
+proxy.ts                   # route protection: unauthenticated -> /login, non-admin -> /dashboard
 types/                     # domain types mirroring the DB schema (Test, TestPrice, Profile, ...)
-supabase/migrations/       # SQL schema (Phase 1)
-supabase/seed/seed.sql     # dev seed data (Phase 1) — never production pricing data
+supabase/migrations/       # SQL schema (Phase 2)
+supabase/seed/seed.sql     # dev seed data (Phase 2) — never production pricing data
 tests/{unit,integration,fixtures}/
 ```
 
