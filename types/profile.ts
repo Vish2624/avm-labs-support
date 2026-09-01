@@ -8,6 +8,8 @@ export interface Profile {
   name: string;
   description: string | null;
   active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Mirrors `profile_tests` — which tests belong to a profile. */
@@ -20,7 +22,7 @@ export interface ProfileTest {
 
 /**
  * A profile's bundle price is fixed per location + service type (not
- * computed from its component tests' prices).
+ * computed from its component tests' prices). Temporal, same as TestPrice.
  */
 export interface ProfilePrice {
   id: string;
@@ -28,7 +30,10 @@ export interface ProfilePrice {
   locationId: string;
   serviceType: ServiceType;
   price: number; // minor units, see lib/pricing/money.ts
-  currency: string;
+  currencyCode: string;
   tatText: string;
   availability: AvailabilityStatus;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  versionId: string | null;
 }

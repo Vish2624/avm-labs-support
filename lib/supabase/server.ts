@@ -9,7 +9,7 @@ import type { Database } from "@/lib/supabase/database.types";
  * This is what admin sign-in / sign-out and "who am I" checks go through.
  *
  * For all actual data access (tests, pricing, imports), use
- * createServiceRoleClient() from ./service instead.
+ * createAdminClient() from ./admin instead.
  */
 export async function createAuthServerClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

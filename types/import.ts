@@ -24,9 +24,14 @@ export interface PriceListVersion {
   locationId: string;
   serviceType: ServiceType;
   originalFilename: string;
+  fileStoragePath: string | null;
+  fileSize: number | null;
   status: ImportStatus;
+  recordCount: number | null;
   createdBy: string;
   createdAt: string;
+  validatedAt: string | null;
+  approvedAt: string | null;
   activatedAt: string | null;
 }
 
@@ -45,4 +50,16 @@ export interface ImportValidationReport {
   errorCount: number;
   warningCount: number;
   issues: ImportRowIssue[];
+}
+
+/** Mirrors `audit_log`. */
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  createdAt: string;
 }

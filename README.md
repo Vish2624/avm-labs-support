@@ -37,7 +37,7 @@ components/
   ui/                      # shadcn/ui primitives
 
 lib/
-  supabase/                # client.ts (browser), server.ts (auth session), service.ts
+  supabase/                # client.ts (browser), server.ts (auth session), admin.ts
                             # (service-role — all data access), middleware.ts
   constants/                # LocationCode, ServiceType, AvailabilityStatus — single source
                             # of truth for these unions; actual records still come from the DB

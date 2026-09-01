@@ -4,7 +4,7 @@
  * Never hardcode location records in application code; this exists purely
  * so code can type-check against the known location codes.
  */
-export const LOCATION_CODES = ["DXB", "RUH", "KHJ", "BHR"] as const;
+export const LOCATION_CODES = ["DUB", "RUH", "KHO", "BAH"] as const;
 
 export type LocationCode = (typeof LOCATION_CODES)[number];
 

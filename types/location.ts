@@ -8,6 +8,10 @@ export interface Location {
   id: string;
   code: LocationCode;
   name: string;
-  currency: string; // ISO 4217, e.g. "AED"
+  country: string;
+  currencyCode: string; // ISO 4217, e.g. "AED"
+  currencySymbol: string; // display symbol, e.g. "AED", "SAR", ".د.ب"
   active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

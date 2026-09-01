@@ -6,7 +6,7 @@ import type { Database } from "@/lib/supabase/database.types";
  *
  * Scope: auth session state (sign-in/out, "who am I") for Client Components.
  * All actual data (tests, pricing, imports) is fetched server-side via
- * createServiceRoleClient (./service.ts) — never queried from the browser.
+ * createAdminClient (./admin.ts) — never queried from the browser.
  */
 export function createBrowserSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
