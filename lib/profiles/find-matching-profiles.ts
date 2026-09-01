@@ -1,6 +1,7 @@
 import "server-only";
 import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getProfilePricing } from "./profile-pricing";
+import { hydrateProfileTests } from "./hydrate-profile-tests";
 import { calculateProfileMatch, rankProfileMatches } from "./calculate-profile-match";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { ProfileSuggestion } from "@/types/profile";
@@ -30,11 +31,17 @@ export async function findMatchingProfiles(
   if (matches.length === 0) return [];
 
   const profileById = new Map(profiles.map(({ profile }) => [profile.id, profile]));
-  const pricingByProfileId = await getProfilePricing(
-    matches.map((match) => match.profileId),
-    locationId,
-    serviceType
-  );
+  const profileTestIdsById = new Map(profiles.map(({ profile, testIds: ids }) => [profile.id, ids]));
+  const [pricingByProfileId, testsByProfileId] = await Promise.all([
+    getProfilePricing(
+      matches.map((match) => match.profileId),
+      locationId,
+      serviceType
+    ),
+    hydrateProfileTests(
+      new Map(matches.map((match) => [match.profileId, profileTestIdsById.get(match.profileId) ?? []]))
+    ),
+  ]);
 
   const suggestions: ProfileSuggestion[] = [];
   for (const match of matches) {
@@ -49,6 +56,7 @@ export async function findMatchingProfiles(
       code: profile.code,
       name: profile.name,
       description: profile.description,
+      tests: testsByProfileId.get(profile.id) ?? [],
       matchedTestIds: match.matchedTestIds,
       matchedCount: match.matchedCount,
       requestedCount: match.requestedCount,

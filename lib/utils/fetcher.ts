@@ -1,4 +1,4 @@
-/** Shared SWR fetcher for the workspace's client-side API reads. */
+/** Shared SWR fetcher for client-side API reads (Support Workspace, /profiles). */
 export async function fetcher<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
