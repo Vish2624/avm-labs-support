@@ -47,3 +47,12 @@ export async function listActiveLocations(): Promise<Location[]> {
   if (error) throw error;
   return ((data ?? []) as LocationRow[]).map(mapLocation);
 }
+
+/** One location by id, regardless of active flag (e.g. for import validation context). */
+export async function getLocationById(id: string): Promise<Location | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("locations").select(LOCATION_COLUMNS).eq("id", id).maybeSingle();
+
+  if (error) throw error;
+  return data ? mapLocation(data as LocationRow) : null;
+}
