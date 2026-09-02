@@ -110,6 +110,14 @@ Same primitive powers `/profiles`' "search by test names" mode: resolve each inp
    **Verified**: `npx tsc --noEmit`, `npm run lint`, and `npm run build` (webpack) all clean — all 11 new routes compile. 13/13 read-only checks against the live Supabase project confirm every new query and embedded-join shape (tests/aliases/prices/profile_prices joins, the `profile_tests` count join, the export join's row count vs. raw) resolves with the right column names and honours the schema's `alias_type`/`availability`/`service_type` check constraints. **Not yet done**: browser click-through of the forms/tables/toasts and the "manual edit → immediately visible in Workspace search" end-to-end (Chrome extension wasn't connected this session); live exercise of the write paths (create/update/delete/upsert) against the DB.
 8. **Polish & deploy** — loading/empty/error states, Vercel deploy with Supabase prod env vars, full smoke test in production before go-live.
 
+   **Polish — DONE.** Route-level states were the gap (per-component empty states and toast error handling were already built in Phases 4–7):
+   - `app/global-error.tsx` — last-resort boundary for root-layout errors, renders its own `<html>/<body>` with an inline-styled reload card (no app CSS/chrome available at that point).
+   - `app/error.tsx`, `app/(dashboard)/error.tsx`, `app/(dashboard)/admin/error.tsx` — client error boundaries sharing `components/layout/page-error.tsx` (destructive `Alert` + "Try again" `reset()`, logs the error + `digest` to the console). The dashboard/admin ones keep their chrome (sidebar, admin sub-nav) mounted.
+   - `app/not-found.tsx` — centered 404 with a link back to `/workspace`.
+   - `loading.tsx` for every server-fetching route (`profiles`, `workspace`, and the six admin sub-pages), sharing `components/layout/page-skeleton.tsx` (`padded` off for admin pages, which sit inside the already-padded admin layout; `withFilters` for the location/service-type pickers). `tsc`/`lint`/`build` clean.
+
+   **Deploy — pending you.** Needs a Vercel project + the three Supabase env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — service-role server-only) set in Vercel, then a production smoke test before go-live.
+
 ## Setup Needed From You
 
 - ~~A Supabase project and its connection env vars~~ — done. Connected to the `AVMLabs / Chat Web App` project (`jboiysqdtvmtqvufbwlt`), keys in `.env.local` (gitignored), connection verified.
