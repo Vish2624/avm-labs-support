@@ -50,3 +50,81 @@ export async function getTestsByIds(ids: string[]): Promise<Test[]> {
   if (error) throw error;
   return ((data ?? []) as TestRow[]).map(mapTest);
 }
+
+/** Every test, active or not — the Admin Tests catalog table. */
+export async function listAllTests(): Promise<Test[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("tests")
+    .select(TEST_COLUMNS)
+    .order("code", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as TestRow[]).map(mapTest);
+}
+
+export interface TestInput {
+  code: string;
+  officialName: string;
+  shortName: string | null;
+  category: string | null;
+  description: string | null;
+}
+
+export async function createTest(input: TestInput): Promise<Test> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("tests")
+    .insert({
+      code: input.code,
+      official_name: input.officialName,
+      short_name: input.shortName,
+      category: input.category,
+      description: input.description,
+    })
+    .select(TEST_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return mapTest(data as TestRow);
+}
+
+export async function updateTest(id: string, input: TestInput): Promise<Test> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("tests")
+    .update({
+      code: input.code,
+      official_name: input.officialName,
+      short_name: input.shortName,
+      category: input.category,
+      description: input.description,
+    })
+    .eq("id", id)
+    .select(TEST_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return mapTest(data as TestRow);
+}
+
+export async function setTestActive(id: string, active: boolean): Promise<Test> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("tests")
+    .update({ active })
+    .eq("id", id)
+    .select(TEST_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return mapTest(data as TestRow);
+}
+
+export async function getTestById(id: string): Promise<Test | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("tests").select(TEST_COLUMNS).eq("id", id).maybeSingle();
+
+  if (error) throw error;
+  return data ? mapTest(data as TestRow) : null;
+}

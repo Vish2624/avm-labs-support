@@ -66,3 +66,66 @@ export async function getCurrentPrices(
   if (error) throw error;
   return ((data ?? []) as TestPriceRow[]).map(mapPrice);
 }
+
+/** Every current price row for one test, across all locations/service types — for the Admin test detail view. */
+export async function listCurrentPricesForTest(testId: string): Promise<TestPrice[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("test_prices")
+    .select(PRICE_COLUMNS)
+    .eq("test_id", testId)
+    .is("effective_to", null);
+
+  if (error) throw error;
+  return ((data ?? []) as TestPriceRow[]).map(mapPrice);
+}
+
+export interface PriceWithTest extends TestPrice {
+  testCode: string;
+  testOfficialName: string;
+  testCategory: string | null;
+}
+
+/**
+ * Every current test price, optionally filtered by location/service type,
+ * joined with its test's code/name/category — the Admin Availability table
+ * and the Excel export both need this shape.
+ */
+export async function listCurrentPricesWithTestInfo(filter?: {
+  locationId?: string;
+  serviceType?: ServiceType;
+}): Promise<PriceWithTest[]> {
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("test_prices")
+    .select(`${PRICE_COLUMNS}, tests(code, official_name, category)`)
+    .is("effective_to", null);
+
+  if (filter?.locationId) query = query.eq("location_id", filter.locationId);
+  if (filter?.serviceType) query = query.eq("service_type", filter.serviceType);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  type JoinedTest = { code: string; official_name: string; category: string | null };
+  type JoinedRow = TestPriceRow & { tests: JoinedTest | JoinedTest[] | null };
+  return ((data ?? []) as unknown as JoinedRow[]).map((row) => {
+    const test = Array.isArray(row.tests) ? row.tests[0] : row.tests;
+    return {
+      ...mapPrice(row),
+      testCode: test?.code ?? "",
+      testOfficialName: test?.official_name ?? "",
+      testCategory: test?.category ?? null,
+    };
+  });
+}
+
+/** Directly updates one current price row's availability — an admin quick-edit, not a versioned import. */
+export async function updatePriceAvailability(
+  priceId: string,
+  availability: TestPrice["availability"]
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("test_prices").update({ availability }).eq("id", priceId);
+  if (error) throw error;
+}

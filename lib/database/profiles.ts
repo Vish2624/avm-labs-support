@@ -114,3 +114,217 @@ export async function getCurrentProfilePrices(
   if (error) throw error;
   return ((data ?? []) as ProfilePriceRow[]).map(mapProfilePrice);
 }
+
+export interface ProfilePriceWithProfile extends ProfilePrice {
+  profileCode: string;
+  profileName: string;
+}
+
+/**
+ * Every current profile bundle price, optionally filtered by
+ * location/service type, joined with its profile's code/name — the Admin
+ * Availability table needs this shape (alongside the equivalent test-price
+ * join in lib/database/prices.ts).
+ */
+export async function listCurrentProfilePricesWithProfileInfo(filter?: {
+  locationId?: string;
+  serviceType?: ServiceType;
+}): Promise<ProfilePriceWithProfile[]> {
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("profile_prices")
+    .select(`${PROFILE_PRICE_COLUMNS}, profiles(code, name)`)
+    .is("effective_to", null);
+
+  if (filter?.locationId) query = query.eq("location_id", filter.locationId);
+  if (filter?.serviceType) query = query.eq("service_type", filter.serviceType);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  type JoinedRow = ProfilePriceRow & { profiles: { code: string; name: string } | { code: string; name: string }[] | null };
+  return ((data ?? []) as unknown as JoinedRow[]).map((row) => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    return { ...mapProfilePrice(row), profileCode: profile?.code ?? "", profileName: profile?.name ?? "" };
+  });
+}
+
+/** Directly updates one current profile-price row's availability — an admin quick-edit, not a versioned import. */
+export async function updateProfilePriceAvailability(priceId: string, availability: ProfilePrice["availability"]): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("profile_prices").update({ availability }).eq("id", priceId);
+  if (error) throw error;
+}
+
+export interface ProfileWithTestCount extends Profile {
+  testCount: number;
+}
+
+/** Every profile, active or not, with its component test count — the Admin Profiles table. */
+export async function listAllProfilesForAdmin(): Promise<ProfileWithTestCount[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(`${PROFILE_COLUMNS}, profile_tests(test_id)`)
+    .order("code", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as ProfileWithTestsRow[]).map((row) => ({
+    ...mapProfile(row),
+    testCount: row.profile_tests.length,
+  }));
+}
+
+/** A profile's component tests (id + required flag), regardless of the profile's own active flag — the Admin profile detail view. */
+export async function getProfileTestSelections(profileId: string): Promise<{ testId: string; required: boolean }[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profile_tests")
+    .select("test_id, required")
+    .eq("profile_id", profileId);
+  if (error) throw error;
+  return ((data ?? []) as { test_id: string; required: boolean }[]).map((row) => ({
+    testId: row.test_id,
+    required: row.required,
+  }));
+}
+
+export async function getProfileById(id: string): Promise<Profile | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? mapProfile(data as ProfileRow) : null;
+}
+
+export interface ProfileInput {
+  code: string;
+  name: string;
+  description: string | null;
+}
+
+export async function createProfile(input: ProfileInput): Promise<Profile> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .insert({ code: input.code, name: input.name, description: input.description })
+    .select(PROFILE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapProfile(data as ProfileRow);
+}
+
+export async function updateProfile(id: string, input: ProfileInput): Promise<Profile> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ code: input.code, name: input.name, description: input.description })
+    .eq("id", id)
+    .select(PROFILE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapProfile(data as ProfileRow);
+}
+
+export async function setProfileActive(id: string, active: boolean): Promise<Profile> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ active })
+    .eq("id", id)
+    .select(PROFILE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapProfile(data as ProfileRow);
+}
+
+/**
+ * Replaces a profile's full set of component tests. This is a low-volume,
+ * admin-curated join table (not the price-critical import path), so a
+ * plain delete-then-insert is an acceptable, simple way to apply a diff —
+ * unlike price activation, a partial failure here just means the admin
+ * retries, with no pricing-correctness risk.
+ */
+export async function setProfileTests(
+  profileId: string,
+  tests: { testId: string; required: boolean }[]
+): Promise<void> {
+  const supabase = createAdminClient();
+
+  const { error: deleteError } = await supabase.from("profile_tests").delete().eq("profile_id", profileId);
+  if (deleteError) throw deleteError;
+
+  if (tests.length === 0) return;
+
+  const { error: insertError } = await supabase
+    .from("profile_tests")
+    .insert(tests.map((test) => ({ profile_id: profileId, test_id: test.testId, required: test.required })));
+  if (insertError) throw insertError;
+}
+
+/** A profile's current (effective_to null) bundle prices across every location/service type — the Admin profile detail view. */
+export async function listProfilePricesForProfile(profileId: string): Promise<ProfilePrice[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profile_prices")
+    .select(PROFILE_PRICE_COLUMNS)
+    .eq("profile_id", profileId)
+    .is("effective_to", null);
+  if (error) throw error;
+  return ((data ?? []) as ProfilePriceRow[]).map(mapProfilePrice);
+}
+
+/**
+ * Sets a profile's bundle price at one location + service type — a direct
+ * admin correction (update in place if a current row exists, insert if
+ * not), not a versioned import. Unlike the Excel pipeline's temporal
+ * close-out/reopen, this doesn't need history: profile pricing is
+ * admin-form-managed by design (assumption 5, AVM_PLAN.md), so there's no
+ * "previous version" to preserve the way there is for Excel-driven prices.
+ */
+export async function upsertProfilePrice(input: {
+  profileId: string;
+  locationId: string;
+  serviceType: ServiceType;
+  price: number;
+  currencyCode: string;
+  tatText: string;
+  availability: ProfilePrice["availability"];
+}): Promise<ProfilePrice> {
+  const supabase = createAdminClient();
+
+  const { data: existing, error: findError } = await supabase
+    .from("profile_prices")
+    .select("id")
+    .eq("profile_id", input.profileId)
+    .eq("location_id", input.locationId)
+    .eq("service_type", input.serviceType)
+    .is("effective_to", null)
+    .maybeSingle();
+  if (findError) throw findError;
+
+  const patch = {
+    price: input.price,
+    currency_code: input.currencyCode,
+    tat_text: input.tatText,
+    availability: input.availability,
+  };
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from("profile_prices")
+      .update(patch)
+      .eq("id", existing.id)
+      .select(PROFILE_PRICE_COLUMNS)
+      .single();
+    if (error) throw error;
+    return mapProfilePrice(data as ProfilePriceRow);
+  }
+
+  const { data, error } = await supabase
+    .from("profile_prices")
+    .insert({ profile_id: input.profileId, location_id: input.locationId, service_type: input.serviceType, ...patch })
+    .select(PROFILE_PRICE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapProfilePrice(data as ProfilePriceRow);
+}

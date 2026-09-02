@@ -1,3 +1,5 @@
+import type { AliasType } from "@/lib/constants/alias-types";
+
 /** Mirrors the `tests` table — master catalog, prices live separately (see price.ts). */
 export interface Test {
   id: string;
@@ -11,7 +13,7 @@ export interface Test {
   updatedAt: string;
 }
 
-export type AliasType = "customer_term" | "brand_name" | "abbreviation" | "misspelling" | "other";
+export type { AliasType };
 
 /**
  * Mirrors `test_aliases` — admin-curated mappings (e.g. "insulin resistance"
