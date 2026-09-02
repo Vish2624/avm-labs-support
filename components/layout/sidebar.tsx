@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Search, LibraryBig, Bell, ShieldCheck } from "lucide-react";
+import { Search, LibraryBig, Bell, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types/auth";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/workspace", label: "Support Workspace", icon: Search },
   { href: "/profiles", label: "Profile Search", icon: LibraryBig },
   { href: "/updates", label: "Updates", icon: Bell },

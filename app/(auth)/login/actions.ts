@@ -24,5 +24,5 @@ export async function signInAction(_prevState: LoginState, formData: FormData): 
     return { error: "Invalid email or password." };
   }
 
-  redirect("/dashboard");
+  redirect("/workspace");
 }
