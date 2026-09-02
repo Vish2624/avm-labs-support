@@ -19,7 +19,7 @@ export function ProfileMatchCard({ suggestion }: { suggestion: ProfileSuggestion
           {suggestion.requestedCount === 1 ? "" : "s"} ({suggestion.profileTestCount} tests in bundle)
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{formatCurrency(suggestion.price)}</span>
+          <span className="font-medium text-foreground tabular-nums">{formatCurrency(suggestion.price)}</span>
           <span>TAT: {formatTat(suggestion.tatText)}</span>
           <span>{AVAILABILITY_LABELS[suggestion.availability]}</span>
         </div>

@@ -36,7 +36,9 @@ export function TestResultCard({
           ) : null}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{formatCurrency(result.price)}</span>
+          <span className="text-sm font-semibold text-foreground tabular-nums">
+            {formatCurrency(result.price)}
+          </span>
           <span>TAT: {formatTat(result.tatText)}</span>
           <Badge variant={AVAILABILITY_BADGE_VARIANT[result.availability]}>
             {AVAILABILITY_LABELS[result.availability]}

@@ -35,7 +35,7 @@ export function QuotationRow({
           {AVAILABILITY_LABELS[item.availability]}
         </Badge>
       </TableCell>
-      <TableCell className="text-right font-medium">{formatCurrency(item.price)}</TableCell>
+      <TableCell className="text-right font-medium tabular-nums">{formatCurrency(item.price)}</TableCell>
       <TableCell>
         <Button
           type="button"

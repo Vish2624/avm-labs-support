@@ -49,7 +49,7 @@ export function SearchResults({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex max-h-[30rem] flex-col gap-2 overflow-y-auto pr-1">
       {results.map((result) => (
         <TestResultCard
           key={result.testId}
