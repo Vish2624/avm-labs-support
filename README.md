@@ -22,12 +22,12 @@ npm run dev
 
 ```
 app/
-  (auth)/login/            # admin sign-in (static placeholder)
+  (auth)/login/            # sign-in (support@ shared / admin@)
   (dashboard)/             # authenticated shell: sidebar + topbar
-    dashboard/             # TODO: purpose not yet defined
+    dashboard/             # redirect() to /workspace (the real landing page)
     workspace/              # Support Workspace — single-page search + quotation (Phase 4)
     profiles/               # Profile/package search (Phase 5)
-    updates/                 # TODO: purpose not yet defined
+    updates/                 # read-only feed of recent price/availability changes (Phase 8)
     admin/                  # Excel import pipeline + catalog/alias/profile management (Phases 6-7)
   api/                     # route handlers backing search/quotation/profiles/imports/exports
 
@@ -46,7 +46,7 @@ lib/
   profiles/calculate-profile-match.ts  # profile-ranking algorithm (implemented, pure)
   search/ excel/ imports/ whatsapp/ database/ validation/  # placeholders pending their phase
 
-proxy.ts                   # route protection: unauthenticated -> /login, non-admin -> /dashboard
+proxy.ts                   # route protection: unauthenticated -> /login, non-admin -> /workspace
 types/                     # domain types mirroring the DB schema (Test, TestPrice, Profile, ...)
 supabase/migrations/       # SQL schema (Phase 2)
 supabase/seed/seed.sql     # dev seed data (Phase 2) — never production pricing data
@@ -55,6 +55,6 @@ tests/{unit,integration,fixtures}/
 
 ## Status
 
-Phase 0 (scaffold + full folder structure) complete. See `AVM_PLAN.md` for phase-by-phase
-progress. No business data (test names, prices, aliases) is hardcoded anywhere — the
-database is the sole source of truth once Phase 1 (schema + seed) lands.
+Phases 0–7 complete; Phase 8 (polish) done bar the Vercel deploy. See `AVM_PLAN.md` for the
+authoritative phase-by-phase log — it's more current than this file. No business data (test
+names, prices, aliases) is hardcoded anywhere — the database is the sole source of truth.

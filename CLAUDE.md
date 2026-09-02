@@ -26,7 +26,7 @@ Local setup: `npm install`, then `cp .env.example .env.local` and fill in the Su
 
 ## Architecture
 
-**Route protection is `proxy.ts`, not `middleware.ts`.** Next 16 renamed Middleware to Proxy — gating lives in `proxy.ts` at the repo root, exporting `proxy()`. It calls `lib/supabase/middleware.ts`'s `updateSession()` to refresh the auth cookie and resolve the caller's role, then redirects unauthenticated requests to `/login` and non-admins hitting `/admin/*` to `/dashboard`. This is a UX convenience, not the sole guard: every protected Server Component/Action/Route Handler independently calls `requireUser()`/`requireAdmin()` (`lib/auth/permissions.ts`).
+**Route protection is `proxy.ts`, not `middleware.ts`.** Next 16 renamed Middleware to Proxy — gating lives in `proxy.ts` at the repo root, exporting `proxy()`. It calls `lib/supabase/middleware.ts`'s `updateSession()` to refresh the auth cookie and resolve the caller's role, then redirects unauthenticated requests to `/login` and non-admins hitting `/admin/*` to `/workspace`. This is a UX convenience, not the sole guard: every protected Server Component/Action/Route Handler independently calls `requireUser()`/`requireAdmin()` (`lib/auth/permissions.ts`). (`/dashboard` has no page of its own — it just `redirect()`s to `/workspace`, the real landing page.)
 
 **Three Supabase clients — pick the right one:**
 - `lib/supabase/admin.ts` (`createAdminClient`) — service-role, bypasses RLS. The *only* client used for real business data (tests, prices, aliases, profiles, imports). Server-only; never import from `"use client"` code.
