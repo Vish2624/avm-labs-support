@@ -13,7 +13,7 @@ export function ServiceTypeSelector({
   onChange: (serviceType: ServiceType) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-input p-0.5" role="group" aria-label="Service type">
+    <div className="inline-flex items-center gap-1 rounded-lg border border-input bg-muted/40 p-0.5 backdrop-blur-sm" role="group" aria-label="Service type">
       {SERVICE_TYPES.map((serviceType) => (
         <Button
           key={serviceType}

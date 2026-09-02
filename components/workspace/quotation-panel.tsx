@@ -26,7 +26,7 @@ export function QuotationPanel({
   const count = quotation.lineItems.length;
 
   return (
-    <Card>
+    <Card className="border-glass-border bg-glass shadow-glass backdrop-blur-2xl">
       <CardHeader>
         <CardTitle className="flex items-baseline justify-between gap-3">
           <span>
