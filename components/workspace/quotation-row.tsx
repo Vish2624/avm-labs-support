@@ -6,14 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { AVAILABILITY_LABELS, AVAILABILITY_BADGE_VARIANT } from "@/lib/constants/availability";
 import type { QuotationLineItem } from "@/types/quotation";
-
-const AVAILABILITY_BADGE_VARIANT = {
-  available: "secondary",
-  unavailable: "destructive",
-  temporarily_unavailable: "outline",
-} as const;
 
 // One line item in the quotation table (name, code, price, TAT, availability, remove).
 export function QuotationRow({

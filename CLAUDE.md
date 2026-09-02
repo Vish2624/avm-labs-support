@@ -43,7 +43,7 @@ The browser never queries Postgres directly. All data fetching happens server-si
 
 **The quotation cart is client-only state**, never persisted to Supabase (`components/workspace/workspace-client.tsx`). Changing location or service type clears it — a quote's line items are priced in one location's currency at one service type, so switching either would otherwise silently mix prices/currencies — surfaced via a `sonner` toast.
 
-**The Excel import pipeline (`lib/excel/*`, `lib/imports/*`) is Phase 6 and not yet implemented** — those files are typed placeholders (`throw new Error("Not implemented: ...")`) for the staged upload → validate → preview/diff → confirm & activate (one Postgres transaction) → archive → rollback flow. `AVM_PLAN.md`'s "Validation Rules" and phase-6 sections define the intended behavior; implement against that rather than re-deriving it.
+**The Excel import pipeline (`lib/excel/*`, `lib/imports/*`) is Phase 6 and implemented** — staged upload → validate → preview/diff → confirm & activate → archive → rollback. Activation and rollback run as Postgres functions (`supabase/migrations/20260901120000_import_pipeline_functions.sql`) called via `supabase.rpc()`, since supabase-js has no multi-statement client transaction. `AVM_PLAN.md`'s "Validation Rules" and phase-6/7 sections are the source of truth for intended behavior.
 
 **Auth/roles:** two Supabase Auth accounts — one shared `support@avmlabs.com` login for all 5 agents, one `admin@avmlabs.com`. Role is read from `user_profiles.role` via the RLS-scoped client (not the service-role client) in `updateSession()`, and every table's RLS policy gates on a `current_user_role()` Postgres helper (`supabase/migrations/20260831120000_initial_schema.sql`).
 

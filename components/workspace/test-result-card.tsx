@@ -5,15 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { AVAILABILITY_LABELS, AVAILABILITY_BADGE_VARIANT } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
-
-const AVAILABILITY_BADGE_VARIANT = {
-  available: "secondary",
-  unavailable: "destructive",
-  temporarily_unavailable: "outline",
-} as const;
 
 // Single test search result row (code, name, price, TAT, availability).
 export function TestResultCard({
