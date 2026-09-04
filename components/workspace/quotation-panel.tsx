@@ -1,12 +1,14 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Trash2, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { SelectedTests } from "./selected-tests";
 import { WhatsappResponse } from "./whatsapp-response";
 import { formatCurrency } from "@/lib/utils/format-currency";
+import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import type { Quotation } from "@/types/quotation";
 
 // Totals, currency, and generated reply for the in-progress quotation.
@@ -24,6 +26,7 @@ export function QuotationPanel({
   onClear: () => void;
 }) {
   const count = quotation.lineItems.length;
+  const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
 
   return (
     <Card className="border-glass-border bg-glass shadow-glass backdrop-blur-2xl">
@@ -48,6 +51,18 @@ export function QuotationPanel({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {flagged.length > 0 ? (
+          <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertDescription>
+              {flagged.length} item{flagged.length === 1 ? "" : "s"} not fully available —{" "}
+              {flagged
+                .map((item) => `${item.testName} (${AVAILABILITY_LABELS[item.availability]})`)
+                .join(", ")}
+              . Check before sending the quote.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <SelectedTests lineItems={quotation.lineItems} onRemove={onRemove} />
         <Separator />
         <WhatsappResponse message={whatsappMessage} disabled={count === 0} />

@@ -14,11 +14,11 @@ export const AVAILABILITY_LABELS: Record<AvailabilityStatus, string> = {
 /** Badge variant for each status — shared by the workspace result card and quotation row. */
 export const AVAILABILITY_BADGE_VARIANT: Record<
   AvailabilityStatus,
-  "secondary" | "destructive" | "outline"
+  "success" | "destructive" | "warning"
 > = {
-  available: "secondary",
+  available: "success",
   unavailable: "destructive",
-  temporarily_unavailable: "outline",
+  temporarily_unavailable: "warning",
 };
 
 export function isAvailabilityStatus(value: string): value is AvailabilityStatus {

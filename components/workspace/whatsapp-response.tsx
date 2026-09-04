@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
 // Generated, copy-ready reply text built only from verified DB fields
-// (see lib/whatsapp/generate-response.ts).
+// (see lib/whatsapp/generate-response.ts). Copy is the panel's primary
+// action, so it's a full-width button under the preview.
 export function WhatsappResponse({ message, disabled }: { message: string; disabled: boolean }) {
   const [copied, setCopied] = useState(false);
 
@@ -24,22 +25,30 @@ export function WhatsappResponse({ message, disabled }: { message: string; disab
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <Label htmlFor="whatsapp-response">WhatsApp reply</Label>
-        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={handleCopy}>
-          {copied ? (
-            <>
-              <CheckIcon /> Copied
-            </>
-          ) : (
-            <>
-              <CopyIcon /> Copy
-            </>
-          )}
-        </Button>
-      </div>
-      <Textarea id="whatsapp-response" readOnly value={message} className="min-h-40 font-mono text-xs" />
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="whatsapp-response">WhatsApp reply</Label>
+      <Textarea
+        id="whatsapp-response"
+        readOnly
+        value={message}
+        className="min-h-40 font-mono text-xs"
+      />
+      <Button
+        type="button"
+        className="w-full"
+        disabled={disabled}
+        onClick={handleCopy}
+      >
+        {copied ? (
+          <>
+            <CheckIcon /> Copied
+          </>
+        ) : (
+          <>
+            <CopyIcon /> Copy reply
+          </>
+        )}
+      </Button>
     </div>
   );
 }

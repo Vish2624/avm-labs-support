@@ -15,11 +15,26 @@ export function LoginForm() {
     <form action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" required placeholder="you@avmlabs.com" />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoFocus
+          autoComplete="username"
+          placeholder="you@avmlabs.com"
+        />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" required placeholder="••••••••" />
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          required
+          autoComplete="current-password"
+          placeholder="••••••••"
+        />
       </div>
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
       <Button type="submit" className="w-full" disabled={pending}>

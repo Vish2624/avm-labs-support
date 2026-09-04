@@ -13,14 +13,14 @@ export function ServiceTypeSelector({
   onChange: (serviceType: ServiceType) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-input bg-muted/40 p-0.5 backdrop-blur-sm" role="group" aria-label="Service type">
+    <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-card p-1 shadow-xs" role="group" aria-label="Service type">
       {SERVICE_TYPES.map((serviceType) => (
         <Button
           key={serviceType}
           type="button"
           size="sm"
           variant={value === serviceType ? "default" : "ghost"}
-          className={cn("h-7")}
+          className={cn("h-7 rounded-full", value !== serviceType && "shadow-none")}
           aria-pressed={value === serviceType}
           onClick={() => onChange(serviceType)}
         >

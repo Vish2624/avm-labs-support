@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
+import { PageHeader } from "@/components/layout/page-header";
 import { ProfileSearch, type ProfileSearchMode } from "./profile-search";
 import { ProfileResults } from "./profile-results";
 import { fetcher } from "@/lib/utils/fetcher";
@@ -74,18 +75,13 @@ export function ProfileSearchClient({ locations }: { locations: Location[] }) {
 
   return (
     <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Profile Search</h1>
-          <p className="text-sm text-muted-foreground">
-            Search profiles by name or by the tests they contain, ranked by match.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-          <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
-        </div>
-      </div>
+      <PageHeader
+        title="Profile Search"
+        description="Search profiles by name or by the tests they contain, ranked by match."
+      >
+        <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
+        <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
+      </PageHeader>
 
       <ProfileSearch
         mode={mode}

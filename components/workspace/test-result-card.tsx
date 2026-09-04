@@ -1,6 +1,7 @@
 "use client";
 
 import { PlusIcon, CheckIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils/format-currency";
@@ -20,7 +21,14 @@ export function TestResultCard({
   onAdd: (result: SearchTestResult) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+    <div
+      className={cn(
+        "flex items-center justify-between gap-3 rounded-xl border p-3 transition-all",
+        added
+          ? "border-primary/25 bg-primary/5"
+          : "border-transparent bg-muted/40 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-accent/40 hover:shadow-sm"
+      )}
+    >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{result.officialName}</span>

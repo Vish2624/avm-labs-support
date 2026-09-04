@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
+import { PageHeader } from "@/components/layout/page-header";
 import { CustomerRequestInput } from "./customer-request-input";
 import { TestSearch } from "./test-search";
 import { SearchResults } from "./search-results";
@@ -103,6 +104,13 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     setLineItems((prev) => prev.filter((item) => item.testId !== testId));
   }
 
+  // Enter in the search box adds the first result that isn't already in the
+  // quote — lets an agent clear a customer's list without touching the mouse.
+  function handleSearchSubmit() {
+    const next = searchResults.find((result) => !addedTestIds.has(result.testId));
+    if (next) handleAdd(next);
+  }
+
   function handleClear() {
     setLineItems((prev) => {
       if (prev.length === 0) return prev;
@@ -133,16 +141,10 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
 
   return (
     <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Support Workspace</h1>
-          {context ? <p className="mt-0.5 text-sm text-muted-foreground">{context}</p> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-          <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
-        </div>
-      </div>
+      <PageHeader title="Support Workspace" description={context ?? undefined}>
+        <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
+        <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
+      </PageHeader>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-4">
@@ -153,7 +155,7 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
               <CardTitle>Search tests</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <TestSearch value={query} onChange={setQuery} />
+              <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} />
               <SearchResults
                 query={debouncedQuery}
                 results={searchResults}

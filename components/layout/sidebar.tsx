@@ -25,10 +25,10 @@ export function Sidebar({ role }: { role: UserRole }) {
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+          "flex items-center gap-2.5 rounded-full px-3 py-2 text-sm transition-colors",
           active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm ring-1 ring-sidebar-border"
-            : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+            ? "bg-primary text-primary-foreground font-medium shadow-sm"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
         )}
       >
         <Icon className="size-4 shrink-0" />
@@ -38,9 +38,9 @@ export function Sidebar({ role }: { role: UserRole }) {
   };
 
   return (
-    <nav className="flex h-full w-56 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar p-3 backdrop-blur-xl">
-      <div className="flex items-center gap-2 px-1.5 py-3">
-        <span className="grid size-7 place-items-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-sm">
+    <nav className="flex h-full w-60 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar p-3.5 backdrop-blur-xl">
+      <div className="flex items-center gap-2.5 px-1.5 py-3">
+        <span className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-[oklch(0.6_0.22_300)] text-xs font-bold text-primary-foreground shadow-glow">
           AV
         </span>
         <span className="text-sm font-semibold tracking-tight">AVM Labs</span>
@@ -49,7 +49,7 @@ export function Sidebar({ role }: { role: UserRole }) {
       {role === "admin" ? (
         <>
           <div className="mx-2 my-2 border-t border-sidebar-border" />
-          <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50">
+          <div className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50">
             Admin
           </div>
           {renderLink(adminItem)}

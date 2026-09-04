@@ -49,15 +49,21 @@ export function SearchResults({
   }
 
   return (
-    <div className="flex max-h-[30rem] flex-col gap-2 overflow-y-auto pr-1">
-      {results.map((result) => (
-        <TestResultCard
-          key={result.testId}
-          result={result}
-          added={addedTestIds.has(result.testId)}
-          onAdd={onAdd}
-        />
-      ))}
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        {results.length} match{results.length === 1 ? "" : "es"} · press{" "}
+        <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> to add the top one
+      </p>
+      <div className="flex max-h-[30rem] flex-col gap-2 overflow-y-auto pr-1">
+        {results.map((result) => (
+          <TestResultCard
+            key={result.testId}
+            result={result}
+            added={addedTestIds.has(result.testId)}
+            onAdd={onAdd}
+          />
+        ))}
+      </div>
     </div>
   );
 }

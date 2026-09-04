@@ -1,6 +1,7 @@
 import { listRecentUpdates, type UpdateKind } from "@/lib/database/updates";
 import { formatDateTime } from "@/lib/utils/dates";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/layout/page-header";
 
 // Updates — a read-only feed of changes that affect what agents quote:
 // price-list activations plus one-off availability / profile-price
@@ -19,12 +20,10 @@ export default async function UpdatesPage() {
 
   return (
     <main className="flex flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-xl font-semibold">Updates</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Recent pricing and availability changes across all locations.
-        </p>
-      </div>
+      <PageHeader
+        title="Updates"
+        description="Recent pricing and availability changes across all locations."
+      />
 
       {updates.length === 0 ? (
         <p className="text-sm text-muted-foreground">No changes recorded yet.</p>
