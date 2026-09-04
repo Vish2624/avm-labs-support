@@ -2,6 +2,7 @@ import { listRecentUpdates, type UpdateKind } from "@/lib/database/updates";
 import { formatDateTime } from "@/lib/utils/dates";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
+import { Card } from "@/components/ui/card";
 
 // Updates — a read-only feed of changes that affect what agents quote:
 // price-list activations plus one-off availability / profile-price
@@ -19,7 +20,7 @@ export default async function UpdatesPage() {
   const updates = await listRecentUpdates();
 
   return (
-    <main className="flex flex-col gap-4 p-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 lg:p-8">
       <PageHeader
         title="Updates"
         description="Recent pricing and availability changes across all locations."
@@ -28,9 +29,9 @@ export default async function UpdatesPage() {
       {updates.length === 0 ? (
         <p className="text-sm text-muted-foreground">No changes recorded yet.</p>
       ) : (
-        <ul className="flex flex-col divide-y rounded-lg border">
+        <Card className="gap-0 divide-y divide-border/40 py-0">
           {updates.map((u) => (
-            <li key={u.id} className="flex items-start gap-3 px-3 py-2.5">
+            <div key={u.id} className="flex items-start gap-3 px-4 py-3">
               <Badge variant="outline" className="mt-0.5 shrink-0">
                 {KIND_LABEL[u.kind]}
               </Badge>
@@ -43,9 +44,9 @@ export default async function UpdatesPage() {
               <time className="shrink-0 text-xs text-muted-foreground" dateTime={u.at}>
                 {formatDateTime(u.at)}
               </time>
-            </li>
+            </div>
           ))}
-        </ul>
+        </Card>
       )}
     </main>
   );

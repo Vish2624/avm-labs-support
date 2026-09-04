@@ -21,35 +21,37 @@ export function ProfileTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Code</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Tests</TableHead>
-          <TableHead>Active</TableHead>
-          <TableHead />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {profiles.map((profile) => (
-          <TableRow key={profile.id}>
-            <TableCell>
-              <Badge variant="outline">{profile.code}</Badge>
-            </TableCell>
-            <TableCell>{profile.name}</TableCell>
-            <TableCell className="text-sm text-muted-foreground">{profile.testCount}</TableCell>
-            <TableCell>
-              <Switch checked={profile.active} onCheckedChange={(checked) => onToggleActive(profile, checked)} />
-            </TableCell>
-            <TableCell className="flex justify-end">
-              <Button size="sm" variant="outline" onClick={() => onEdit(profile)}>
-                Edit
-              </Button>
-            </TableCell>
+    <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-xs">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Code</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Tests</TableHead>
+            <TableHead>Active</TableHead>
+            <TableHead />
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {profiles.map((profile) => (
+            <TableRow key={profile.id}>
+              <TableCell>
+                <Badge variant="outline">{profile.code}</Badge>
+              </TableCell>
+              <TableCell>{profile.name}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">{profile.testCount}</TableCell>
+              <TableCell>
+                <Switch checked={profile.active} onCheckedChange={(checked) => onToggleActive(profile, checked)} />
+              </TableCell>
+              <TableCell className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => onEdit(profile)}>
+                  Edit
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

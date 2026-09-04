@@ -21,35 +21,37 @@ export function TestTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Code</TableHead>
-          <TableHead>Official name</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead>Active</TableHead>
-          <TableHead />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {tests.map((test) => (
-          <TableRow key={test.id}>
-            <TableCell>
-              <Badge variant="outline">{test.code}</Badge>
-            </TableCell>
-            <TableCell>{test.officialName}</TableCell>
-            <TableCell className="text-sm text-muted-foreground">{test.category ?? "—"}</TableCell>
-            <TableCell>
-              <Switch checked={test.active} onCheckedChange={(checked) => onToggleActive(test, checked)} />
-            </TableCell>
-            <TableCell className="flex justify-end">
-              <Button size="sm" variant="outline" onClick={() => onView(test)}>
-                Edit
-              </Button>
-            </TableCell>
+    <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-xs">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Code</TableHead>
+            <TableHead>Official name</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead>Active</TableHead>
+            <TableHead />
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {tests.map((test) => (
+            <TableRow key={test.id}>
+              <TableCell>
+                <Badge variant="outline">{test.code}</Badge>
+              </TableCell>
+              <TableCell>{test.officialName}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">{test.category ?? "—"}</TableCell>
+              <TableCell>
+                <Switch checked={test.active} onCheckedChange={(checked) => onToggleActive(test, checked)} />
+              </TableCell>
+              <TableCell className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => onView(test)}>
+                  Edit
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

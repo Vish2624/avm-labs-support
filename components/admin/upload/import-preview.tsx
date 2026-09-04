@@ -42,7 +42,7 @@ export function ImportPreview({ diff }: { diff: ImportDiff }) {
         </TabsList>
       </Tabs>
 
-      <div className="max-h-96 overflow-y-auto rounded-lg border">
+      <div className="max-h-96 overflow-y-auto rounded-xl border border-border/50">
         <Table>
           <TableHeader>
             <TableRow>

@@ -39,12 +39,15 @@ export function Sidebar({ role }: { role: UserRole }) {
 
   return (
     <nav className="flex h-full w-60 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar p-3.5 backdrop-blur-xl">
-      <div className="flex items-center gap-2.5 px-1.5 py-3">
-        <span className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-[oklch(0.6_0.22_300)] text-xs font-bold text-primary-foreground shadow-glow">
-          AV
-        </span>
-        <span className="text-sm font-semibold tracking-tight">AVM Labs</span>
+      <div className="flex justify-center px-1.5 pt-2 pb-3">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no benefit from next/image */}
+        <img
+          src="/logo/avm-labs-logo-full.svg"
+          alt="AVM Labs — Wellness Laboratory"
+          className="h-auto w-28"
+        />
       </div>
+      <div className="mx-2 mb-2 border-t border-sidebar-border" />
       {navItems.map(renderLink)}
       {role === "admin" ? (
         <>

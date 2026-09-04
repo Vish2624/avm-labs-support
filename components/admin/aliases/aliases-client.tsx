@@ -39,6 +39,14 @@ export function AliasesClient({ tests }: { tests: Test[] }) {
   const [deleting, setDeleting] = useState<AliasWithTest | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // The confirm dialog animates out over ~150ms after `deleting` is cleared
+  // to null on success — rendering its text off `deleting` directly would
+  // flash `Delete ""?` during that window. Keep the last real value while it closes.
+  const [displayDeleting, setDisplayDeleting] = useState(deleting);
+  if (deleting && deleting !== displayDeleting) {
+    setDisplayDeleting(deleting);
+  }
+
   async function handleSave(input: AliasInput) {
     setSubmitting(true);
     try {
@@ -140,7 +148,7 @@ export function AliasesClient({ tests }: { tests: Test[] }) {
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete &ldquo;{deleting?.alias}&rdquo;?</AlertDialogTitle>
+            <AlertDialogTitle>Delete &ldquo;{displayDeleting?.alias}&rdquo;?</AlertDialogTitle>
             <AlertDialogDescription>
               This removes the alias mapping permanently. Searches that relied on it will fall back to fuzzy
               matching only.

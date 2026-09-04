@@ -13,9 +13,9 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { formatCurrency } from "@/lib/utils/format-currency";
 import type { PriceListStagingRow, PriceListVersion } from "@/types/import";
 
-const ROW_STATUS_BADGE_VARIANT: Record<PriceListStagingRow["rowStatus"], "secondary" | "destructive" | "outline"> = {
-  ok: "secondary",
-  warning: "outline",
+const ROW_STATUS_BADGE_VARIANT: Record<PriceListStagingRow["rowStatus"], "success" | "destructive" | "warning"> = {
+  ok: "success",
+  warning: "warning",
   error: "destructive",
 };
 
@@ -54,7 +54,7 @@ export function ImportDetails({
             <Skeleton className="h-8 w-full" />
           </div>
         ) : (
-          <div className="max-h-96 overflow-y-auto rounded-lg border">
+          <div className="max-h-96 overflow-y-auto rounded-xl border border-border/50">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -25,7 +25,7 @@ export function ImportConfirmation({
   if (!canActivate) return null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 shadow-xs">
       {hasWarnings ? (
         <label className="flex items-center gap-2 text-sm">
           <Checkbox checked={acknowledged} onCheckedChange={setAcknowledged} />

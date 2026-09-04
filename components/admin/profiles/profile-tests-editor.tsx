@@ -52,7 +52,7 @@ export function ProfileTestsEditor({
     <div className="flex flex-col gap-3">
       <Input placeholder="Search tests…" value={query} onChange={(event) => setQuery(event.target.value)} />
 
-      <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
+      <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-xl border border-border/50 p-2">
         {filtered.map((test) => {
           const included = selected.has(test.id);
           return (

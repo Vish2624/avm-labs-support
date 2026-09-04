@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DownloadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/constants/service-types";
@@ -21,27 +22,41 @@ export function ExportOptions({ locations }: { locations: Location[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 rounded-lg border p-3">
-        <h3 className="text-sm font-medium">Test catalog</h3>
-        <p className="text-sm text-muted-foreground">Every test in the master catalog, active or not.</p>
-        <Button size="sm" className="w-fit" render={<a href="/api/exports?type=tests" />}>
-          <DownloadIcon /> Download
-        </Button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Test catalog</CardTitle>
+          <CardDescription>Every test in the master catalog, active or not.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button size="sm" className="w-fit" nativeButton={false} render={<a href="/api/exports?type=tests" />}>
+            <DownloadIcon /> Download
+          </Button>
+        </CardContent>
+      </Card>
 
-      <div className="flex flex-col gap-2 rounded-lg border p-3">
-        <h3 className="text-sm font-medium">Price list</h3>
-        <p className="text-sm text-muted-foreground">
-          Current prices for one location and service type — the same columns the Excel import reads.
-        </p>
-        <div className="flex items-center gap-2">
-          <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-          <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
-        </div>
-        <Button size="sm" className="w-fit" disabled={!priceListHref} render={priceListHref ? <a href={priceListHref} /> : undefined}>
-          <DownloadIcon /> Download
-        </Button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Price list</CardTitle>
+          <CardDescription>
+            Current prices for one location and service type — the same columns the Excel import reads.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
+            <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
+          </div>
+          <Button
+            size="sm"
+            className="w-fit"
+            disabled={!priceListHref}
+            nativeButton={false}
+            render={priceListHref ? <a href={priceListHref} /> : undefined}
+          >
+            <DownloadIcon /> Download
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

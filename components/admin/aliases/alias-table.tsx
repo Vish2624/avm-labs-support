@@ -25,42 +25,44 @@ export function AliasTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Alias</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Confidence</TableHead>
-          <TableHead>Test</TableHead>
-          <TableHead>Active</TableHead>
-          <TableHead />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {aliases.map((alias) => (
-          <TableRow key={alias.id}>
-            <TableCell>{alias.alias}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{ALIAS_TYPE_LABELS[alias.aliasType]}</Badge>
-            </TableCell>
-            <TableCell className="text-sm text-muted-foreground">{alias.confidence}</TableCell>
-            <TableCell>
-              {alias.testOfficialName} <span className="text-muted-foreground">({alias.testCode})</span>
-            </TableCell>
-            <TableCell>
-              <Switch checked={alias.active} onCheckedChange={(checked) => onToggleActive(alias, checked)} />
-            </TableCell>
-            <TableCell className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => onEdit(alias)}>
-                Edit
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => onDelete(alias)}>
-                Delete
-              </Button>
-            </TableCell>
+    <div className="overflow-hidden rounded-xl border border-border/50 bg-card shadow-xs">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Alias</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Confidence</TableHead>
+            <TableHead>Test</TableHead>
+            <TableHead>Active</TableHead>
+            <TableHead />
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {aliases.map((alias) => (
+            <TableRow key={alias.id}>
+              <TableCell>{alias.alias}</TableCell>
+              <TableCell>
+                <Badge variant="outline">{ALIAS_TYPE_LABELS[alias.aliasType]}</Badge>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{alias.confidence}</TableCell>
+              <TableCell>
+                {alias.testOfficialName} <span className="text-muted-foreground">({alias.testCode})</span>
+              </TableCell>
+              <TableCell>
+                <Switch checked={alias.active} onCheckedChange={(checked) => onToggleActive(alias, checked)} />
+              </TableCell>
+              <TableCell className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => onEdit(alias)}>
+                  Edit
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onDelete(alias)}>
+                  Delete
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

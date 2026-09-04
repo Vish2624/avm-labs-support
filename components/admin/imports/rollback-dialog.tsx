@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -25,15 +26,24 @@ export function RollbackDialog({
   onConfirm: () => void;
   rollingBack: boolean;
 }) {
+  // The parent clears `target` to null the instant the dialog should close,
+  // but the dialog itself animates out over ~150ms — rendering off `target`
+  // directly would flash "version ?" / "0 priced test(s)" during that
+  // window. Keep showing the last real target while it closes.
+  const [displayTarget, setDisplayTarget] = useState(target);
+  if (target && target !== displayTarget) {
+    setDisplayTarget(target);
+  }
+
   return (
     <AlertDialog open={target !== null} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Roll back to version {target?.versionNumber}?</AlertDialogTitle>
+          <AlertDialogTitle>Roll back to version {displayTarget?.versionNumber}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This restores version {target?.versionNumber}&apos;s {target?.recordCount ?? 0} priced test(s) as a new,
-            active version. The currently active version will be marked rolled back — nothing is deleted, and this
-            can be reversed the same way.
+            This restores version {displayTarget?.versionNumber}&apos;s {displayTarget?.recordCount ?? 0} priced
+            test(s) as a new, active version. The currently active version will be marked rolled back — nothing is
+            deleted, and this can be reversed the same way.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
