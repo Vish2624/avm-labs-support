@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local one-off smoke scripts (not committed)
 /scripts.local/
+
+.vercel
+.env*

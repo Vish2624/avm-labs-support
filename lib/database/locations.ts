@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Location } from "@/types/location";
 import type { LocationCode } from "@/lib/constants/locations";
@@ -35,18 +36,27 @@ function mapLocation(row: LocationRow): Location {
 /**
  * Every active location — the source of truth for the workspace's location
  * switcher. Never hardcode a location list in the UI (spec section 91).
+ *
+ * Called fresh on 8 separate pages, so every single navigation was paying
+ * for this exact same round-trip again. There's no admin flow anywhere in
+ * the app that changes a location (they're seeded once via SQL), so a
+ * 5-minute cache is free — nothing in-app can ever make it stale.
  */
-export async function listActiveLocations(): Promise<Location[]> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("locations")
-    .select(LOCATION_COLUMNS)
-    .eq("active", true)
-    .order("name", { ascending: true });
+export const listActiveLocations = unstable_cache(
+  async (): Promise<Location[]> => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("locations")
+      .select(LOCATION_COLUMNS)
+      .eq("active", true)
+      .order("name", { ascending: true });
 
-  if (error) throw error;
-  return ((data ?? []) as LocationRow[]).map(mapLocation);
-}
+    if (error) throw error;
+    return ((data ?? []) as LocationRow[]).map(mapLocation);
+  },
+  ["active-locations"],
+  { revalidate: 300 }
+);
 
 /** One location by id, regardless of active flag (e.g. for import validation context). */
 export async function getLocationById(id: string): Promise<Location | null> {

@@ -1,3 +1,4 @@
+import { LayersIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
@@ -7,7 +8,10 @@ import type { ProfileSuggestion } from "@/types/profile";
 // Single profile suggestion with match percentage.
 export function ProfileMatchCard({ suggestion }: { suggestion: ProfileSuggestion }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground">
+        <LayersIcon className="size-4" />
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{suggestion.name}</span>

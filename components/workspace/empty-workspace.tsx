@@ -3,8 +3,8 @@ import { ReceiptText } from "lucide-react";
 // Empty state for the quotation column before any test is added.
 export function EmptyWorkspace() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/80 bg-glass p-10 text-center backdrop-blur-xl">
-      <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
+    <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-border/70 bg-glass p-12 text-center backdrop-blur-sm">
+      <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary shadow-glow">
         <ReceiptText className="size-5" />
       </span>
       <p className="text-sm font-medium">No tests in the quotation yet</p>

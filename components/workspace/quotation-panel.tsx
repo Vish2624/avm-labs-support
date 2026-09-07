@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, TriangleAlert } from "lucide-react";
+import { Trash2, TriangleAlert, ReceiptText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,28 +29,34 @@ export function QuotationPanel({
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
 
   return (
-    <Card className="border-glass-border bg-glass shadow-glass backdrop-blur-2xl">
+    <Card className="border-glass-border bg-glass shadow-glass backdrop-blur-sm">
       <CardHeader>
-        <CardTitle className="flex items-baseline justify-between gap-3">
-          <span>
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <span className="grid size-7 place-items-center rounded-full bg-primary/15 text-primary">
+              <ReceiptText className="size-3.5" />
+            </span>
             Quotation
-            <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+            <span className="text-sm font-normal text-muted-foreground">
               {count} test{count === 1 ? "" : "s"}
             </span>
           </span>
-          <span className="text-base font-semibold tabular-nums">{formatCurrency(quotation.total)}</span>
-        </CardTitle>
-        <div className="flex items-center justify-between gap-3">
-          {context ? <p className="text-xs text-muted-foreground">{context}</p> : <span />}
           {count > 0 ? (
             <Button type="button" size="xs" variant="ghost" onClick={onClear}>
               <Trash2 />
               Clear all
             </Button>
           ) : null}
-        </div>
+        </CardTitle>
+        {context ? <p className="text-xs text-muted-foreground">{context}</p> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <div className="flex items-baseline justify-between rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
+          <span className="text-sm font-medium text-muted-foreground">Total</span>
+          <span className="text-2xl font-semibold tabular-nums text-primary">
+            {formatCurrency(quotation.total)}
+          </span>
+        </div>
         {flagged.length > 0 ? (
           <Alert variant="destructive">
             <TriangleAlert />

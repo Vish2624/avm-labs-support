@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { SearchIcon } from "lucide-react";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
 import { PageHeader } from "@/components/layout/page-header";
@@ -140,19 +141,24 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 lg:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-6 lg:p-8">
       <PageHeader title="Support Workspace" description={context ?? undefined}>
         <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
         <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
       </PageHeader>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           <CustomerRequestInput />
 
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle>Search tests</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <span className="grid size-7 place-items-center rounded-full bg-primary/15 text-primary">
+                  <SearchIcon className="size-3.5" />
+                </span>
+                Search tests
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} />

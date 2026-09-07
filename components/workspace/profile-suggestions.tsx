@@ -1,5 +1,6 @@
 "use client";
 
+import { LayersIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProfileMatchCard } from "./profile-match-card";
@@ -20,9 +21,14 @@ export function ProfileSuggestions({
   if (!hasSelection || (!loading && suggestions.length === 0)) return null;
 
   return (
-    <Card>
+    <Card className="border-border">
       <CardHeader>
-        <CardTitle>Matching profiles</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-full bg-accent text-accent-foreground">
+            <LayersIcon className="size-3.5" />
+          </span>
+          Matching profiles
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {loading ? (

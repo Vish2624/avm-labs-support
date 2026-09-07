@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, LibraryBig, Bell, ShieldCheck } from "lucide-react";
@@ -16,6 +17,11 @@ const adminItem = { href: "/admin", label: "Admin", icon: ShieldCheck };
 
 export function Sidebar({ role }: { role: UserRole }) {
   const pathname = usePathname();
+  const [filter, setFilter] = useState("");
+
+  const normalizedFilter = filter.trim().toLowerCase();
+  const items = navItems.filter((item) => item.label.toLowerCase().includes(normalizedFilter));
+  const showAdmin = role === "admin" && adminItem.label.toLowerCase().includes(normalizedFilter);
 
   const renderLink = ({ href, label, icon: Icon }: (typeof navItems)[number]) => {
     const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -25,9 +31,9 @@ export function Sidebar({ role }: { role: UserRole }) {
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-2.5 rounded-full px-3 py-2 text-sm transition-colors",
+          "flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm transition-colors",
           active
-            ? "bg-primary text-primary-foreground font-medium shadow-sm"
+            ? "bg-primary text-primary-foreground font-medium shadow-glow"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
         )}
       >
@@ -38,18 +44,21 @@ export function Sidebar({ role }: { role: UserRole }) {
   };
 
   return (
-    <nav className="flex h-full w-60 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar p-3.5 backdrop-blur-xl">
-      <div className="flex justify-center px-1.5 pt-2 pb-3">
-        {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no benefit from next/image */}
-        <img
-          src="/logo/avm-labs-logo-full.svg"
-          alt="AVM Labs — Wellness Laboratory"
-          className="h-auto w-28"
+    <nav className="flex h-full w-64 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar p-3.5 backdrop-blur-md">
+      <div className="relative mb-1">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-sidebar-foreground/40" />
+        <input
+          type="text"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Search…"
+          aria-label="Filter navigation"
+          className="h-9 w-full rounded-full border border-sidebar-border bg-sidebar-accent/30 pl-9 pr-3 text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/40 outline-none transition-colors focus-visible:border-sidebar-ring focus-visible:ring-3 focus-visible:ring-sidebar-ring/30"
         />
       </div>
-      <div className="mx-2 mb-2 border-t border-sidebar-border" />
-      {navItems.map(renderLink)}
-      {role === "admin" ? (
+      <div className="mx-1 my-2 border-t border-sidebar-border" />
+      {items.map(renderLink)}
+      {showAdmin ? (
         <>
           <div className="mx-2 my-2 border-t border-sidebar-border" />
           <div className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50">
@@ -57,6 +66,9 @@ export function Sidebar({ role }: { role: UserRole }) {
           </div>
           {renderLink(adminItem)}
         </>
+      ) : null}
+      {items.length === 0 && !showAdmin ? (
+        <p className="px-3 py-2 text-xs text-sidebar-foreground/40">No matches</p>
       ) : null}
     </nav>
   );

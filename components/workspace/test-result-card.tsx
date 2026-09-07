@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon, CheckIcon } from "lucide-react";
+import { PlusIcon, CheckIcon, FlaskConicalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,12 +23,20 @@ export function TestResultCard({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 rounded-xl border p-3 transition-all",
+        "group flex items-center gap-3 rounded-2xl border p-3 transition-all",
         added
           ? "border-primary/25 bg-primary/5"
-          : "border-transparent bg-muted/40 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-accent/40 hover:shadow-sm"
+          : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-elevated"
       )}
     >
+      <span
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-full transition-colors",
+          added ? "bg-primary/15 text-primary" : "bg-accent text-accent-foreground"
+        )}
+      >
+        <FlaskConicalIcon className="size-4" />
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{result.officialName}</span>
@@ -50,20 +58,14 @@ export function TestResultCard({
       </div>
       <Button
         type="button"
-        size="sm"
-        variant={added ? "secondary" : "outline"}
+        size="icon"
+        variant={added ? "secondary" : "default"}
         disabled={added}
+        aria-label={added ? `${result.officialName} added` : `Add ${result.officialName}`}
+        className="shrink-0"
         onClick={() => onAdd(result)}
       >
-        {added ? (
-          <>
-            <CheckIcon /> Added
-          </>
-        ) : (
-          <>
-            <PlusIcon /> Add
-          </>
-        )}
+        {added ? <CheckIcon /> : <PlusIcon />}
       </Button>
     </div>
   );

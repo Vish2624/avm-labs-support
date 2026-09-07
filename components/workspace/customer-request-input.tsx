@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 // so agents who don't use it can keep search at the top.
 export function CustomerRequestInput() {
   return (
-    <details open className="group rounded-lg border px-3 py-2">
+    <details open className="group rounded-2xl border border-border bg-card px-3.5 py-2.5">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
         <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
         Customer&apos;s message (for reference)
@@ -16,7 +16,7 @@ export function CustomerRequestInput() {
       <Textarea
         id="customer-request"
         placeholder="Paste the customer's WhatsApp message here…"
-        className="mt-2 min-h-20"
+        className="mt-2 min-h-20 rounded-xl"
       />
     </details>
   );

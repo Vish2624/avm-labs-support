@@ -1,6 +1,6 @@
 "use client";
 
-import { CopyIcon, CheckIcon } from "lucide-react";
+import { CopyIcon, CheckIcon, MessageCircleIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,15 @@ export function WhatsappResponse({ message, disabled }: { message: string; disab
 
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor="whatsapp-response">WhatsApp reply</Label>
+      <Label htmlFor="whatsapp-response" className="flex items-center gap-1.5">
+        <MessageCircleIcon className="size-3.5 text-success" />
+        WhatsApp reply
+      </Label>
       <Textarea
         id="whatsapp-response"
         readOnly
         value={message}
-        className="min-h-40 font-mono text-xs"
+        className="min-h-40 rounded-xl font-mono text-xs"
       />
       <Button
         type="button"
