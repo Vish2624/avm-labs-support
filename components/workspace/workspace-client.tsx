@@ -170,14 +170,13 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
                 addedTestIds={addedTestIds}
                 onAdd={handleAdd}
               />
+              <ProfileSuggestions
+                suggestions={profileSuggestions}
+                loading={profileLoading}
+                hasSelection={selectedTestIds.length > 0}
+              />
             </CardContent>
           </Card>
-
-          <ProfileSuggestions
-            suggestions={profileSuggestions}
-            loading={profileLoading}
-            hasSelection={selectedTestIds.length > 0}
-          />
         </div>
 
         <div className="flex flex-col gap-4 lg:sticky lg:top-6">
