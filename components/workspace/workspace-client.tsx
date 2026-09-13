@@ -170,11 +170,6 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
                 addedTestIds={addedTestIds}
                 onAdd={handleAdd}
               />
-              <ProfileSuggestions
-                suggestions={profileSuggestions}
-                loading={profileLoading}
-                hasSelection={selectedTestIds.length > 0}
-              />
             </CardContent>
           </Card>
         </div>
@@ -193,6 +188,14 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
           )}
         </div>
       </div>
+
+      {/* Renders nothing here — portals into the sidebar rail's empty
+          space below the nav links, see SidebarPortal. */}
+      <ProfileSuggestions
+        suggestions={profileSuggestions}
+        loading={profileLoading}
+        hasSelection={selectedTestIds.length > 0}
+      />
     </div>
   );
 }
