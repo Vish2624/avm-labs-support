@@ -172,12 +172,6 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
               />
             </CardContent>
           </Card>
-
-          <ProfileSuggestions
-            suggestions={profileSuggestions}
-            loading={profileLoading}
-            hasSelection={selectedTestIds.length > 0}
-          />
         </div>
 
         <div className="flex flex-col gap-4 lg:sticky lg:top-6">
@@ -194,6 +188,14 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
           )}
         </div>
       </div>
+
+      {/* Renders nothing here — portals into the sidebar rail's empty
+          space below the nav links, see SidebarPortal. */}
+      <ProfileSuggestions
+        suggestions={profileSuggestions}
+        loading={profileLoading}
+        hasSelection={selectedTestIds.length > 0}
+      />
     </div>
   );
 }

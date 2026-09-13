@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, LibraryBig, Bell, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SIDEBAR_PANEL_ID } from "./sidebar-portal";
 import type { UserRole } from "@/types/auth";
 
 const navItems = [
@@ -70,6 +71,10 @@ export function Sidebar({ role }: { role: UserRole }) {
       {items.length === 0 && !showAdmin ? (
         <p className="px-3 py-2 text-xs text-sidebar-foreground/40">No matches</p>
       ) : null}
+      {/* Fills the rest of the rail — pages with page-specific content for
+          here (e.g. the Support Workspace's profile-match suggestions)
+          portal it in via SidebarPortal; empty on every other page. */}
+      <div id={SIDEBAR_PANEL_ID} className="flex min-h-0 flex-1 flex-col overflow-y-auto" />
     </nav>
   );
 }
