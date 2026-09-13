@@ -1,13 +1,11 @@
 "use client";
 
-import { PlusIcon, CheckIcon, FlaskConicalIcon } from "lucide-react";
+import { PlusIcon, CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { AVAILABILITY_LABELS, AVAILABILITY_BADGE_VARIANT } from "@/lib/constants/availability";
-import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
+import { Badge } from "@/components/ui/badge";
 import type { SearchTestResult } from "@/types/search";
 
 // Single test search result row (code, name, price, TAT, availability).
@@ -23,50 +21,43 @@ export function TestResultCard({
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 rounded-2xl border p-3 transition-all",
-        added
-          ? "border-primary/25 bg-primary/5"
-          : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-elevated"
+        "flex items-center gap-3 rounded-xl border-b border-border/60 px-2 py-2.5 transition-colors last:border-b-0 hover:bg-accent/40"
       )}
     >
-      <span
-        className={cn(
-          "grid size-9 shrink-0 place-items-center rounded-full transition-colors",
-          added ? "bg-primary/15 text-primary" : "bg-accent text-accent-foreground"
-        )}
-      >
-        <FlaskConicalIcon className="size-4" />
-      </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{result.officialName}</span>
-          <Badge variant="outline">{result.code}</Badge>
-          {result.matchType === "alias" && result.matchedAlias ? (
-            <span className="text-xs text-muted-foreground">via &ldquo;{result.matchedAlias}&rdquo;</span>
-          ) : null}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span className="text-sm font-semibold text-foreground tabular-nums">
-            {formatCurrency(result.price)}
+          <span className="truncate text-[15px] font-semibold">{result.officialName}</span>
+          <span className="rounded-[6px] bg-muted px-1.5 py-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
+            {result.code}
           </span>
-          <span>TAT: {formatTat(result.tatText)}</span>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-muted-foreground">
+          <span>Ready in {formatTat(result.tatText)}</span>
           <Badge variant={AVAILABILITY_BADGE_VARIANT[result.availability]}>
             {AVAILABILITY_LABELS[result.availability]}
           </Badge>
-          <Badge variant="outline">{SERVICE_TYPE_LABELS[result.serviceType]}</Badge>
+          {result.matchType === "alias" && result.matchedAlias ? (
+            <span className="text-primary italic">matched &ldquo;{result.matchedAlias}&rdquo;</span>
+          ) : null}
         </div>
       </div>
-      <Button
-        type="button"
-        size="icon"
-        variant={added ? "secondary" : "default"}
-        disabled={added}
-        aria-label={added ? `${result.officialName} added` : `Add ${result.officialName}`}
-        className="shrink-0"
-        onClick={() => onAdd(result)}
-      >
-        {added ? <CheckIcon /> : <PlusIcon />}
-      </Button>
+      <div className="flex shrink-0 items-center gap-2.5">
+        <span className="text-[15.5px] font-semibold tabular-nums">{formatCurrency(result.price)}</span>
+        {added ? (
+          <span className="flex shrink-0 items-center gap-1 rounded-[10px] bg-success/15 px-3 py-1.5 text-xs font-semibold text-success-foreground">
+            Added <CheckIcon className="size-3.5" />
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label={`Add ${result.officialName}`}
+            onClick={() => onAdd(result)}
+            className="flex shrink-0 items-center gap-1 rounded-[10px] bg-muted px-3.5 py-1.5 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+          >
+            <PlusIcon className="size-3.5" /> Add
+          </button>
+        )}
+      </div>
     </div>
   );
 }

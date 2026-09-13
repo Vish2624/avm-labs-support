@@ -28,17 +28,20 @@ const Toaster = ({ ...props }: ToasterProps) => {
           <Loader2Icon className="size-4 animate-spin" />
         ),
       }}
+      position="bottom-center"
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          // A fixed dark pill regardless of light/dark theme, matching the
+          // Modern Workspace redesign's toast treatment.
+          "--normal-bg": "oklch(0.27 0.02 275)",
+          "--normal-text": "oklch(0.97 0.005 85)",
+          "--normal-border": "transparent",
+          "--border-radius": "999px",
         } as React.CSSProperties
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast px-5 py-3.5 shadow-lg",
         },
       }}
       {...props}

@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { ProfileTestSummary } from "@/types/profile";
 
 // Tests included in a profile bundle. In "search by test names" mode,
@@ -15,14 +15,21 @@ export function ProfileTestList({
   }
 
   return (
-    <ul className="flex flex-col gap-1">
+    <div className="flex flex-wrap gap-2">
       {tests.map((test) => (
-        <li key={test.testId} className="flex items-center gap-2 text-sm">
-          <span>{test.officialName}</span>
-          <Badge variant="outline">{test.code}</Badge>
-          {matchedTestIds?.has(test.testId) ? <Badge variant="secondary">Requested</Badge> : null}
-        </li>
+        <span
+          key={test.testId}
+          title={matchedTestIds?.has(test.testId) ? "Requested" : undefined}
+          className={cn(
+            "rounded-full px-3 py-1.5 text-[13px]",
+            matchedTestIds?.has(test.testId)
+              ? "bg-accent text-accent-foreground"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {test.officialName}
+        </span>
       ))}
-    </ul>
+    </div>
   );
 }

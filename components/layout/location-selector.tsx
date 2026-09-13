@@ -16,7 +16,8 @@ export function LocationSelector({
 }) {
   return (
     <Select value={value} onValueChange={(next) => next && onChange(next)}>
-      <SelectTrigger aria-label="Location">
+      <SelectTrigger aria-label="Location" className="h-[42px] rounded-xl px-3.5">
+        <span className="size-2 shrink-0 rounded-full bg-primary" />
         {/* Base UI's SelectValue renders the raw value unless given a
             formatter — it doesn't reflect the matching SelectItem's
             children like Radix does. */}
@@ -30,7 +31,8 @@ export function LocationSelector({
       <SelectContent>
         {locations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
-            {location.name} ({location.code})
+            <span className="flex-1">{location.name}</span>
+            <span className="text-xs text-muted-foreground">{location.currencyCode}</span>
           </SelectItem>
         ))}
       </SelectContent>

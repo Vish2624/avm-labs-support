@@ -1,16 +1,11 @@
-import { ReceiptText } from "lucide-react";
-
 // Empty state for the quotation column before any test is added.
 export function EmptyWorkspace() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-border/70 bg-glass p-12 text-center backdrop-blur-sm">
-      <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary shadow-glow">
-        <ReceiptText className="size-5" />
-      </span>
-      <p className="text-sm font-medium">No tests in the quotation yet</p>
-      <p className="max-w-xs text-xs text-muted-foreground">
-        Search for a test or alias on the left and add it. The running total and the
-        WhatsApp reply build here automatically.
+    <div className="flex max-w-[340px] flex-col gap-2 pt-10">
+      <span className="grid size-[52px] place-items-center rounded-[18px] bg-accent text-[22px]">🧾</span>
+      <p className="mt-2 text-[17px] font-medium">Nothing added yet</p>
+      <p className="text-[14.5px] leading-relaxed text-muted-foreground">
+        Add tests on the left and they appear here with the running total and a ready-to-send reply.
       </p>
     </div>
   );

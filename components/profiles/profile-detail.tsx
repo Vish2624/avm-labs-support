@@ -1,4 +1,3 @@
-import { Separator } from "@/components/ui/separator";
 import { ProfileTestList } from "./profile-test-list";
 import type { ProfileTestSummary } from "@/types/profile";
 
@@ -13,8 +12,7 @@ export function ProfileDetail({
   matchedTestIds?: Set<string>;
 }) {
   return (
-    <div className="flex flex-col gap-2 pt-2">
-      <Separator />
+    <div className="mt-3.5 flex flex-col gap-2.5">
       {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       <ProfileTestList tests={tests} matchedTestIds={matchedTestIds} />
     </div>

@@ -20,7 +20,7 @@ export function SelectedTests({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col">
       {lineItems.map((item) => (
         <QuotationRow key={item.testId} item={item} onRemove={onRemove} />
       ))}

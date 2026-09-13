@@ -16,18 +16,21 @@ export function TestSearch({
   value,
   onChange,
   onSubmit,
+  inputRef,
 }: {
   value: string;
   onChange: (query: string) => void;
   onSubmit?: () => void;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   return (
-    <InputGroup>
+    <InputGroup className="h-[52px] rounded-2xl px-3">
       <InputGroupAddon>
-        <SearchIcon className="size-4" />
+        <SearchIcon className="size-[22px]" />
       </InputGroupAddon>
       <InputGroupInput
-        placeholder="Search by test name, code, or alias (e.g. “insulin resistance”)"
+        ref={inputRef}
+        placeholder="Type a test name, code, or the customer's words"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -36,6 +39,7 @@ export function TestSearch({
             onSubmit?.();
           }
         }}
+        className="text-[15.5px]"
         autoFocus
       />
       {value ? (

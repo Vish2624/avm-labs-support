@@ -1,80 +1,74 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, LibraryBig, Bell, ShieldCheck } from "lucide-react";
+import { Search, Package, Bell, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SIDEBAR_PANEL_ID } from "./sidebar-portal";
-import type { UserRole } from "@/types/auth";
+import { ThemeToggle } from "./theme-toggle";
+import { signOutAction } from "@/app/(dashboard)/actions";
+import type { AuthUser } from "@/types/auth";
 
 const navItems = [
-  { href: "/workspace", label: "Support Workspace", icon: Search },
-  { href: "/profiles", label: "Profile Search", icon: LibraryBig },
-  { href: "/updates", label: "Updates", icon: Bell },
+  { href: "/workspace", label: "Support Workspace", short: "Quote", icon: Search },
+  { href: "/profiles", label: "Packages", short: "Packages", icon: Package },
+  { href: "/updates", label: "What changed", short: "Updates", icon: Bell },
 ];
 
-const adminItem = { href: "/admin", label: "Admin", icon: ShieldCheck };
+const adminItem = { href: "/admin", label: "Admin", short: "Admin", icon: ShieldCheck };
 
-export function Sidebar({ role }: { role: UserRole }) {
+// Narrow icon rail — also carries what used to be the topbar's identity:
+// the logo up top, the signed-in agent's initial + sign out and the theme
+// toggle at the bottom. There's no separate topbar in this layout.
+export function Sidebar({ user }: { user: AuthUser }) {
   const pathname = usePathname();
-  const [filter, setFilter] = useState("");
+  const items = user.role === "admin" ? [...navItems, adminItem] : navItems;
+  const initial = user.email.charAt(0).toUpperCase();
 
-  const normalizedFilter = filter.trim().toLowerCase();
-  const items = navItems.filter((item) => item.label.toLowerCase().includes(normalizedFilter));
-  const showAdmin = role === "admin" && adminItem.label.toLowerCase().includes(normalizedFilter);
-
-  const renderLink = ({ href, label, icon: Icon }: (typeof navItems)[number]) => {
+  const renderLink = ({ href, label, short, icon: Icon }: (typeof navItems)[number]) => {
     const active = pathname === href || pathname.startsWith(`${href}/`);
     return (
       <Link
         key={href}
         href={href}
+        title={label}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm transition-colors",
+          "flex w-full flex-col items-center gap-1.5 rounded-2xl px-1 py-2.5 text-center transition-colors",
           active
-            ? "bg-primary text-primary-foreground font-medium shadow-glow"
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
         )}
       >
-        <Icon className="size-4 shrink-0" />
-        {label}
+        <Icon className="size-[22px] shrink-0" />
+        <span className="text-[11px] leading-tight font-medium">{short}</span>
       </Link>
     );
   };
 
   return (
-    <nav className="flex h-full w-64 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar p-3.5 backdrop-blur-md">
-      <div className="relative mb-1">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-sidebar-foreground/40" />
-        <input
-          type="text"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Search…"
-          aria-label="Filter navigation"
-          className="h-9 w-full rounded-full border border-sidebar-border bg-sidebar-accent/30 pl-9 pr-3 text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/40 outline-none transition-colors focus-visible:border-sidebar-ring focus-visible:ring-3 focus-visible:ring-sidebar-ring/30"
-        />
-      </div>
-      <div className="mx-1 my-2 border-t border-sidebar-border" />
+    <nav className="flex h-full w-[76px] shrink-0 flex-col items-center gap-1.5 border-r border-sidebar-border bg-sidebar px-2 py-4.5">
+      <Link href="/workspace" className="mb-3 shrink-0" title="AVM Labs">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no benefit from next/image */}
+        <img src="/logo/avm-labs-logo-full.svg" alt="AVM Labs" className="h-auto w-[54px]" />
+      </Link>
+
       {items.map(renderLink)}
-      {showAdmin ? (
-        <>
-          <div className="mx-2 my-2 border-t border-sidebar-border" />
-          <div className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50">
-            Admin
-          </div>
-          {renderLink(adminItem)}
-        </>
-      ) : null}
-      {items.length === 0 && !showAdmin ? (
-        <p className="px-3 py-2 text-xs text-sidebar-foreground/40">No matches</p>
-      ) : null}
-      {/* Fills the rest of the rail — pages with page-specific content for
-          here (e.g. the Support Workspace's profile-match suggestions)
-          portal it in via SidebarPortal; empty on every other page. */}
-      <div id={SIDEBAR_PANEL_ID} className="flex min-h-0 flex-1 flex-col overflow-y-auto" />
+
+      <div className="mt-auto flex flex-col items-center gap-1">
+        <ThemeToggle />
+        <form action={signOutAction} className="w-full">
+          <button
+            type="submit"
+            title={`Sign out (${user.email})`}
+            className="flex w-full flex-col items-center gap-1.5 rounded-2xl px-1 py-2 text-center transition-colors hover:bg-sidebar-accent/60"
+          >
+            <span className="grid size-[34px] shrink-0 place-items-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+              {initial}
+            </span>
+            <span className="text-[10.5px] text-sidebar-foreground/55">Sign out</span>
+          </button>
+        </form>
+      </div>
     </nav>
   );
 }
