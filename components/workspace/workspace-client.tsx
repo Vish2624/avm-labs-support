@@ -5,28 +5,35 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import { ArrowDownIcon } from "lucide-react";
 import { LocationSelector } from "@/components/layout/location-selector";
-import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
+import { ServiceTypeFilterSelector } from "./service-type-filter";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { TestSearch } from "./test-search";
-import { SearchResults } from "./search-results";
+import { SearchResults, type SearchResultGroup } from "./search-results";
 import { MessageExtractor } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
 import { EmptyWorkspace } from "./empty-workspace";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
-import { SERVICE_TYPES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
+import {
+  SERVICE_TYPES,
+  SERVICE_TYPE_FILTER_LABELS,
+  type ServiceType,
+  type ServiceTypeFilter,
+} from "@/lib/constants/service-types";
 import { cn } from "@/lib/utils";
 import type { Location } from "@/types/location";
 import type { SearchTestResult } from "@/types/search";
-import type { ProfileSuggestion } from "@/types/profile";
+import type { ProfileSuggestion, ProfileSearchResult } from "@/types/profile";
 import type { Quotation, QuotationLineItem } from "@/types/quotation";
 
 const SEARCH_DEBOUNCE_MS = 300;
-// Stable reference so a missing SWR response doesn't create a new empty
-// array every render — that would retrigger effects keyed on this value.
+// Stable references so a missing SWR response doesn't create a new empty
+// array every render — that would retrigger effects keyed on these values.
 const EMPTY_PROFILE_SUGGESTIONS: ProfileSuggestion[] = [];
+const EMPTY_TEST_RESULTS: SearchTestResult[] = [];
+const EMPTY_PROFILE_RESULTS: ProfileSearchResult[] = [];
 
 const tabTriggerClassName = cn(
   "rounded-full border border-border/70 bg-card px-3.5 py-2 text-[13.5px] font-medium text-muted-foreground shadow-none transition-all",
@@ -36,7 +43,10 @@ const tabTriggerClassName = cn(
 
 export function WorkspaceClient({ locations }: { locations: Location[] }) {
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
-  const [serviceType, setServiceType] = useState<ServiceType>(SERVICE_TYPES[0]);
+  // "All" searches both service types at once, grouped in the results —
+  // it's a search-time filter only, not a property of the quote itself
+  // (each line item already carries its own real ServiceType).
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("all");
   const [tab, setTab] = useState<"search" | "paste">("search");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -54,9 +64,11 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     return () => clearTimeout(timeout);
   }, [query]);
 
-  // A quote's line items carry prices in one location's currency at one
-  // service type — switching either invalidates the in-progress quote
-  // rather than silently mixing currencies/prices.
+  // A quote's line items carry prices in one location's currency — changing
+  // location invalidates the in-progress quote rather than silently mixing
+  // currencies. Changing the service-type *search filter* no longer clears
+  // it: that's just what you're browsing, not what's already in the cart
+  // (searching "All" can add both in-house and outsourced tests to one quote).
   useEffect(() => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
@@ -64,10 +76,10 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     }
     setLineItems((prev) => {
       if (prev.length === 0) return prev;
-      toast("Location or service type changed — quotation cleared.");
+      toast("Location changed — quotation cleared.");
       return [];
     });
-  }, [locationId, serviceType]);
+  }, [locationId]);
 
   // "/" and Cmd/Ctrl+K jump to the search tab and focus the box, from
   // anywhere on the page — unless the agent is already typing somewhere.
@@ -88,25 +100,64 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
   }, []);
 
   // Live search — conditional SWR key delays the request until there's a
-  // query, per Next.js's client-side data-fetching guide.
+  // query, per Next.js's client-side data-fetching guide. "All" fetches
+  // both service types (tests + profiles, so 4 requests) and groups them;
+  // a single filter only fetches that one type's 2 requests.
   const trimmedQuery = debouncedQuery.trim();
-  const searchKey =
-    trimmedQuery && locationId
-      ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType })}`
-      : null;
-  const {
-    data: searchData,
-    error: searchErrorObj,
-    isLoading: searchLoading,
-  } = useSWR<{ results: SearchTestResult[] }>(searchKey, fetcher);
-  const searchResults = searchData?.results ?? [];
-  const searchError = searchErrorObj instanceof Error ? searchErrorObj.message : null;
+  const activeServiceTypes: readonly ServiceType[] =
+    serviceTypeFilter === "all" ? SERVICE_TYPES : [serviceTypeFilter];
+  const isActiveServiceType = (type: ServiceType) => activeServiceTypes.includes(type);
 
-  // Profile suggestions for the currently selected tests.
+  function useTestSearchResults(type: ServiceType) {
+    const key =
+      trimmedQuery && locationId && isActiveServiceType(type)
+        ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
+        : null;
+    return useSWR<{ results: SearchTestResult[] }>(key, fetcher);
+  }
+  function useProfileSearchResults(type: ServiceType) {
+    const key =
+      trimmedQuery && locationId && isActiveServiceType(type)
+        ? `/api/profiles?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
+        : null;
+    return useSWR<{ results: ProfileSearchResult[] }>(key, fetcher);
+  }
+
+  const inHouseTests = useTestSearchResults("in_house");
+  const outsourceTests = useTestSearchResults("outsource");
+  const inHouseProfiles = useProfileSearchResults("in_house");
+  const outsourceProfiles = useProfileSearchResults("outsource");
+
+  const groupDataByType: Record<ServiceType, SearchResultGroup> = {
+    in_house: {
+      serviceType: "in_house",
+      tests: inHouseTests.data?.results ?? EMPTY_TEST_RESULTS,
+      testsLoading: inHouseTests.isLoading,
+      testsError: inHouseTests.error instanceof Error ? inHouseTests.error.message : null,
+      profiles: inHouseProfiles.data?.results ?? EMPTY_PROFILE_RESULTS,
+      profilesLoading: inHouseProfiles.isLoading,
+    },
+    outsource: {
+      serviceType: "outsource",
+      tests: outsourceTests.data?.results ?? EMPTY_TEST_RESULTS,
+      testsLoading: outsourceTests.isLoading,
+      testsError: outsourceTests.error instanceof Error ? outsourceTests.error.message : null,
+      profiles: outsourceProfiles.data?.results ?? EMPTY_PROFILE_RESULTS,
+      profilesLoading: outsourceProfiles.isLoading,
+    },
+  };
+  const searchGroups = activeServiceTypes.map((type) => groupDataByType[type]);
+
+  // Profile suggestions for the currently selected tests — only meaningful
+  // when the cart's tests all share one real service type (a package has
+  // one service type too, so there's no single sensible comparison once
+  // the cart itself mixes in-house and outsourced tests).
   const selectedTestIds = useMemo(() => lineItems.map((item) => item.testId), [lineItems]);
+  const lineItemServiceTypes = useMemo(() => new Set(lineItems.map((item) => item.serviceType)), [lineItems]);
+  const uniformServiceType = lineItemServiceTypes.size === 1 ? [...lineItemServiceTypes][0] : null;
   const profileKey =
-    selectedTestIds.length > 0 && locationId
-      ? `/api/profiles?${new URLSearchParams({ testIds: selectedTestIds.join(","), locationId, serviceType })}`
+    selectedTestIds.length > 0 && locationId && uniformServiceType
+      ? `/api/profiles?${new URLSearchParams({ testIds: selectedTestIds.join(","), locationId, serviceType: uniformServiceType })}`
       : null;
   const { data: profileData, isLoading: profileLoading } = useSWR<{ results: ProfileSuggestion[] }>(
     profileKey,
@@ -142,11 +193,17 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     setLineItems((prev) => prev.filter((item) => item.testId !== testId));
   }
 
-  // Enter in the search box adds the first result that isn't already in the
-  // quote — lets an agent clear a customer's list without touching the mouse.
+  // Enter in the search box adds the first result (across active service
+  // types, in_house before outsource) that isn't already in the quote —
+  // lets an agent clear a customer's list without touching the mouse.
   function handleSearchSubmit() {
-    const next = searchResults.find((result) => !addedTestIds.has(result.testId));
-    if (next) handleAdd(next);
+    for (const group of searchGroups) {
+      const next = group.tests.find((result) => !addedTestIds.has(result.testId));
+      if (next) {
+        handleAdd(next);
+        return;
+      }
+    }
   }
 
   function handleClear() {
@@ -160,14 +217,13 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
   const quotation: Quotation = useMemo(
     () => ({
       locationId,
-      serviceType,
       lineItems,
       total: sumMoney(
         lineItems.map((item) => item.price),
         selectedLocation?.currencyCode ?? lineItems[0]?.price.currency ?? "AED"
       ),
     }),
-    [locationId, serviceType, lineItems, selectedLocation]
+    [locationId, lineItems, selectedLocation]
   );
 
   const whatsappMessage = useMemo(() => generateWhatsAppResponse(quotation), [quotation]);
@@ -201,7 +257,7 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
 
   const currencyCode = selectedLocation?.currencyCode ?? lineItems[0]?.price.currency ?? null;
   const context = selectedLocation
-    ? `${selectedLocation.name} · ${SERVICE_TYPE_LABELS[serviceType]}${currencyCode ? ` · prices in ${currencyCode}` : ""}`
+    ? `${selectedLocation.name} · ${SERVICE_TYPE_FILTER_LABELS[serviceTypeFilter]}${currencyCode ? ` · prices in ${currencyCode}` : ""}`
     : null;
 
   return (
@@ -214,7 +270,7 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
           </div>
           <div className="flex items-center gap-2">
             <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-            <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
+            <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
           </div>
         </div>
 
@@ -238,9 +294,8 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
             ) : null}
             <SearchResults
               query={debouncedQuery}
-              results={searchResults}
-              loading={searchLoading}
-              error={searchError}
+              groups={searchGroups}
+              showGroupHeaders={serviceTypeFilter === "all"}
               addedTestIds={addedTestIds}
               onAdd={handleAdd}
             />
@@ -249,7 +304,11 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
           <TabsContent value="paste" className="mt-4">
             <MessageExtractor
               locationId={locationId}
-              serviceType={serviceType}
+              // The pasted-message extractor resolves each token through a
+              // single /api/search call — "All" has no one service type to
+              // pass, so this falls back to in_house rather than doubling
+              // every extraction into 2N requests for a rarely-mixed case.
+              serviceType={serviceTypeFilter === "all" ? SERVICE_TYPES[0] : serviceTypeFilter}
               addedTestIds={addedTestIds}
               onAddMany={handleAddMany}
             />

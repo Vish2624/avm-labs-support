@@ -19,10 +19,14 @@ export function SelectedTests({
     );
   }
 
+  // Searching "All" can add both in-house and outsourced tests to one
+  // quote — only then does each row need to say which it is.
+  const mixedServiceTypes = new Set(lineItems.map((item) => item.serviceType)).size > 1;
+
   return (
     <div className="flex flex-col">
       {lineItems.map((item) => (
-        <QuotationRow key={item.testId} item={item} onRemove={onRemove} />
+        <QuotationRow key={item.testId} item={item} onRemove={onRemove} showServiceType={mixedServiceTypes} />
       ))}
     </div>
   );
