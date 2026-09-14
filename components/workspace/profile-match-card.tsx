@@ -8,22 +8,23 @@ import type { ProfileSuggestion } from "@/types/profile";
 // covers some or all of the currently-selected tests.
 export function ProfileMatchCard({ suggestion }: { suggestion: ProfileSuggestion }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-2xl bg-success/10 p-3.5">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm leading-tight font-semibold">{suggestion.name}</span>
-        <Badge variant="secondary" className="shrink-0">
-          {suggestion.matchPercentage}% match
-        </Badge>
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-success/10 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-[13px] leading-tight font-semibold">{suggestion.name}</span>
+          <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10.5px]">
+            {suggestion.matchPercentage}% match
+          </Badge>
+        </div>
+        <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
+          Covers {suggestion.matchedCount}/{suggestion.requestedCount} requested ·{" "}
+          {suggestion.profileTestCount} tests · ready in {formatTat(suggestion.tatText)}
+        </p>
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        Covers {suggestion.matchedCount} of your {suggestion.requestedCount} requested test
-        {suggestion.requestedCount === 1 ? "" : "s"} · {suggestion.profileTestCount} tests in the package
-      </p>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-base font-semibold tabular-nums">{formatCurrency(suggestion.price)}</span>
-        <span className="text-xs text-muted-foreground">ready in {formatTat(suggestion.tatText)}</span>
+      <div className="flex shrink-0 flex-col items-end gap-0.5">
+        <span className="text-sm font-semibold tabular-nums">{formatCurrency(suggestion.price)}</span>
         {suggestion.availability !== "available" ? (
-          <Badge variant={AVAILABILITY_BADGE_VARIANT[suggestion.availability]}>
+          <Badge variant={AVAILABILITY_BADGE_VARIANT[suggestion.availability]} className="px-1.5 py-0 text-[10.5px]">
             {AVAILABILITY_LABELS[suggestion.availability]}
           </Badge>
         ) : null}
