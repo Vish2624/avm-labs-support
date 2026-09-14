@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { ArrowDownIcon } from "lucide-react";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { TestSearch } from "./test-search";
 import { SearchResults } from "./search-results";
 import { MessageExtractor } from "./message-extractor";
@@ -22,6 +24,9 @@ import type { ProfileSuggestion } from "@/types/profile";
 import type { Quotation, QuotationLineItem } from "@/types/quotation";
 
 const SEARCH_DEBOUNCE_MS = 300;
+// Stable reference so a missing SWR response doesn't create a new empty
+// array every render — that would retrigger effects keyed on this value.
+const EMPTY_PROFILE_SUGGESTIONS: ProfileSuggestion[] = [];
 
 const tabTriggerClassName = cn(
   "rounded-full border border-border/70 bg-card px-3.5 py-2 text-[13.5px] font-medium text-muted-foreground shadow-none transition-all",
@@ -37,6 +42,8 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const quotationScrollRef = useRef<HTMLElement>(null);
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
 
   const selectedLocation = locations.find((location) => location.id === locationId) ?? null;
   const isFirstRun = useRef(true);
@@ -105,7 +112,7 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     profileKey,
     fetcher
   );
-  const profileSuggestions = profileData?.results ?? [];
+  const profileSuggestions = profileData?.results ?? EMPTY_PROFILE_SUGGESTIONS;
 
   const addedTestIds = useMemo(() => new Set(lineItems.map((item) => item.testId)), [lineItems]);
 
@@ -165,6 +172,33 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
 
   const whatsappMessage = useMemo(() => generateWhatsAppResponse(quotation), [quotation]);
 
+  // Show a floating "jump to bottom" button on the quotation column whenever
+  // there's more content below the fold (the WhatsApp reply, usually) — lets
+  // an agent skip past the package suggestions to copy the reply quickly.
+  useEffect(() => {
+    const panel = quotationScrollRef.current;
+    if (!panel) return;
+
+    function updateVisibility() {
+      if (!panel) return;
+      const distanceFromBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight;
+      setShowJumpToBottom(distanceFromBottom > 48);
+    }
+
+    updateVisibility();
+    panel.addEventListener("scroll", updateVisibility);
+    const resizeObserver = new ResizeObserver(updateVisibility);
+    resizeObserver.observe(panel);
+    return () => {
+      panel.removeEventListener("scroll", updateVisibility);
+      resizeObserver.disconnect();
+    };
+  }, [lineItems, profileSuggestions, whatsappMessage]);
+
+  function scrollQuotationToBottom() {
+    quotationScrollRef.current?.scrollTo({ top: quotationScrollRef.current.scrollHeight, behavior: "smooth" });
+  }
+
   const currencyCode = selectedLocation?.currencyCode ?? lineItems[0]?.price.currency ?? null;
   const context = selectedLocation
     ? `${selectedLocation.name} · ${SERVICE_TYPE_LABELS[serviceType]}${currencyCode ? ` · prices in ${currencyCode}` : ""}`
@@ -223,27 +257,45 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
         </Tabs>
       </section>
 
-      <section className="flex h-full min-w-[330px] flex-1 flex-col gap-5 overflow-y-auto bg-card px-6 py-5 lg:px-7 lg:py-6">
-        {lineItems.length === 0 ? (
-          <>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight">Quotation</h1>
-              <p className="mt-1 text-[13px] text-muted-foreground">Nothing added yet</p>
-            </div>
-            <EmptyWorkspace />
-          </>
-        ) : (
-          <QuotationPanel
-            quotation={quotation}
-            whatsappMessage={whatsappMessage}
-            context={context}
-            profileSuggestions={profileSuggestions}
-            profileSuggestionsLoading={profileLoading}
-            onRemove={handleRemove}
-            onClear={handleClear}
-          />
-        )}
-      </section>
+      <div className="relative min-w-[330px] flex-1">
+        <section
+          ref={quotationScrollRef}
+          className="flex h-full flex-col gap-5 overflow-y-auto bg-card px-6 py-5 lg:px-7 lg:py-6"
+        >
+          {lineItems.length === 0 ? (
+            <>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight">Quotation</h1>
+                <p className="mt-1 text-[13px] text-muted-foreground">Nothing added yet</p>
+              </div>
+              <EmptyWorkspace />
+            </>
+          ) : (
+            <QuotationPanel
+              quotation={quotation}
+              whatsappMessage={whatsappMessage}
+              context={context}
+              profileSuggestions={profileSuggestions}
+              profileSuggestionsLoading={profileLoading}
+              onRemove={handleRemove}
+              onClear={handleClear}
+            />
+          )}
+        </section>
+
+        {showJumpToBottom ? (
+          <Button
+            type="button"
+            size="icon-lg"
+            onClick={scrollQuotationToBottom}
+            aria-label="Jump to the WhatsApp reply"
+            title="Jump to the WhatsApp reply"
+            className="absolute bottom-5 right-5 shadow-lg animate-in fade-in zoom-in-95"
+          >
+            <ArrowDownIcon />
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
