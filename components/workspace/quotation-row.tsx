@@ -3,15 +3,21 @@
 import { XIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
+import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import type { QuotationLineItem } from "@/types/quotation";
 
 // One line item in the quotation (name, code, price, TAT, remove).
+// `showServiceType` is set only when the quote actually mixes in-house and
+// outsourced tests (searching "All" makes that possible) — otherwise it'd
+// just repeat the same label on every row for no reason.
 export function QuotationRow({
   item,
   onRemove,
+  showServiceType = false,
 }: {
   item: QuotationLineItem;
   onRemove: (testId: string) => void;
+  showServiceType?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 border-b border-border/60 py-2.5">
@@ -19,6 +25,7 @@ export function QuotationRow({
         <div className="truncate text-sm font-semibold">{item.testName}</div>
         <div className="mt-0.5 truncate text-xs text-muted-foreground">
           {item.testCode} · ready in {formatTat(item.tatText)}
+          {showServiceType ? ` · ${SERVICE_TYPE_LABELS[item.serviceType]}` : ""}
         </div>
       </div>
       <span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrency(item.price)}</span>

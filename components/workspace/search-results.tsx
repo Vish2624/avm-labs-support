@@ -2,21 +2,37 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "./test-result-card";
+import { ProfileResultCard } from "@/components/profiles/profile-result-card";
+import { SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
+import type { ProfileSearchResult } from "@/types/profile";
 
-// List of matched tests for the current query, with loading/empty/error states.
+export interface SearchResultGroup {
+  serviceType: ServiceType;
+  tests: SearchTestResult[];
+  testsLoading: boolean;
+  testsError: string | null;
+  profiles: ProfileSearchResult[];
+  profilesLoading: boolean;
+}
+
+const sectionLabelClassName = "text-[11px] font-semibold tracking-wide text-muted-foreground uppercase";
+const subsectionLabelClassName = "mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground/80 uppercase";
+
+// List of matched tests + profiles for the current query, grouped by
+// service type when searching "All" (see ServiceTypeFilterSelector),
+// otherwise shown flat since the single active service type is already
+// named above the search box.
 export function SearchResults({
   query,
-  results,
-  loading,
-  error,
+  groups,
+  showGroupHeaders,
   addedTestIds,
   onAdd,
 }: {
   query: string;
-  results: SearchTestResult[];
-  loading: boolean;
-  error: string | null;
+  groups: SearchResultGroup[];
+  showGroupHeaders: boolean;
   addedTestIds: Set<string>;
   onAdd: (result: SearchTestResult) => void;
 }) {
@@ -26,7 +42,8 @@ export function SearchResults({
     return null;
   }
 
-  if (loading) {
+  const allLoading = groups.every((group) => group.testsLoading && group.profilesLoading);
+  if (allLoading) {
     return (
       <div className="flex flex-col gap-2">
         <Skeleton className="h-16 w-full rounded-xl" />
@@ -36,11 +53,17 @@ export function SearchResults({
     );
   }
 
-  if (error) {
-    return <p className="text-sm text-destructive">{error}</p>;
+  const firstError = groups.find((group) => group.testsError)?.testsError ?? null;
+  if (firstError) {
+    return <p className="text-sm text-destructive">{firstError}</p>;
   }
 
-  if (results.length === 0) {
+  const totalCount = groups.reduce((sum, group) => sum + group.tests.length + group.profiles.length, 0);
+  const nonEmptyGroups = groups.filter(
+    (group) => group.testsLoading || group.profilesLoading || group.tests.length > 0 || group.profiles.length > 0
+  );
+
+  if (totalCount === 0) {
     return (
       <div className="py-11 text-center leading-relaxed">
         <p className="text-base font-medium">Nothing found for &ldquo;{query}&rdquo;</p>
@@ -53,19 +76,48 @@ export function SearchResults({
   }
 
   return (
-    <div className="flex flex-col">
-      <p className="mb-1 text-xs text-muted-foreground">
-        {results.length} match{results.length === 1 ? "" : "es"} · press{" "}
-        <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> to add the top one
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground">
+        {totalCount} match{totalCount === 1 ? "" : "es"} · press{" "}
+        <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> to add the top test
       </p>
-      {results.map((result) => (
-        <TestResultCard
-          key={result.testId}
-          result={result}
-          added={addedTestIds.has(result.testId)}
-          onAdd={onAdd}
-        />
+      {nonEmptyGroups.map((group) => (
+        <div key={group.serviceType} className="flex flex-col gap-2.5">
+          {showGroupHeaders ? (
+            <p className={sectionLabelClassName}>{SERVICE_TYPE_LABELS[group.serviceType]}</p>
+          ) : null}
+
+          {group.testsLoading ? (
+            <Skeleton className="h-16 w-full rounded-xl" />
+          ) : group.tests.length > 0 ? (
+            <div className="flex flex-col">
+              {group.profiles.length > 0 || group.profilesLoading ? (
+                <p className={subsectionLabelClassName}>Tests</p>
+              ) : null}
+              {group.tests.map((result) => (
+                <TestResultCard
+                  key={result.testId}
+                  result={result}
+                  added={addedTestIds.has(result.testId)}
+                  onAdd={onAdd}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {group.profilesLoading ? (
+            <Skeleton className="h-16 w-full rounded-xl" />
+          ) : group.profiles.length > 0 ? (
+            <div className="flex flex-col">
+              {group.tests.length > 0 ? <p className={subsectionLabelClassName}>Packages</p> : null}
+              {group.profiles.map((result) => (
+                <ProfileResultCard key={result.profileId} result={result} />
+              ))}
+            </div>
+          ) : null}
+        </div>
       ))}
     </div>
   );
 }
+

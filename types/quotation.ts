@@ -19,7 +19,6 @@ export interface QuotationLineItem {
 
 export interface Quotation {
   locationId: string;
-  serviceType: ServiceType;
   lineItems: QuotationLineItem[];
   total: Money;
 }
