@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { SelectedTests } from "./selected-tests";
 import { WhatsappResponse } from "./whatsapp-response";
 import { ProfileSuggestions } from "./profile-suggestions";
+import { DiscountTiers } from "./discount-tiers";
 import { formatCurrency } from "@/lib/utils/format-currency";
+import { applyDiscount } from "@/lib/pricing/discount";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { cn } from "@/lib/utils";
 import type { Quotation } from "@/types/quotation";
 import type { ProfileSuggestion } from "@/types/profile";
 
@@ -31,6 +34,7 @@ export function QuotationPanel({
 }) {
   const count = quotation.lineItems.length;
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
+  const { tier, discountAmount, discountedTotal } = applyDiscount(quotation.total);
 
   return (
     <div className="flex flex-col gap-5">
@@ -53,11 +57,41 @@ export function QuotationPanel({
 
       {count > 0 ? (
         <div className="flex flex-col gap-5">
-          <div className="flex items-baseline justify-between gap-3 border-b border-border pb-5">
-            <span className="text-sm font-medium text-muted-foreground">Total for the customer</span>
-            <span className="text-2xl font-semibold tracking-tight text-primary tabular-nums">
-              {formatCurrency(quotation.total)}
-            </span>
+          <div className="flex flex-col gap-2 border-b border-border pb-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium text-muted-foreground">
+                {tier ? "Subtotal" : "Total for the customer"}
+              </span>
+              <span
+                className={cn(
+                  "tabular-nums",
+                  tier
+                    ? "text-base font-medium text-muted-foreground line-through decoration-1"
+                    : "text-2xl font-semibold tracking-tight text-primary"
+                )}
+              >
+                {formatCurrency(quotation.total)}
+              </span>
+            </div>
+
+            {tier ? (
+              <>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-medium text-success-foreground">Discount ({tier.percent}%)</span>
+                  <span className="text-base font-medium tabular-nums text-success-foreground">
+                    -{formatCurrency(discountAmount)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-medium text-muted-foreground">Total after discount</span>
+                  <span className="text-2xl font-semibold tracking-tight text-primary tabular-nums">
+                    {formatCurrency(discountedTotal)}
+                  </span>
+                </div>
+              </>
+            ) : null}
+
+            <DiscountTiers currency={quotation.total.currency} achievedPercent={tier?.percent} className="mt-1" />
           </div>
 
           {flagged.length > 0 ? (

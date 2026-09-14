@@ -27,9 +27,9 @@ export function ProfileSuggestions({
         Cheaper as a package
       </p>
       {loading ? (
-        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-14 w-full rounded-xl" />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {suggestions.map((suggestion) => (
             <ProfileMatchCard key={suggestion.profileId} suggestion={suggestion} />
           ))}
