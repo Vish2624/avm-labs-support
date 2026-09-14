@@ -6,9 +6,16 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import type { ResolvedTestQuery } from "@/lib/search/resolve-test-ids";
 
 export type ProfileSearchMode = "name" | "tests";
+
+const modeTriggerClassName = cn(
+  "rounded-full border border-border/70 bg-card px-4.5 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-all",
+  "hover:border-primary/50 hover:text-foreground",
+  "data-active:border-primary data-active:bg-primary data-active:text-primary-foreground data-active:shadow-none"
+);
 
 // Search by profile name/code, or by one-or-more test-name chips (each chip
 // gets resolved to a catalog test id server-side — see resolvedByQuery).
@@ -44,29 +51,34 @@ export function ProfileSearch({
 
   return (
     <Tabs value={mode} onValueChange={(value) => onModeChange(value as ProfileSearchMode)}>
-      <TabsList>
-        <TabsTrigger value="name">By name</TabsTrigger>
-        <TabsTrigger value="tests">By test names</TabsTrigger>
+      <TabsList className="mb-1 h-auto gap-1.5 rounded-none bg-transparent p-0">
+        <TabsTrigger value="name" className={modeTriggerClassName}>
+          By name
+        </TabsTrigger>
+        <TabsTrigger value="tests" className={modeTriggerClassName}>
+          By test names
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="name" className="mt-3">
-        <InputGroup>
+        <InputGroup className="h-[60px] rounded-[18px] px-3.5">
           <InputGroupAddon>
-            <SearchIcon className="size-4" />
+            <SearchIcon className="size-5" />
           </InputGroupAddon>
           <InputGroupInput
-            placeholder="Search by profile name or code"
+            placeholder="Search by package name"
             value={nameQuery}
             onChange={(event) => onNameQueryChange(event.target.value)}
+            className="text-base"
             autoFocus
           />
         </InputGroup>
       </TabsContent>
 
       <TabsContent value="tests" className="mt-3">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           <Input
-            placeholder="Type a test name, code, or alias and press Enter"
+            placeholder="Type the tests the customer asked for, press Enter after each"
             value={chipInput}
             onChange={(event) => setChipInput(event.target.value)}
             onKeyDown={(event) => {
@@ -75,6 +87,7 @@ export function ProfileSearch({
                 addChip();
               }
             }}
+            className="h-[60px] rounded-[18px] px-5 text-base"
           />
           {testQueries.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">

@@ -36,11 +36,11 @@ export function ProfileResults({
   }
 
   if (results.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
+    return <p className="py-11 text-center text-[15px] text-muted-foreground">{emptyMessage}</p>;
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col">
       {results.map((result) => (
         <ProfileResultCard key={result.profileId} result={result} />
       ))}

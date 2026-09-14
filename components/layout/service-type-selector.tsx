@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SERVICE_TYPES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
 
@@ -13,20 +12,24 @@ export function ServiceTypeSelector({
   onChange: (serviceType: ServiceType) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-card p-1 shadow-xs" role="group" aria-label="Service type">
-      {SERVICE_TYPES.map((serviceType) => (
-        <Button
-          key={serviceType}
-          type="button"
-          size="sm"
-          variant={value === serviceType ? "default" : "ghost"}
-          className={cn("h-7 rounded-full", value !== serviceType && "shadow-none")}
-          aria-pressed={value === serviceType}
-          onClick={() => onChange(serviceType)}
-        >
-          {SERVICE_TYPE_LABELS[serviceType]}
-        </Button>
-      ))}
+    <div className="inline-flex items-center gap-[3px] rounded-[13px] bg-muted p-[3px]" role="group" aria-label="Service type">
+      {SERVICE_TYPES.map((serviceType) => {
+        const active = value === serviceType;
+        return (
+          <button
+            key={serviceType}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(serviceType)}
+            className={cn(
+              "rounded-[10px] px-3.5 py-2 text-[13.5px] font-medium transition-all",
+              active ? "bg-card text-accent-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {SERVICE_TYPE_LABELS[serviceType]}
+          </button>
+        );
+      })}
     </div>
   );
 }

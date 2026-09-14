@@ -1,14 +1,11 @@
 "use client";
 
-import { XIcon, FlaskConicalIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { XIcon } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { AVAILABILITY_LABELS, AVAILABILITY_BADGE_VARIANT } from "@/lib/constants/availability";
 import type { QuotationLineItem } from "@/types/quotation";
 
-// One line item in the quotation (name, code, price, TAT, availability, remove).
+// One line item in the quotation (name, code, price, TAT, remove).
 export function QuotationRow({
   item,
   onRemove,
@@ -17,32 +14,22 @@ export function QuotationRow({
   onRemove: (testId: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
-        <FlaskConicalIcon className="size-4" />
-      </span>
+    <div className="flex items-center gap-3 border-b border-border/60 py-2.5">
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{item.testName}</span>
-          <Badge variant="outline">{item.testCode}</Badge>
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span>TAT: {formatTat(item.tatText)}</span>
-          <Badge variant={AVAILABILITY_BADGE_VARIANT[item.availability]}>
-            {AVAILABILITY_LABELS[item.availability]}
-          </Badge>
+        <div className="truncate text-sm font-semibold">{item.testName}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+          {item.testCode} · ready in {formatTat(item.tatText)}
         </div>
       </div>
-      <span className="shrink-0 font-semibold tabular-nums">{formatCurrency(item.price)}</span>
-      <Button
+      <span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrency(item.price)}</span>
+      <button
         type="button"
-        size="icon-sm"
-        variant="ghost"
         aria-label={`Remove ${item.testName}`}
         onClick={() => onRemove(item.testId)}
+        className="grid size-8 shrink-0 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
       >
-        <XIcon />
-      </Button>
+        <XIcon className="size-[17px]" />
+      </button>
     </div>
   );
 }

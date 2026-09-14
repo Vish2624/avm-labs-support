@@ -3,21 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { SearchIcon } from "lucide-react";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
-import { PageHeader } from "@/components/layout/page-header";
-import { CustomerRequestInput } from "./customer-request-input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TestSearch } from "./test-search";
 import { SearchResults } from "./search-results";
+import { MessageExtractor } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
-import { ProfileSuggestions } from "./profile-suggestions";
 import { EmptyWorkspace } from "./empty-workspace";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
 import { SERVICE_TYPES, SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
+import { cn } from "@/lib/utils";
 import type { Location } from "@/types/location";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSuggestion } from "@/types/profile";
@@ -25,12 +23,20 @@ import type { Quotation, QuotationLineItem } from "@/types/quotation";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+const tabTriggerClassName = cn(
+  "rounded-full border border-border/70 bg-card px-3.5 py-2 text-[13.5px] font-medium text-muted-foreground shadow-none transition-all",
+  "hover:border-primary/50 hover:text-foreground",
+  "data-active:border-primary data-active:bg-primary data-active:text-primary-foreground data-active:shadow-none"
+);
+
 export function WorkspaceClient({ locations }: { locations: Location[] }) {
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [serviceType, setServiceType] = useState<ServiceType>(SERVICE_TYPES[0]);
+  const [tab, setTab] = useState<"search" | "paste">("search");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const selectedLocation = locations.find((location) => location.id === locationId) ?? null;
   const isFirstRun = useRef(true);
@@ -55,6 +61,24 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
       return [];
     });
   }, [locationId, serviceType]);
+
+  // "/" and Cmd/Ctrl+K jump to the search tab and focus the box, from
+  // anywhere on the page — unless the agent is already typing somewhere.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const typing = Boolean(target && /INPUT|TEXTAREA/.test(target.tagName));
+      const isSlash = event.key === "/" && !typing;
+      const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+      if (isSlash || isCmdK) {
+        event.preventDefault();
+        setTab("search");
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Live search — conditional SWR key delays the request until there's a
   // query, per Next.js's client-side data-fetching guide.
@@ -101,6 +125,12 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     });
   }
 
+  function handleAddMany(results: SearchTestResult[]) {
+    if (results.length === 0) return;
+    results.forEach(handleAdd);
+    toast.success(`${results.length} test${results.length === 1 ? "" : "s"} added`);
+  }
+
   function handleRemove(testId: string) {
     setLineItems((prev) => prev.filter((item) => item.testId !== testId));
   }
@@ -141,61 +171,79 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
     : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-6 lg:p-8">
-      <PageHeader title="Support Workspace" description={context ?? undefined}>
-        <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-        <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
-      </PageHeader>
-
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-5">
-          <CustomerRequestInput />
-
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="grid size-7 place-items-center rounded-full bg-primary/15 text-primary">
-                  <SearchIcon className="size-3.5" />
-                </span>
-                Search tests
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} />
-              <SearchResults
-                query={debouncedQuery}
-                results={searchResults}
-                loading={searchLoading}
-                error={searchError}
-                addedTestIds={addedTestIds}
-                onAdd={handleAdd}
-              />
-            </CardContent>
-          </Card>
+    <div className="flex h-full items-stretch overflow-hidden">
+      <section className="flex h-full min-w-[360px] flex-1 flex-col gap-4 overflow-y-auto border-r border-border px-6 py-5 lg:px-7 lg:py-6">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold tracking-tight">Find tests</h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">{context}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
+            <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-4 lg:sticky lg:top-6">
-          {lineItems.length === 0 ? (
-            <EmptyWorkspace />
-          ) : (
-            <QuotationPanel
-              quotation={quotation}
-              whatsappMessage={whatsappMessage}
-              context={context}
-              onRemove={handleRemove}
-              onClear={handleClear}
+        <Tabs value={tab} onValueChange={(next) => setTab(next as "search" | "paste")}>
+          <TabsList className="h-auto gap-1.5 rounded-none bg-transparent p-0">
+            <TabsTrigger value="search" className={tabTriggerClassName}>
+              Search tests
+            </TabsTrigger>
+            <TabsTrigger value="paste" className={tabTriggerClassName}>
+              Paste a message
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="search" className="mt-4 flex flex-col gap-2">
+            <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
+            {!query.trim() ? (
+              <p className="pl-1 text-[13px] text-muted-foreground">
+                Press <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">/</kbd> anywhere to jump
+                here. Nicknames work too — try &ldquo;sugar test&rdquo;.
+              </p>
+            ) : null}
+            <SearchResults
+              query={debouncedQuery}
+              results={searchResults}
+              loading={searchLoading}
+              error={searchError}
+              addedTestIds={addedTestIds}
+              onAdd={handleAdd}
             />
-          )}
-        </div>
-      </div>
+          </TabsContent>
 
-      {/* Renders nothing here — portals into the sidebar rail's empty
-          space below the nav links, see SidebarPortal. */}
-      <ProfileSuggestions
-        suggestions={profileSuggestions}
-        loading={profileLoading}
-        hasSelection={selectedTestIds.length > 0}
-      />
+          <TabsContent value="paste" className="mt-4">
+            <MessageExtractor
+              locationId={locationId}
+              serviceType={serviceType}
+              addedTestIds={addedTestIds}
+              onAddMany={handleAddMany}
+            />
+          </TabsContent>
+        </Tabs>
+      </section>
+
+      <section className="flex h-full min-w-[330px] flex-1 flex-col gap-5 overflow-y-auto bg-card px-6 py-5 lg:px-7 lg:py-6">
+        {lineItems.length === 0 ? (
+          <>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">Quotation</h1>
+              <p className="mt-1 text-[13px] text-muted-foreground">Nothing added yet</p>
+            </div>
+            <EmptyWorkspace />
+          </>
+        ) : (
+          <QuotationPanel
+            quotation={quotation}
+            whatsappMessage={whatsappMessage}
+            context={context}
+            profileSuggestions={profileSuggestions}
+            profileSuggestionsLoading={profileLoading}
+            onRemove={handleRemove}
+            onClear={handleClear}
+          />
+        )}
+      </section>
     </div>
   );
 }

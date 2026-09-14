@@ -29,9 +29,9 @@ export function SearchResults({
   if (loading) {
     return (
       <div className="flex flex-col gap-2">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-16 w-full rounded-xl" />
       </div>
     );
   }
@@ -42,28 +42,30 @@ export function SearchResults({
 
   if (results.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No tests matched &ldquo;{query}&rdquo; at this location and service type.
-      </p>
+      <div className="py-11 text-center leading-relaxed">
+        <p className="text-base font-medium">Nothing found for &ldquo;{query}&rdquo;</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Try the customer&apos;s own words — &ldquo;sugar test&rdquo; and &ldquo;vit d&rdquo; are mapped to
+          the right test.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-xs text-muted-foreground">
+    <div className="flex flex-col">
+      <p className="mb-1 text-xs text-muted-foreground">
         {results.length} match{results.length === 1 ? "" : "es"} · press{" "}
         <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> to add the top one
       </p>
-      <div className="flex max-h-[30rem] flex-col gap-2 overflow-y-auto pr-1">
-        {results.map((result) => (
-          <TestResultCard
-            key={result.testId}
-            result={result}
-            added={addedTestIds.has(result.testId)}
-            onAdd={onAdd}
-          />
-        ))}
-      </div>
+      {results.map((result) => (
+        <TestResultCard
+          key={result.testId}
+          result={result}
+          added={addedTestIds.has(result.testId)}
+          onAdd={onAdd}
+        />
+      ))}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
-import { PageHeader } from "@/components/layout/page-header";
 import { ProfileSearch, type ProfileSearchMode } from "./profile-search";
 import { ProfileResults } from "./profile-results";
 import { fetcher } from "@/lib/utils/fetcher";
@@ -68,20 +67,25 @@ export function ProfileSearchClient({ locations }: { locations: Location[] }) {
   const error = errorObj instanceof Error ? errorObj.message : null;
   const emptyMessage =
     mode === "name"
-      ? `No profiles matched “${trimmedNameQuery}”.`
+      ? `No package matches “${trimmedNameQuery}”.`
       : resolvedTestIds.length === 0
         ? "None of the typed test names matched the catalog."
-        : "No profiles cover any of the resolved tests.";
+        : "No package covers any of the resolved tests.";
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6 lg:p-8">
-      <PageHeader
-        title="Profile Search"
-        description="Search profiles by name or by the tests they contain, ranked by match."
-      >
-        <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-        <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
-      </PageHeader>
+    <div className="mx-auto flex h-full max-w-[1000px] flex-col gap-5 overflow-y-auto px-7 py-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Packages</h1>
+          <p className="mt-1.5 text-[14.5px] text-muted-foreground">
+            Find a package by its name, or by the tests the customer asked for.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
+          <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
+        </div>
+      </div>
 
       <ProfileSearch
         mode={mode}

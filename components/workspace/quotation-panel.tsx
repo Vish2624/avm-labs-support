@@ -1,27 +1,31 @@
 "use client";
 
-import { Trash2, TriangleAlert, ReceiptText } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
 import { SelectedTests } from "./selected-tests";
 import { WhatsappResponse } from "./whatsapp-response";
+import { ProfileSuggestions } from "./profile-suggestions";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import type { Quotation } from "@/types/quotation";
+import type { ProfileSuggestion } from "@/types/profile";
 
-// Totals, currency, and generated reply for the in-progress quotation.
+// Totals, currency, package suggestions, and generated reply for the
+// in-progress quotation.
 export function QuotationPanel({
   quotation,
   whatsappMessage,
   context,
+  profileSuggestions,
+  profileSuggestionsLoading,
   onRemove,
   onClear,
 }: {
   quotation: Quotation;
   whatsappMessage: string;
   context: string | null;
+  profileSuggestions: ProfileSuggestion[];
+  profileSuggestionsLoading: boolean;
   onRemove: (testId: string) => void;
   onClear: () => void;
 }) {
@@ -29,50 +33,53 @@ export function QuotationPanel({
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
 
   return (
-    <Card className="border-glass-border bg-glass shadow-glass backdrop-blur-sm">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-full bg-primary/15 text-primary">
-              <ReceiptText className="size-3.5" />
-            </span>
-            Quotation
-            <span className="text-sm font-normal text-muted-foreground">
-              {count} test{count === 1 ? "" : "s"}
-            </span>
-          </span>
-          {count > 0 ? (
-            <Button type="button" size="xs" variant="ghost" onClick={onClear}>
-              <Trash2 />
-              Clear all
-            </Button>
-          ) : null}
-        </CardTitle>
-        {context ? <p className="text-xs text-muted-foreground">{context}</p> : null}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex items-baseline justify-between rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
-          <span className="text-sm font-medium text-muted-foreground">Total</span>
-          <span className="text-2xl font-semibold tabular-nums text-primary">
-            {formatCurrency(quotation.total)}
-          </span>
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Quotation</h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            {count > 0
+              ? `${count} test${count === 1 ? "" : "s"}${context ? ` · ${context}` : ""}`
+              : "Nothing added yet"}
+          </p>
         </div>
-        {flagged.length > 0 ? (
-          <Alert variant="destructive">
-            <TriangleAlert />
-            <AlertDescription>
-              {flagged.length} item{flagged.length === 1 ? "" : "s"} not fully available —{" "}
-              {flagged
-                .map((item) => `${item.testName} (${AVAILABILITY_LABELS[item.availability]})`)
-                .join(", ")}
-              . Check before sending the quote.
-            </AlertDescription>
-          </Alert>
+        {count > 0 ? (
+          <Button type="button" variant="outline" size="sm" onClick={onClear}>
+            <Trash2Icon />
+            Clear all
+          </Button>
         ) : null}
-        <SelectedTests lineItems={quotation.lineItems} onRemove={onRemove} />
-        <Separator />
-        <WhatsappResponse message={whatsappMessage} disabled={count === 0} />
-      </CardContent>
-    </Card>
+      </div>
+
+      {count > 0 ? (
+        <div className="flex flex-col gap-5">
+          <div className="flex items-baseline justify-between gap-3 border-b border-border pb-5">
+            <span className="text-sm font-medium text-muted-foreground">Total for the customer</span>
+            <span className="text-2xl font-semibold tracking-tight text-primary tabular-nums">
+              {formatCurrency(quotation.total)}
+            </span>
+          </div>
+
+          {flagged.length > 0 ? (
+            <p className="rounded-2xl bg-warning/15 px-4 py-3.5 text-[13.5px] leading-relaxed text-warning-foreground">
+              Check before sending:{" "}
+              {flagged.map((item) => `${item.testName} is ${AVAILABILITY_LABELS[item.availability].toLowerCase()}`).join(", ")}.
+            </p>
+          ) : null}
+
+          <SelectedTests lineItems={quotation.lineItems} onRemove={onRemove} />
+
+          <ProfileSuggestions
+            suggestions={profileSuggestions}
+            loading={profileSuggestionsLoading}
+            hasSelection={count > 0}
+          />
+
+          <div className="flex flex-col gap-3 border-t border-border pt-5">
+            <WhatsappResponse message={whatsappMessage} disabled={count === 0} />
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

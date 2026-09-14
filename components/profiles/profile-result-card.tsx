@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { AVAILABILITY_LABELS, AVAILABILITY_BADGE_VARIANT } from "@/lib/constants/availability";
 import { ProfileDetail } from "./profile-detail";
 import type { ProfileSearchResult, ProfileSuggestion } from "@/types/profile";
 
@@ -18,38 +16,36 @@ export function ProfileResultCard({ result }: { result: ProfileSuggestion | Prof
   const match = "matchedCount" in result ? result : null;
 
   return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+    <div className="border-b border-border/60 py-3.5 last:border-b-0">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="min-w-0 flex-1 basis-60">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{result.name}</span>
-            <Badge variant="outline">{result.code}</Badge>
-            {match ? <Badge variant="secondary">{match.matchPercentage}% match</Badge> : null}
+            <span className="text-[15px] font-semibold">{result.name}</span>
+            <Badge variant={AVAILABILITY_BADGE_VARIANT[result.availability]}>
+              {AVAILABILITY_LABELS[result.availability]}
+            </Badge>
+            {match ? <Badge variant="secondary">covers {match.matchPercentage}%</Badge> : null}
           </div>
-          {match ? (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Covers {match.matchedCount} of your {match.requestedCount} requested test
-              {match.requestedCount === 1 ? "" : "s"} ({match.profileTestCount} tests in bundle)
-            </p>
-          ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{formatCurrency(result.price)}</span>
-            <span>TAT: {formatTat(result.tatText)}</span>
-            <span>{AVAILABILITY_LABELS[result.availability]}</span>
+          <div className="mt-1.5 flex flex-wrap gap-3.5 text-[13.5px] text-muted-foreground">
+            <span>{result.tests.length} test{result.tests.length === 1 ? "" : "s"} included</span>
+            <span>ready in {formatTat(result.tatText)}</span>
           </div>
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setExpanded((prev) => !prev)}>
-          {expanded ? (
-            <>
-              <ChevronUpIcon /> Hide tests
-            </>
-          ) : (
-            <>
-              <ChevronDownIcon /> {result.tests.length} test{result.tests.length === 1 ? "" : "s"}
-            </>
-          )}
-        </Button>
+        <span className="text-[15.5px] font-semibold tabular-nums">{formatCurrency(result.price)}</span>
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="rounded-xl border border-border px-4 py-2.5 text-[13.5px] font-medium transition-colors hover:border-primary/60"
+        >
+          {expanded ? "Hide tests" : "See tests"}
+        </button>
       </div>
+      {match ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Covers {match.matchedCount} of your {match.requestedCount} requested test
+          {match.requestedCount === 1 ? "" : "s"} · {match.profileTestCount} tests in the package
+        </p>
+      ) : null}
       {expanded ? (
         <ProfileDetail
           description={result.description}
