@@ -12,6 +12,7 @@ import { TestSearch } from "./test-search";
 import { SearchResults, type SearchResultGroup } from "./search-results";
 import { MessageExtractor } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
+import { PackageSuggestions } from "./package-suggestions";
 import { EmptyWorkspace } from "./empty-workspace";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
@@ -229,8 +230,8 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
   const whatsappMessage = useMemo(() => generateWhatsAppResponse(quotation), [quotation]);
 
   // Show a floating "jump to bottom" button on the quotation column whenever
-  // there's more content below the fold (the WhatsApp reply, usually) — lets
-  // an agent skip past the package suggestions to copy the reply quickly.
+  // there's more content below the fold — lets an agent skip past the
+  // selected tests to copy the WhatsApp reply quickly.
   useEffect(() => {
     const panel = quotationScrollRef.current;
     if (!panel) return;
@@ -249,7 +250,7 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
       panel.removeEventListener("scroll", updateVisibility);
       resizeObserver.disconnect();
     };
-  }, [lineItems, profileSuggestions, whatsappMessage]);
+  }, [lineItems, whatsappMessage]);
 
   function scrollQuotationToBottom() {
     quotationScrollRef.current?.scrollTo({ top: quotationScrollRef.current.scrollHeight, behavior: "smooth" });
@@ -314,6 +315,15 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
             />
           </TabsContent>
         </Tabs>
+
+        <div className="mt-auto">
+          <PackageSuggestions
+            suggestions={profileSuggestions}
+            loading={profileLoading}
+            hasSelection={lineItems.length > 0}
+            lineItems={lineItems}
+          />
+        </div>
       </section>
 
       <div className="relative min-w-[330px] flex-1">
@@ -334,8 +344,6 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
               quotation={quotation}
               whatsappMessage={whatsappMessage}
               context={context}
-              profileSuggestions={profileSuggestions}
-              profileSuggestionsLoading={profileLoading}
               onRemove={handleRemove}
               onClear={handleClear}
             />
