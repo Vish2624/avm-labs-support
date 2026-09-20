@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon, CheckIcon } from "lucide-react";
+import { PlusIcon, CheckIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
@@ -13,10 +13,12 @@ export function TestResultCard({
   result,
   added,
   onAdd,
+  onRemove,
 }: {
   result: SearchTestResult;
   added: boolean;
   onAdd: (result: SearchTestResult) => void;
+  onRemove: (testId: string) => void;
 }) {
   return (
     <div
@@ -44,9 +46,17 @@ export function TestResultCard({
       <div className="flex shrink-0 items-center gap-2.5">
         <span className="text-[15.5px] font-semibold tabular-nums">{formatCurrency(result.price)}</span>
         {added ? (
-          <span className="flex shrink-0 items-center gap-1 rounded-[10px] bg-success/15 px-3 py-1.5 text-xs font-semibold text-success-foreground">
-            Added <CheckIcon className="size-3.5" />
-          </span>
+          <button
+            type="button"
+            aria-label={`Remove ${result.officialName}`}
+            onClick={() => onRemove(result.testId)}
+            className="group/added flex shrink-0 items-center gap-1 rounded-[10px] bg-success/15 px-3 py-1.5 text-xs font-semibold text-success-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+          >
+            <span className="group-hover/added:hidden">Added</span>
+            <span className="hidden group-hover/added:inline">Remove</span>
+            <CheckIcon className="size-3.5 group-hover/added:hidden" />
+            <XIcon className="hidden size-3.5 group-hover/added:inline" />
+          </button>
         ) : (
           <button
             type="button"

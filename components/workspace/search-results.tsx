@@ -29,12 +29,14 @@ export function SearchResults({
   showGroupHeaders,
   addedTestIds,
   onAdd,
+  onRemove,
 }: {
   query: string;
   groups: SearchResultGroup[];
   showGroupHeaders: boolean;
   addedTestIds: Set<string>;
   onAdd: (result: SearchTestResult) => void;
+  onRemove: (testId: string) => void;
 }) {
   if (!query.trim()) {
     // Also covers a stale loading/error/results state left over from a
@@ -100,6 +102,7 @@ export function SearchResults({
                   result={result}
                   added={addedTestIds.has(result.testId)}
                   onAdd={onAdd}
+                  onRemove={onRemove}
                 />
               ))}
             </div>
