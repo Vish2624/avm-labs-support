@@ -3,11 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { ArrowDownIcon } from "lucide-react";
 import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TestSearch } from "./test-search";
 import { SearchResults, type SearchResultGroup } from "./search-results";
 import { MessageExtractor } from "./message-extractor";
@@ -30,6 +28,12 @@ import type { ProfileSuggestion, ProfileSearchResult } from "@/types/profile";
 import type { Quotation, QuotationLineItem } from "@/types/quotation";
 
 const SEARCH_DEBOUNCE_MS = 300;
+// Floors for the draggable column split — matches the columns' own min-w
+// classes so the divider never drags a column below where its content
+// (buttons, filters) would start wrapping badly.
+const LEFT_COLUMN_MIN_PX = 360;
+const RIGHT_COLUMN_MIN_PX = 330;
+const SPLIT_STORAGE_KEY = "avm-workspace-split";
 // Stable references so a missing SWR response doesn't create a new empty
 // array every render — that would retrigger effects keyed on these values.
 const EMPTY_PROFILE_SUGGESTIONS: ProfileSuggestion[] = [];
@@ -53,8 +57,59 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const quotationScrollRef = useRef<HTMLElement>(null);
-  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+
+  // Draggable split between "Find tests" and "Quotation" — remembered per
+  // browser so an agent who prefers a wider search column doesn't have to
+  // redrag it every session.
+  const columnsRef = useRef<HTMLDivElement>(null);
+  // Starts at the SSR-safe default; hydrated from localStorage in an effect
+  // below (reading it during the initial render would mismatch the
+  // server-rendered HTML, which has no access to it).
+  const [leftColumnPercent, setLeftColumnPercent] = useState(50);
+  const [isResizingColumns, setIsResizingColumns] = useState(false);
+
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem(SPLIT_STORAGE_KEY));
+    if (Number.isFinite(saved) && saved >= 20 && saved <= 80) {
+      // One-time hydration of a persisted preference from localStorage,
+      // which isn't available during SSR — the mount-only setState here is
+      // intentional, not a synchronization loop.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLeftColumnPercent(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingColumns) return;
+
+    function handlePointerMove(event: PointerEvent) {
+      const container = columnsRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const minPercent = (LEFT_COLUMN_MIN_PX / rect.width) * 100;
+      const maxPercent = 100 - (RIGHT_COLUMN_MIN_PX / rect.width) * 100;
+      const rawPercent = ((event.clientX - rect.left) / rect.width) * 100;
+      setLeftColumnPercent(Math.min(Math.max(rawPercent, minPercent), maxPercent));
+    }
+    function handlePointerUp() {
+      setIsResizingColumns(false);
+    }
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isResizingColumns]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SPLIT_STORAGE_KEY, String(leftColumnPercent));
+  }, [leftColumnPercent]);
 
   const selectedLocation = locations.find((location) => location.id === locationId) ?? null;
   const isFirstRun = useRef(true);
@@ -229,80 +284,67 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
 
   const whatsappMessage = useMemo(() => generateWhatsAppResponse(quotation), [quotation]);
 
-  // Show a floating "jump to bottom" button on the quotation column whenever
-  // there's more content below the fold — lets an agent skip past the
-  // selected tests to copy the WhatsApp reply quickly.
-  useEffect(() => {
-    const panel = quotationScrollRef.current;
-    if (!panel) return;
-
-    function updateVisibility() {
-      if (!panel) return;
-      const distanceFromBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight;
-      setShowJumpToBottom(distanceFromBottom > 48);
-    }
-
-    updateVisibility();
-    panel.addEventListener("scroll", updateVisibility);
-    const resizeObserver = new ResizeObserver(updateVisibility);
-    resizeObserver.observe(panel);
-    return () => {
-      panel.removeEventListener("scroll", updateVisibility);
-      resizeObserver.disconnect();
-    };
-  }, [lineItems, whatsappMessage]);
-
-  function scrollQuotationToBottom() {
-    quotationScrollRef.current?.scrollTo({ top: quotationScrollRef.current.scrollHeight, behavior: "smooth" });
-  }
-
   const currencyCode = selectedLocation?.currencyCode ?? lineItems[0]?.price.currency ?? null;
   const context = selectedLocation
     ? `${selectedLocation.name} · ${SERVICE_TYPE_FILTER_LABELS[serviceTypeFilter]}${currencyCode ? ` · prices in ${currencyCode}` : ""}`
     : null;
 
   return (
-    <div className="flex h-full items-stretch overflow-hidden">
-      <section className="flex h-full min-w-[360px] flex-1 flex-col gap-4 overflow-y-auto border-r border-border px-6 py-5 lg:px-7 lg:py-6">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight">Find tests</h1>
-            <p className="mt-1 text-[13px] text-muted-foreground">{context}</p>
+    <div ref={columnsRef} className="flex h-full items-stretch overflow-hidden">
+      <section
+        style={{ width: `${leftColumnPercent}%` }}
+        className="flex h-full min-w-[360px] flex-none flex-col overflow-hidden border-r border-border"
+      >
+        {/* Static: header, tabs, and (on the search tab) the search box itself
+            never scroll — only the results below them do. */}
+        <div className="flex shrink-0 flex-col gap-4 border-b border-border px-6 pt-5 pb-4 lg:px-7 lg:pt-6">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-semibold tracking-tight">Find tests</h1>
+              <p className="mt-1 text-[13px] text-muted-foreground">{context}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
+              <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
-            <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
-          </div>
+
+          <Tabs value={tab} onValueChange={(next) => setTab(next as "search" | "paste")}>
+            <TabsList className="h-auto gap-1.5 rounded-none bg-transparent p-0">
+              <TabsTrigger value="search" className={tabTriggerClassName}>
+                Search tests
+              </TabsTrigger>
+              <TabsTrigger value="paste" className={tabTriggerClassName}>
+                Paste a message
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {tab === "search" ? (
+            <div className="flex flex-col gap-2">
+              <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
+              {!query.trim() ? (
+                <p className="pl-1 text-[13px] text-muted-foreground">
+                  Press <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">/</kbd> anywhere to
+                  jump here. Nicknames work too — try &ldquo;sugar test&rdquo;.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <Tabs value={tab} onValueChange={(next) => setTab(next as "search" | "paste")}>
-          <TabsList className="h-auto gap-1.5 rounded-none bg-transparent p-0">
-            <TabsTrigger value="search" className={tabTriggerClassName}>
-              Search tests
-            </TabsTrigger>
-            <TabsTrigger value="paste" className={tabTriggerClassName}>
-              Paste a message
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="search" className="mt-4 flex flex-col gap-2">
-            <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
-            {!query.trim() ? (
-              <p className="pl-1 text-[13px] text-muted-foreground">
-                Press <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">/</kbd> anywhere to jump
-                here. Nicknames work too — try &ldquo;sugar test&rdquo;.
-              </p>
-            ) : null}
+        {/* Scrollable: results only. */}
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-6 pt-3 pb-5 lg:px-7 lg:pb-6">
+          {tab === "search" ? (
             <SearchResults
               query={debouncedQuery}
               groups={searchGroups}
               showGroupHeaders={serviceTypeFilter === "all"}
               addedTestIds={addedTestIds}
               onAdd={handleAdd}
+              onRemove={handleRemove}
             />
-          </TabsContent>
-
-          <TabsContent value="paste" className="mt-4">
+          ) : (
             <MessageExtractor
               locationId={locationId}
               // The pasted-message extractor resolves each token through a
@@ -313,10 +355,8 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
               addedTestIds={addedTestIds}
               onAddMany={handleAddMany}
             />
-          </TabsContent>
-        </Tabs>
+          )}
 
-        <div className="mt-auto">
           <PackageSuggestions
             suggestions={profileSuggestions}
             loading={profileLoading}
@@ -326,19 +366,37 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
         </div>
       </section>
 
-      <div className="relative min-w-[330px] flex-1">
-        <section
-          ref={quotationScrollRef}
-          className="flex h-full flex-col gap-5 overflow-y-auto bg-card px-6 py-5 lg:px-7 lg:py-6"
-        >
+      {/* Drag to resize the two columns; double-click resets to a 50/50 split. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize columns"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          setIsResizingColumns(true);
+        }}
+        onDoubleClick={() => setLeftColumnPercent(50)}
+        className="group relative w-2.5 shrink-0 cursor-col-resize touch-none"
+      >
+        <div
+          className={cn(
+            "absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors",
+            "group-hover:bg-primary/50",
+            isResizingColumns && "bg-primary"
+          )}
+        />
+      </div>
+
+      <div className="min-w-[330px] flex-1 overflow-hidden">
+        <section className="flex h-full flex-col overflow-hidden bg-card">
           {lineItems.length === 0 ? (
-            <>
+            <div className="flex h-full flex-col gap-5 overflow-y-auto px-6 py-5 lg:px-7 lg:py-6">
               <div>
                 <h1 className="text-xl font-semibold tracking-tight">Quotation</h1>
                 <p className="mt-1 text-[13px] text-muted-foreground">Nothing added yet</p>
               </div>
               <EmptyWorkspace />
-            </>
+            </div>
           ) : (
             <QuotationPanel
               quotation={quotation}
@@ -349,19 +407,6 @@ export function WorkspaceClient({ locations }: { locations: Location[] }) {
             />
           )}
         </section>
-
-        {showJumpToBottom ? (
-          <Button
-            type="button"
-            size="icon-lg"
-            onClick={scrollQuotationToBottom}
-            aria-label="Jump to the WhatsApp reply"
-            title="Jump to the WhatsApp reply"
-            className="absolute bottom-5 right-5 shadow-lg animate-in fade-in zoom-in-95"
-          >
-            <ArrowDownIcon />
-          </Button>
-        ) : null}
       </div>
     </div>
   );

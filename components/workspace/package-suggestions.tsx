@@ -29,8 +29,10 @@ function calculateSavings(suggestion: ProfileSuggestion, lineItems: QuotationLin
 }
 
 // Package suggestions for the currently selected tests. Rendered in the
-// "Find tests" column (see workspace-client.tsx), below the search tabs —
-// deliberately minimal: one featured (best-matched) package plus a link to
+// "Find tests" column (see workspace-client.tsx) as a floating bar stuck to
+// the bottom of that column — it overlays the search results as they scroll
+// underneath rather than getting pushed around by result-list length.
+// Deliberately minimal: one featured (best-matched) package plus a link to
 // see the rest, rather than a list competing with the quotation itself.
 export function PackageSuggestions({
   suggestions,
@@ -51,7 +53,7 @@ export function PackageSuggestions({
   const [top, ...rest] = suggestions;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="sticky bottom-0 -mx-6 -mb-5 mt-auto flex flex-col gap-2 border-t border-border bg-background/95 px-6 pt-3 pb-5 shadow-[0_-8px_20px_-12px_rgba(0,0,0,0.15)] backdrop-blur-sm lg:-mx-7 lg:-mb-6 lg:px-7 lg:pb-6">
       <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         <PackageIcon className="size-3.5" />
         Bundle &amp; save
