@@ -4,31 +4,27 @@ import { Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SelectedTests } from "./selected-tests";
 import { WhatsappResponse } from "./whatsapp-response";
-import { ProfileSuggestions } from "./profile-suggestions";
 import { DiscountTiers } from "./discount-tiers";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { applyDiscount } from "@/lib/pricing/discount";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { cn } from "@/lib/utils";
 import type { Quotation } from "@/types/quotation";
-import type { ProfileSuggestion } from "@/types/profile";
 
-// Totals, currency, package suggestions, and generated reply for the
-// in-progress quotation.
+// Totals, currency, and generated reply for the in-progress quotation.
+// Package suggestions live in the "Find tests" column instead (see
+// package-suggestions.tsx) — they're a search-time recommendation, not part
+// of the quote itself.
 export function QuotationPanel({
   quotation,
   whatsappMessage,
   context,
-  profileSuggestions,
-  profileSuggestionsLoading,
   onRemove,
   onClear,
 }: {
   quotation: Quotation;
   whatsappMessage: string;
   context: string | null;
-  profileSuggestions: ProfileSuggestion[];
-  profileSuggestionsLoading: boolean;
   onRemove: (testId: string) => void;
   onClear: () => void;
 }) {
@@ -102,12 +98,6 @@ export function QuotationPanel({
           ) : null}
 
           <SelectedTests lineItems={quotation.lineItems} onRemove={onRemove} />
-
-          <ProfileSuggestions
-            suggestions={profileSuggestions}
-            loading={profileSuggestionsLoading}
-            hasSelection={count > 0}
-          />
 
           <div className="flex flex-col gap-3 border-t border-border pt-5">
             <WhatsappResponse message={whatsappMessage} disabled={count === 0} />

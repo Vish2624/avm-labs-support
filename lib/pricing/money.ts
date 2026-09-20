@@ -47,6 +47,13 @@ export function addMoney(a: Money, b: Money): Money {
   return { amount: a.amount + b.amount, currency: a.currency };
 }
 
+export function subtractMoney(a: Money, b: Money): Money {
+  assertSameCurrency(a, b);
+  assertIntegerAmount(a);
+  assertIntegerAmount(b);
+  return { amount: a.amount - b.amount, currency: a.currency };
+}
+
 export function sumMoney(amounts: Money[], currency: string): Money {
   return amounts.reduce((total, m) => addMoney(total, m), { amount: 0, currency });
 }
