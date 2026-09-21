@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const ADMIN_NAV_ITEMS = [
-  { href: "/admin", label: "Overview" },
   { href: "/admin/upload", label: "Upload" },
   { href: "/admin/imports", label: "Import History" },
   { href: "/admin/tests", label: "Tests" },
@@ -13,7 +12,6 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/aliases", label: "Aliases" },
   { href: "/admin/availability", label: "Availability" },
   { href: "/admin/export", label: "Export" },
-  { href: "/admin/settings", label: "Settings" },
 ] as const;
 
 // Secondary nav for the Admin section's sub-pages.
