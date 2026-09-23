@@ -44,8 +44,14 @@ export function SearchResults({
     return null;
   }
 
-  const allLoading = groups.every((group) => group.testsLoading && group.profilesLoading);
-  if (allLoading) {
+  const anyLoading = groups.some((group) => group.testsLoading || group.profilesLoading);
+  const totalCount = groups.reduce((sum, group) => sum + group.tests.length + group.profiles.length, 0);
+
+  // Nothing has come back yet for ANY of the in-flight requests — e.g. the
+  // profiles fetch resolved with 0 matches while the (usually slower) tests
+  // fetch is still running. Keep showing the skeleton rather than "Nothing
+  // found", which would otherwise flash before the test results land.
+  if (totalCount === 0 && anyLoading) {
     return (
       <div className="flex flex-col gap-2">
         <Skeleton className="h-16 w-full rounded-xl" />
@@ -60,7 +66,6 @@ export function SearchResults({
     return <p className="text-sm text-destructive">{firstError}</p>;
   }
 
-  const totalCount = groups.reduce((sum, group) => sum + group.tests.length + group.profiles.length, 0);
   const nonEmptyGroups = groups.filter(
     (group) => group.testsLoading || group.profilesLoading || group.tests.length > 0 || group.profiles.length > 0
   );
