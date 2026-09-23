@@ -1,16 +1,19 @@
 import { normalizeQuery } from "./normalize-query";
-import { fuzzyMatch } from "./fuzzy-match";
+import { matchScore } from "./fuzzy-match";
 import type { SearchCandidate } from "./rank-results";
 import type { Test, TestAlias } from "@/types/test";
 
-/** Below this Jaccard trigram score, a fuzzy candidate is noise, not a real typo-tolerant match. */
-export const FUZZY_THRESHOLD = 0.3;
+/** Below this matchScore(), a fuzzy candidate is noise, not a real typo-tolerant match. */
+export const FUZZY_THRESHOLD = 0.45;
+
+const compact = (value: string) => value.replace(/\s+/g, "");
 
 /**
  * Generates ranked-search candidates for a (pre-normalized) query against
- * the test catalog and its aliases: exact code/name/short-name match, fuzzy
- * catalog match, exact/fuzzy alias match. Pure — no DB access. Shared by
- * searchTests() (joins to price) and resolveTestIds() (doesn't).
+ * the test catalog and its aliases: exact code/name/short-name/alias match
+ * (spacing-insensitive, so "hb a1c" = "HbA1c"), then typo-tolerant fuzzy
+ * matches (see matchScore()). Pure — no DB access. Shared by searchTests()
+ * (joins to price) and resolveTestIds() (doesn't).
  */
 export function buildSearchCandidates(
   normalizedQuery: string,
@@ -18,37 +21,36 @@ export function buildSearchCandidates(
   aliases: TestAlias[]
 ): SearchCandidate[] {
   const candidates: SearchCandidate[] = [];
+  const queryCompact = compact(normalizedQuery);
 
   for (const test of tests) {
-    const codeNorm = normalizeQuery(test.code);
-    const nameNorm = normalizeQuery(test.officialName);
-    const shortNorm = test.shortName ? normalizeQuery(test.shortName) : "";
+    const fields = [normalizeQuery(test.code), normalizeQuery(test.officialName)];
+    if (test.shortName) fields.push(normalizeQuery(test.shortName));
 
-    if (normalizedQuery === codeNorm || normalizedQuery === nameNorm || (shortNorm && normalizedQuery === shortNorm)) {
+    if (fields.some((field) => field && compact(field) === queryCompact)) {
       candidates.push({ testId: test.id, matchType: "exact", score: 100 });
       continue;
     }
 
-    const fuzzyScores = [fuzzyMatch(normalizedQuery, codeNorm), fuzzyMatch(normalizedQuery, nameNorm)];
-    if (shortNorm) fuzzyScores.push(fuzzyMatch(normalizedQuery, shortNorm));
-    const best = Math.max(...fuzzyScores);
+    const best = Math.max(...fields.map((field) => matchScore(normalizedQuery, field)));
     if (best >= FUZZY_THRESHOLD) {
       candidates.push({ testId: test.id, matchType: "fuzzy", score: best * 100 });
     }
   }
 
   for (const alias of aliases) {
-    if (normalizedQuery === alias.normalizedAlias) {
+    if (compact(alias.normalizedAlias) === queryCompact) {
       candidates.push({
         testId: alias.testId,
         matchType: "alias",
+        exact: true,
         score: alias.confidence,
         matchedAlias: alias.alias,
       });
       continue;
     }
 
-    const similarity = fuzzyMatch(normalizedQuery, alias.normalizedAlias);
+    const similarity = matchScore(normalizedQuery, alias.normalizedAlias);
     if (similarity >= FUZZY_THRESHOLD) {
       candidates.push({
         testId: alias.testId,

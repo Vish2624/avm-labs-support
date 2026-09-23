@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, UploadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { AliasTable } from "./alias-table";
 import { AliasForm } from "./alias-form";
+import { AliasImportDialog } from "./alias-import-dialog";
 import { fetcher } from "@/lib/utils/fetcher";
 import type { AliasWithTest } from "@/lib/database/aliases";
 import type { Test } from "@/types/test";
@@ -36,6 +37,7 @@ export function AliasesClient({ tests }: { tests: Test[] }) {
 
   const [editing, setEditing] = useState<AliasWithTest | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState<AliasWithTest | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -111,10 +113,17 @@ export function AliasesClient({ tests }: { tests: Test[] }) {
           onChange={(event) => setQuery(event.target.value)}
           className="max-w-xs"
         />
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <PlusIcon /> New alias
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImporting(true)}>
+            <UploadIcon /> Import from Excel
+          </Button>
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <PlusIcon /> New alias
+          </Button>
+        </div>
       </div>
+
+      <AliasImportDialog open={importing} onOpenChange={setImporting} onImported={() => mutate()} />
 
       <AliasTable aliases={filtered} onEdit={setEditing} onToggleActive={handleToggleActive} onDelete={setDeleting} />
 
