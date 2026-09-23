@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "./fetch-all-rows";
 import type { TestAlias, AliasType } from "@/types/test";
 
 const ALIAS_COLUMNS =
@@ -34,13 +35,10 @@ function mapAlias(row: TestAliasRow): TestAlias {
 /** Every active admin-curated alias — the second signal searchTests() ranks against. */
 export async function listActiveAliases(): Promise<TestAlias[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("test_aliases")
-    .select(ALIAS_COLUMNS)
-    .eq("active", true);
-
-  if (error) throw error;
-  return ((data ?? []) as TestAliasRow[]).map(mapAlias);
+  const rows = await fetchAllRows<TestAliasRow>((from, to) =>
+    supabase.from("test_aliases").select(ALIAS_COLUMNS).eq("active", true).order("id").range(from, to)
+  );
+  return rows.map(mapAlias);
 }
 
 /** Every alias (active or not) for one test — the Admin test detail view. */
@@ -64,14 +62,17 @@ export interface AliasWithTest extends TestAlias {
 /** Every alias (active or not), joined with its test's code/name — the Admin Aliases table. */
 export async function listAllAliasesWithTest(): Promise<AliasWithTest[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("test_aliases")
-    .select(`${ALIAS_COLUMNS}, tests(code, official_name)`)
-    .order("alias", { ascending: true });
-
-  if (error) throw error;
   type JoinedRow = TestAliasRow & { tests: { code: string; official_name: string } | { code: string; official_name: string }[] | null };
-  return ((data ?? []) as unknown as JoinedRow[]).map((row) => {
+  const rows = await fetchAllRows<JoinedRow>(
+    (from, to) =>
+      supabase
+        .from("test_aliases")
+        .select(`${ALIAS_COLUMNS}, tests(code, official_name)`)
+        .order("alias", { ascending: true })
+        .order("id")
+        .range(from, to) as unknown as PromiseLike<{ data: JoinedRow[] | null; error: unknown }>
+  );
+  return rows.map((row) => {
     const test = Array.isArray(row.tests) ? row.tests[0] : row.tests;
     return { ...mapAlias(row), testCode: test?.code ?? "", testOfficialName: test?.official_name ?? "" };
   });

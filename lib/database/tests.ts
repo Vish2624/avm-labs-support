@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "./fetch-all-rows";
 import type { Test } from "@/types/test";
 
 const TEST_COLUMNS =
@@ -34,10 +35,10 @@ function mapTest(row: TestRow): Test {
 /** Every active test in the master catalog — the candidate set searchTests() ranks against. */
 export async function listActiveTests(): Promise<Test[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.from("tests").select(TEST_COLUMNS).eq("active", true);
-
-  if (error) throw error;
-  return ((data ?? []) as TestRow[]).map(mapTest);
+  const rows = await fetchAllRows<TestRow>((from, to) =>
+    supabase.from("tests").select(TEST_COLUMNS).eq("active", true).order("id").range(from, to)
+  );
+  return rows.map(mapTest);
 }
 
 /** Fetch specific tests by id (e.g. to hydrate profile_tests/quotation line items). */
@@ -54,13 +55,10 @@ export async function getTestsByIds(ids: string[]): Promise<Test[]> {
 /** Every test, active or not — the Admin Tests catalog table. */
 export async function listAllTests(): Promise<Test[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("tests")
-    .select(TEST_COLUMNS)
-    .order("code", { ascending: true });
-
-  if (error) throw error;
-  return ((data ?? []) as TestRow[]).map(mapTest);
+  const rows = await fetchAllRows<TestRow>((from, to) =>
+    supabase.from("tests").select(TEST_COLUMNS).order("code", { ascending: true }).order("id").range(from, to)
+  );
+  return rows.map(mapTest);
 }
 
 export interface TestInput {

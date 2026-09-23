@@ -1,7 +1,9 @@
 /**
- * Order search results: exact match > alias match > fuzzy similarity score,
- * per AVM_PLAN.md's ranking rule. Pure algorithm over candidate
- * matches — no database access.
+ * Order search results. Exact matches (a test's own code/name/short name,
+ * or an exact alias) always come first; everything else is ordered by how
+ * close the match is, whether it came from the catalog or an alias — a
+ * near-perfect name match shouldn't sit below a loose alias match. Ties go
+ * to alias matches (admin-curated). Pure algorithm — no database access.
  */
 
 export type SearchMatchType = "exact" | "alias" | "fuzzy";
@@ -9,17 +11,27 @@ export type SearchMatchType = "exact" | "alias" | "fuzzy";
 export interface SearchCandidate {
   testId: string;
   matchType: SearchMatchType;
-  /** 0-100. Only comparable within the same matchType — matchType always wins first. */
+  /** 0-100 closeness of the match. */
   score: number;
+  /** An alias that matched the query exactly (spacing/punctuation aside). */
+  exact?: boolean;
   /** The alias text that produced this candidate, when matchType is "alias". */
   matchedAlias?: string;
 }
 
-const MATCH_TYPE_PRIORITY: Record<SearchMatchType, number> = {
-  exact: 3,
-  alias: 2,
-  fuzzy: 1,
-};
+function tier(candidate: SearchCandidate): number {
+  if (candidate.matchType === "exact") return 3;
+  if (candidate.exact) return 2;
+  return 1;
+}
+
+function compare(a: SearchCandidate, b: SearchCandidate): number {
+  const tierDiff = tier(b) - tier(a);
+  if (tierDiff !== 0) return tierDiff;
+  const scoreDiff = b.score - a.score;
+  if (Math.abs(scoreDiff) > 0.5) return scoreDiff;
+  return (b.matchType === "alias" ? 1 : 0) - (a.matchType === "alias" ? 1 : 0);
+}
 
 /**
  * Dedupes to the single best candidate per test (a test can match on
@@ -31,20 +43,10 @@ export function rankResults(candidates: SearchCandidate[]): SearchCandidate[] {
 
   for (const candidate of candidates) {
     const existing = bestByTest.get(candidate.testId);
-    if (!existing || isBetter(candidate, existing)) {
+    if (!existing || compare(candidate, existing) < 0) {
       bestByTest.set(candidate.testId, candidate);
     }
   }
 
-  return [...bestByTest.values()].sort((a, b) => {
-    const priorityDiff = MATCH_TYPE_PRIORITY[b.matchType] - MATCH_TYPE_PRIORITY[a.matchType];
-    if (priorityDiff !== 0) return priorityDiff;
-    return b.score - a.score;
-  });
-}
-
-function isBetter(a: SearchCandidate, b: SearchCandidate): boolean {
-  const priorityDiff = MATCH_TYPE_PRIORITY[a.matchType] - MATCH_TYPE_PRIORITY[b.matchType];
-  if (priorityDiff !== 0) return priorityDiff > 0;
-  return a.score > b.score;
+  return [...bestByTest.values()].sort(compare);
 }

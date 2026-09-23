@@ -3,7 +3,7 @@ import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getProfilePricing } from "./profile-pricing";
 import { hydrateProfileTests } from "./hydrate-profile-tests";
 import { normalizeQuery } from "@/lib/search/normalize-query";
-import { fuzzyMatch } from "@/lib/search/fuzzy-match";
+import { matchScore } from "@/lib/search/fuzzy-match";
 import { FUZZY_THRESHOLD } from "@/lib/search/build-search-candidates";
 import type { Profile } from "@/types/profile";
 import type { ServiceType } from "@/lib/constants/service-types";
@@ -35,7 +35,7 @@ export async function searchProfilesByName(
     const score =
       normalized === codeNorm || normalized === nameNorm
         ? 100
-        : Math.max(fuzzyMatch(normalized, codeNorm), fuzzyMatch(normalized, nameNorm)) * 100;
+        : Math.max(matchScore(normalized, codeNorm), matchScore(normalized, nameNorm)) * 100;
     if (score >= FUZZY_THRESHOLD * 100) scored.push({ profile, testIds, score });
   }
   scored.sort((a, b) => b.score - a.score);
