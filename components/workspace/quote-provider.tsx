@@ -20,8 +20,6 @@ interface QuoteContextValue {
   /** Swap the tests a package covers for the package itself. */
   applyPackage: (pkg: QuotationPackageLine) => void;
   clear: () => void;
-  /** Replace the whole quote (location + lines + customer) — used by History's "Reopen in Quote". */
-  loadQuote: (quote: { locationId: string; lineItems: QuotationLineItem[]; customerName: string }) => void;
   customerName: string;
   setCustomerName: (name: string) => void;
 }
@@ -30,9 +28,8 @@ const QuoteContext = createContext<QuoteContextValue | null>(null);
 
 /**
  * The in-progress quotation, held in client memory only (never persisted to
- * Supabase — a quote is only saved to History when its reply is copied).
- * Lives in the dashboard layout rather than the Workspace page so the cart
- * and location survive switching to History/Packages and back.
+ * Supabase). Lives in the dashboard layout rather than the Workspace page so
+ * the cart and location survive switching to Packages/Updates and back.
  */
 export function QuoteProvider({ locations, children }: { locations: Location[]; children: React.ReactNode }) {
   const [locationId, setLocationIdState] = useState(locations[0]?.id ?? "");
@@ -126,15 +123,6 @@ export function QuoteProvider({ locations, children }: { locations: Location[]; 
     });
   }, []);
 
-  const loadQuote = useCallback<QuoteContextValue["loadQuote"]>(
-    (quote) => {
-      persistLocation(quote.locationId);
-      setLineItems(quote.lineItems);
-      setCustomerName(quote.customerName);
-    },
-    [persistLocation]
-  );
-
   const value = useMemo<QuoteContextValue>(
     () => ({
       locations,
@@ -147,7 +135,6 @@ export function QuoteProvider({ locations, children }: { locations: Location[]; 
       removeLineItem,
       applyPackage,
       clear,
-      loadQuote,
       customerName,
       setCustomerName,
     }),
@@ -161,7 +148,6 @@ export function QuoteProvider({ locations, children }: { locations: Location[]; 
       removeLineItem,
       applyPackage,
       clear,
-      loadQuote,
       customerName,
     ]
   );

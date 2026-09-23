@@ -10,9 +10,8 @@ import { MessageExtractionResults, useMessageExtraction } from "./message-extrac
 import { QuotationPanel } from "./quotation-panel";
 import { PackageSuggestions } from "./package-suggestions";
 import { useQuote } from "./quote-provider";
-import { fetcher, postJson } from "@/lib/utils/fetcher";
+import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
-import { applyDiscount } from "@/lib/pricing/discount";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
 import { SERVICE_TYPES, type ServiceType, type ServiceTypeFilter } from "@/lib/constants/service-types";
 import { cn } from "@/lib/utils";
@@ -24,7 +23,6 @@ import type {
   QuotationPackageLine,
   QuotationTestLine,
 } from "@/types/quotation";
-import type { QuoteHistoryInput } from "@/types/quote-history";
 
 const SEARCH_DEBOUNCE_MS = 300;
 // Floors for the draggable column split — matches the columns' own min-w
@@ -65,26 +63,6 @@ function toPackageLine(result: ProfileSearchResult | ProfileSuggestion): Quotati
     tatText: result.tatText,
     serviceType: result.serviceType,
     availability: result.availability,
-  };
-}
-
-function toHistoryInput(quotation: Quotation, replyText: string): QuoteHistoryInput {
-  const { tier, discountedTotal } = applyDiscount(quotation.total);
-  return {
-    locationId: quotation.locationId,
-    customerName: quotation.customerName?.trim() || null,
-    lineItems: quotation.lineItems.map((item) => ({
-      kind: item.kind,
-      refId: item.kind === "test" ? item.testId : item.profileId,
-      code: item.code,
-      name: item.name,
-      serviceType: item.serviceType,
-      price: item.price,
-    })),
-    subtotal: quotation.total,
-    discountPercent: tier?.percent ?? 0,
-    total: discountedTotal,
-    replyText,
   };
 }
 
@@ -339,10 +317,6 @@ export function WorkspaceClient() {
 
   const whatsappMessage = useMemo(() => generateWhatsAppResponse(quotation), [quotation]);
 
-  async function handleCopy(message: string) {
-    await postJson("/api/quotes", toHistoryInput(quotation, message));
-  }
-
   const locationLabel = selectedLocation
     ? `${selectedLocation.name} · prices in ${selectedLocation.currencyCode}`
     : null;
@@ -451,7 +425,6 @@ export function WorkspaceClient() {
           onCustomerNameChange={setCustomerName}
           onRemove={handleRemove}
           onClear={clear}
-          onCopy={handleCopy}
         />
       </aside>
     </div>

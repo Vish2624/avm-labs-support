@@ -9,12 +9,12 @@ import { listActiveLocations } from "@/lib/database/locations";
 //
 // The top header carries nav, the location picker and identity; every page
 // gets the full remaining height to manage its own layout/scrolling (the
-// Quote and History screens' two independently scrolling columns, in
+// Quote screen's two independently scrolling columns, in
 // particular). `overflow-y-auto` here is a fallback for pages that don't
 // manage their own internal scroll (e.g. Admin).
 //
 // QuoteProvider lives here (not on the Quote page) so the in-progress quote
-// and chosen location survive navigating to History/Packages and back.
+// and chosen location survive navigating to Packages/Updates and back.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [user, locations] = await Promise.all([requireUser(), listActiveLocations()]);
 
