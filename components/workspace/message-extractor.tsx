@@ -23,6 +23,7 @@ const EMPTY_EXTRACTION: Extraction = { detected: [], notOffered: [], unmatched: 
 // One toast id, so re-reading an edited message replaces the last
 // notification instead of stacking a new one per keystroke pause.
 const EXTRACTION_TOAST_ID = "message-extraction";
+const MAX_TOAST_NAMES = 12;
 
 /** Pop-up summary of a finished read: how many tests were found, how many weren't. */
 function notifyExtraction(extraction: Extraction, failed: boolean) {
@@ -41,9 +42,19 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
   if (notAvailable === 0) {
     toast.success(found, { id: EXTRACTION_TOAST_ID });
   } else {
+    // Name them right in the pop-up — what's missing is what the agent has
+    // to tell the customer. Long lists are trimmed; the red box has them all.
+    const names = [
+      ...extraction.unmatched,
+      ...extraction.notOffered.map((test) => test.code),
+      ...extraction.detected.filter((result) => result.availability !== "available").map((result) => result.code),
+    ];
+    const shown = names.slice(0, MAX_TOAST_NAMES).join(", ");
+    const more = names.length > MAX_TOAST_NAMES ? ` +${names.length - MAX_TOAST_NAMES} more` : "";
     toast.warning(`${found} · ${notAvailable} not available`, {
       id: EXTRACTION_TOAST_ID,
-      description: "See the red box above the results for which ones and why.",
+      description: `Not available: ${shown}${more}`,
+      duration: 10_000,
     });
   }
 }
