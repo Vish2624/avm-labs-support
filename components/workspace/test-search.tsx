@@ -1,12 +1,6 @@
 "use client";
 
 import { SearchIcon, XIcon } from "lucide-react";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
-import { Button } from "@/components/ui/button";
 
 // Search box driving alias/fuzzy test lookup (see lib/search/search-tests.ts
 // via /api/search). Purely controlled — debouncing/fetching happens in the
@@ -24,13 +18,11 @@ export function TestSearch({
   inputRef?: React.Ref<HTMLInputElement>;
 }) {
   return (
-    <InputGroup className="h-[52px] rounded-2xl px-3">
-      <InputGroupAddon>
-        <SearchIcon className="size-[22px]" />
-      </InputGroupAddon>
-      <InputGroupInput
+    <div className="relative">
+      <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-[17px] -translate-y-1/2 text-muted-foreground" />
+      <input
         ref={inputRef}
-        placeholder="Type a test name, code, or the customer's words"
+        type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -39,22 +31,21 @@ export function TestSearch({
             onSubmit?.();
           }
         }}
-        className="text-[15.5px]"
+        placeholder="Search test name, code or nickname"
+        aria-label="Search tests"
         autoFocus
+        className="h-[50px] w-full rounded-xl border border-input bg-card px-11 text-[15px] outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
       />
       {value ? (
-        <InputGroupAddon align="inline-end">
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Clear search"
-            onClick={() => onChange("")}
-          >
-            <XIcon />
-          </Button>
-        </InputGroupAddon>
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() => onChange("")}
+          className="absolute top-1/2 right-2.5 grid size-[30px] -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <XIcon className="size-4" />
+        </button>
       ) : null}
-    </InputGroup>
+    </div>
   );
 }

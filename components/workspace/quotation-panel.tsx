@@ -1,233 +1,228 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Trash2Icon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { SelectedTests } from "./selected-tests";
-import { WhatsappResponse } from "./whatsapp-response";
-import { DiscountTiers } from "./discount-tiers";
-import { formatCurrency } from "@/lib/utils/format-currency";
-import { applyDiscount } from "@/lib/pricing/discount";
-import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { useState } from "react";
+import { XIcon } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Quotation } from "@/types/quotation";
+import { formatCurrency } from "@/lib/utils/format-currency";
+import { formatTat } from "@/lib/utils/format-tat";
+import { applyDiscount, getDiscountTiers } from "@/lib/pricing/discount";
+import { subtractMoney } from "@/lib/pricing/money";
+import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
+import { lineItemKey, type Quotation, type QuotationLineItem } from "@/types/quotation";
 
-// Floors (in px) for the two drag-resizable regions below the fixed header —
-// price display and the WhatsApp reply — so neither can be dragged down to
-// where its own content clips. The line-item list in between just takes
-// whatever's left.
-const PRICE_SECTION_MIN_PX = 88;
-const REPLY_SECTION_MIN_PX = 150;
-const LIST_SECTION_MIN_PX = 56;
-const SPLIT_STORAGE_KEY = "avm-quotation-split";
-const DEFAULT_SPLIT = { pricePercent: 30, replyPercent: 34 };
-
-function readStoredSplit(): { pricePercent: number; replyPercent: number } {
-  if (typeof window === "undefined") return DEFAULT_SPLIT;
-  try {
-    const raw = window.localStorage.getItem(SPLIT_STORAGE_KEY);
-    if (!raw) return DEFAULT_SPLIT;
-    const parsed = JSON.parse(raw);
-    const { pricePercent, replyPercent } = parsed ?? {};
-    if (typeof pricePercent === "number" && typeof replyPercent === "number") {
-      return { pricePercent, replyPercent };
-    }
-  } catch {
-    // Ignore malformed/legacy storage — fall back to the default split.
+function lineMeta(item: QuotationLineItem): string {
+  const availability = item.availability === "available" ? "" : ` · ${AVAILABILITY_LABELS[item.availability]}`;
+  if (item.kind === "package") {
+    return `${item.tests.length} test${item.tests.length === 1 ? "" : "s"} · ready in ${formatTat(item.tatText)}${availability}`;
   }
-  return DEFAULT_SPLIT;
+  return `${item.code} · ${SERVICE_TYPE_LABELS[item.serviceType]} · ready in ${formatTat(item.tatText)}${availability}`;
 }
 
-// Totals, currency, and generated reply for the in-progress quotation.
-// Package suggestions live in the "Find tests" column instead (see
-// package-suggestions.tsx) — they're a search-time recommendation, not part
-// of the quote itself.
-//
-// Layout: the title/count row is a fixed header; the price display, the
-// line-item list, and the WhatsApp reply below it are three stacked regions
-// an agent can resize by dragging the handles between them (persisted per
-// browser), so whichever one matters most right now can take the room.
+// Volume-discount progress: how far the total is towards the top tier, and
+// what the next tier needs. Returns null for a currency with no tiers.
+function tierProgress(quotation: Quotation) {
+  const tiers = getDiscountTiers(quotation.total.currency);
+  if (tiers.length === 0) return null;
+  const top = tiers[tiers.length - 1];
+  const next = tiers.find((tier) => quotation.total.amount < tier.thresholdMinor);
+  return {
+    percent: Math.min(100, (quotation.total.amount / top.thresholdMinor) * 100),
+    hint: next
+      ? `Add ${formatCurrency(subtractMoney({ amount: next.thresholdMinor, currency: quotation.total.currency }, quotation.total))} more to unlock ${next.percent}% off`
+      : `Maximum ${top.percent}% volume discount applied`,
+  };
+}
+
+// The in-progress quote: line items, total (with the volume discount), the
+// generated WhatsApp reply and the Copy action. Copying also saves the
+// quote to History (see onCopy) — once per distinct reply, so re-copying
+// the same text doesn't create duplicates.
 export function QuotationPanel({
   quotation,
   whatsappMessage,
-  context,
+  locationLabel,
+  customerName,
+  onCustomerNameChange,
   onRemove,
   onClear,
+  onCopy,
 }: {
   quotation: Quotation;
   whatsappMessage: string;
-  context: string | null;
-  onRemove: (testId: string) => void;
+  locationLabel: string | null;
+  customerName: string;
+  onCustomerNameChange: (name: string) => void;
+  onRemove: (item: QuotationLineItem) => void;
   onClear: () => void;
+  /** Called after the reply lands on the clipboard; saves it to History. */
+  onCopy: (message: string) => Promise<void>;
 }) {
+  const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const count = quotation.lineItems.length;
+  const copied = copiedMessage === whatsappMessage;
+
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
-  const { tier, discountAmount, discountedTotal } = applyDiscount(quotation.total);
+  const { tier, discountedTotal } = applyDiscount(quotation.total);
+  const progress = tierProgress(quotation);
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [{ pricePercent, replyPercent }, setSplit] = useState(readStoredSplit);
-  const [dragging, setDragging] = useState<"price" | "reply" | null>(null);
-
-  useEffect(() => {
-    if (!dragging) return;
-
-    function handlePointerMove(event: PointerEvent) {
-      const container = containerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-
-      setSplit((prev) => {
-        if (dragging === "price") {
-          const minPercent = (PRICE_SECTION_MIN_PX / rect.height) * 100;
-          const maxPercent = 100 - prev.replyPercent - (LIST_SECTION_MIN_PX / rect.height) * 100;
-          const raw = ((event.clientY - rect.top) / rect.height) * 100;
-          return { ...prev, pricePercent: Math.min(Math.max(raw, minPercent), Math.max(minPercent, maxPercent)) };
-        }
-        const minPercent = (REPLY_SECTION_MIN_PX / rect.height) * 100;
-        const maxPercent = 100 - prev.pricePercent - (LIST_SECTION_MIN_PX / rect.height) * 100;
-        const raw = ((rect.bottom - event.clientY) / rect.height) * 100;
-        return { ...prev, replyPercent: Math.min(Math.max(raw, minPercent), Math.max(minPercent, maxPercent)) };
-      });
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(whatsappMessage);
+    } catch {
+      toast.error("Couldn't copy — select and copy the text manually.");
+      return;
     }
-    function handlePointerUp() {
-      setDragging(null);
+    if (copied) {
+      toast.success("Copied again");
+      return;
     }
+    setCopiedMessage(whatsappMessage);
+    try {
+      await onCopy(whatsappMessage);
+      toast.success("Copied and saved to History");
+    } catch {
+      toast.warning("Copied, but couldn't save it to History.");
+    }
+  }
 
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    return () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-  }, [dragging]);
+  const header = (
+    <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-3.5">
+      <div>
+        <h1 className="text-lg font-semibold tracking-tight">Quotation</h1>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
+          {count > 0 ? `${count} item${count === 1 ? "" : "s"}${locationLabel ? ` · ${locationLabel}` : ""}` : locationLabel}
+        </p>
+      </div>
+      {count > 0 ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="h-[30px] rounded-lg px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+        >
+          Clear all
+        </button>
+      ) : null}
+    </div>
+  );
 
-  useEffect(() => {
-    window.localStorage.setItem(SPLIT_STORAGE_KEY, JSON.stringify({ pricePercent, replyPercent }));
-  }, [pricePercent, replyPercent]);
-
-  return (
-    <div ref={containerRef} className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-6 py-4 lg:px-7">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Quotation</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            {count > 0
-              ? `${count} test${count === 1 ? "" : "s"}${context ? ` · ${context}` : ""}`
-              : "Nothing added yet"}
+  if (count === 0) {
+    return (
+      <div className="flex h-full flex-col">
+        {header}
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-10 py-6 text-center">
+          <div className="size-11 rounded-xl border-[1.5px] border-dashed border-input" />
+          <p className="mt-1.5 text-[15px] font-medium">Nothing added yet</p>
+          <p className="max-w-[320px] text-[13px] leading-relaxed text-muted-foreground">
+            Search or paste the customer&apos;s message, then add tests. Price, discount and the reply update as
+            you go.
           </p>
         </div>
-        {count > 0 ? (
-          <Button type="button" variant="outline" size="sm" onClick={onClear}>
-            <Trash2Icon />
-            Clear all
-          </Button>
-        ) : null}
       </div>
+    );
+  }
 
-      {count > 0 ? (
-        <>
-          {/* Price display — compact: subtotal/discount/total collapse to one
-              line instead of three once a tier is reached. */}
-          <div style={{ height: `${pricePercent}%` }} className="shrink-0 overflow-y-auto px-6 py-3 lg:px-7">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[13px] font-medium text-muted-foreground">
-                    {tier ? "Total after discount" : "Total for the customer"}
-                  </span>
-                  {tier ? (
-                    <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-success-foreground">
-                      -{tier.percent}%
+  return (
+    <div className="flex h-full flex-col">
+      {header}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="px-6">
+          {quotation.lineItems.map((item) => (
+            <div key={lineItemKey(item)} className="flex items-center gap-2.5 border-b border-border/60 py-[11px]">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{item.name}</span>
+                  {item.kind === "package" ? (
+                    <span className="shrink-0 rounded-[5px] bg-primary/10 px-1.5 py-px text-[10.5px] font-semibold text-primary">
+                      PACKAGE
                     </span>
                   ) : null}
                 </div>
-                <div className="flex items-baseline gap-2">
-                  {tier ? (
-                    <span className="text-[13px] font-medium text-muted-foreground line-through decoration-1">
-                      {formatCurrency(quotation.total)}
-                    </span>
-                  ) : null}
-                  <span className="text-xl font-semibold tracking-tight text-primary tabular-nums">
-                    {formatCurrency(tier ? discountedTotal : quotation.total)}
-                  </span>
-                </div>
+                <div className="mt-0.5 truncate text-xs text-muted-foreground">{lineMeta(item)}</div>
               </div>
+              <span className="shrink-0 text-sm font-medium whitespace-nowrap tabular-nums">
+                {formatCurrency(item.price)}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${item.name}`}
+                onClick={() => onRemove(item)}
+                className="grid size-[26px] shrink-0 place-items-center rounded-[7px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <XIcon className="size-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {flagged.length > 0 ? (
+          <p className="mx-6 mt-3 rounded-[10px] bg-warning/20 px-3 py-2.5 text-[12.5px] leading-relaxed text-warning-foreground">
+            Check before sending:{" "}
+            {flagged.map((item) => `${item.name} is ${AVAILABILITY_LABELS[item.availability].toLowerCase()}`).join(", ")}.
+          </p>
+        ) : null}
+
+        <div className="mx-6 mt-3 flex flex-col gap-2 rounded-xl bg-muted/60 px-3.5 py-2.5">
+          <div className="flex items-center justify-between gap-2.5">
+            <span className="text-[13px] font-medium">Total</span>
+            <div className="flex items-baseline gap-2 tabular-nums">
               {tier ? (
-                <p className="text-right text-[11.5px] text-success-foreground/90">
-                  You saved {formatCurrency(discountAmount)}
-                </p>
+                <>
+                  <span className="rounded-full bg-success/15 px-1.5 py-px text-[11.5px] font-semibold text-success-foreground">
+                    −{tier.percent}%
+                  </span>
+                  <span className="text-[12.5px] text-muted-foreground line-through">
+                    {formatCurrency(quotation.total)}
+                  </span>
+                </>
               ) : null}
-
-              <DiscountTiers currency={quotation.total.currency} achievedPercent={tier?.percent} className="mt-0.5" />
-
-              {flagged.length > 0 ? (
-                <p className="mt-1 rounded-xl bg-warning/15 px-3 py-2 text-[12.5px] leading-relaxed text-warning-foreground">
-                  Check before sending:{" "}
-                  {flagged
-                    .map((item) => `${item.testName} is ${AVAILABILITY_LABELS[item.availability].toLowerCase()}`)
-                    .join(", ")}
-                  .
-                </p>
-              ) : null}
+              <span className="text-[19px] font-semibold tracking-tight">
+                {formatCurrency(tier ? discountedTotal : quotation.total)}
+              </span>
             </div>
           </div>
+          {progress ? (
+            <div className="flex items-center gap-2.5">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full rounded-full bg-success transition-[width] duration-300"
+                  style={{ width: `${progress.percent.toFixed(1)}%` }}
+                />
+              </div>
+              <span className="text-[11.5px] whitespace-nowrap text-muted-foreground">{progress.hint}</span>
+            </div>
+          ) : null}
+        </div>
 
-          <div
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Resize price display"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              setDragging("price");
-            }}
-            onDoubleClick={() => setSplit((prev) => ({ ...prev, pricePercent: DEFAULT_SPLIT.pricePercent }))}
-            className="group relative h-2.5 shrink-0 cursor-row-resize touch-none"
-          >
-            <div
-              className={cn(
-                "absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-colors",
-                "group-hover:bg-primary/50",
-                dragging === "price" && "bg-primary"
-              )}
+        <div className="flex flex-col gap-2.5 px-6 pt-[18px] pb-2">
+          <div className="flex items-center justify-between gap-2.5">
+            <h2 className="text-sm font-semibold">Reply to send</h2>
+            <input
+              value={customerName}
+              onChange={(event) => onCustomerNameChange(event.target.value)}
+              placeholder="Customer name (optional)"
+              aria-label="Customer name"
+              className="h-[30px] w-[180px] rounded-lg border border-input bg-card px-2.5 text-[12.5px] outline-none focus:border-primary"
             />
           </div>
-
-          <div className="flex-1 overflow-y-auto px-6 lg:px-7">
-            <SelectedTests lineItems={quotation.lineItems} onRemove={onRemove} />
+          <div className="rounded-[4px_14px_14px_14px] bg-bubble px-4 py-3.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
+            {whatsappMessage}
           </div>
-
-          <div
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Resize WhatsApp reply"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              setDragging("reply");
-            }}
-            onDoubleClick={() => setSplit((prev) => ({ ...prev, replyPercent: DEFAULT_SPLIT.replyPercent }))}
-            className="group relative h-2.5 shrink-0 cursor-row-resize touch-none"
-          >
-            <div
-              className={cn(
-                "absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-colors",
-                "group-hover:bg-primary/50",
-                dragging === "reply" && "bg-primary"
-              )}
-            />
-          </div>
-
-          <div
-            style={{ height: `${replyPercent}%` }}
-            className="flex shrink-0 flex-col gap-3 overflow-y-auto border-t border-border px-6 pt-4 pb-5 lg:px-7 lg:pb-6"
-          >
-            <WhatsappResponse message={whatsappMessage} disabled={count === 0} />
-          </div>
-        </>
-      ) : null}
+        </div>
+      </div>
+      <div className="shrink-0 border-t border-border px-6 pt-3.5 pb-[18px]">
+        <button
+          type="button"
+          onClick={handleCopy}
+          className={cn(
+            "h-[46px] w-full rounded-xl text-[14.5px] font-medium text-white transition-colors",
+            copied ? "bg-success" : "bg-primary hover:bg-primary/90"
+          )}
+        >
+          {copied ? "Copied — paste it into WhatsApp" : "Copy reply"}
+        </button>
+      </div>
     </div>
   );
 }

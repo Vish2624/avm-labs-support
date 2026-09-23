@@ -4,7 +4,10 @@
  * templates themselves never carry placeholder or invented data.
  */
 export const WHATSAPP_TEMPLATES = {
-  intro: "Hi! Here are the details for your requested tests:",
+  intro: (customerName: string | null) =>
+    customerName
+      ? `Hi ${customerName}! Here are the details for your requested tests:`
+      : "Hi! Here are the details for your requested tests:",
   // `tat` and `availability` are omitted (pass null) when that detail is
   // shown once for the whole quotation instead, or is the unremarkable
   // "Available" default not worth repeating to the customer.
@@ -14,9 +17,12 @@ export const WHATSAPP_TEMPLATES = {
     code: string,
     price: string,
     tat: string | null,
-    availability: string | null
+    availability: string | null,
+    includes: string | null = null
   ) => {
-    const parts = [`${index}. ${name} (${code})`, `   Price: ${price}`];
+    const parts = [`${index}. ${name} (${code})`];
+    if (includes) parts.push(`   Includes: ${includes}`);
+    parts.push(`   Price: ${price}`);
     if (tat) parts.push(`   TAT: ${tat}`);
     if (availability) parts.push(`   Availability: ${availability}`);
     return parts.join("\n");

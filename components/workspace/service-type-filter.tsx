@@ -7,10 +7,10 @@ import {
   type ServiceTypeFilter,
 } from "@/lib/constants/service-types";
 
-// Same look as components/layout/service-type-selector.tsx, but with an
-// "All" option — Workspace-search-only, since every other caller of that
-// shared selector (Admin availability/export/upload, /profiles) needs a
-// single real ServiceType, never "all".
+// Pill filter with an "All" option — Workspace-search-only, since every
+// other caller of components/layout/service-type-selector.tsx (Admin
+// availability/export/upload, /profiles) needs a single real ServiceType,
+// never "all".
 export function ServiceTypeFilterSelector({
   value,
   onChange,
@@ -19,7 +19,7 @@ export function ServiceTypeFilterSelector({
   onChange: (serviceType: ServiceTypeFilter) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-[3px] rounded-[13px] bg-muted p-[3px]" role="group" aria-label="Service type">
+    <div className="flex gap-1.5" role="group" aria-label="Service type">
       {SERVICE_TYPE_FILTERS.map((serviceType) => {
         const active = value === serviceType;
         return (
@@ -29,8 +29,10 @@ export function ServiceTypeFilterSelector({
             aria-pressed={active}
             onClick={() => onChange(serviceType)}
             className={cn(
-              "rounded-[10px] px-3.5 py-2 text-[13.5px] font-medium transition-all",
-              active ? "bg-card text-accent-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              "h-[30px] rounded-full border px-3 text-[13px] whitespace-nowrap transition-colors",
+              active
+                ? "border-primary/30 bg-primary/10 font-medium text-primary"
+                : "border-input bg-card text-secondary-foreground hover:border-foreground/40"
             )}
           >
             {SERVICE_TYPE_FILTER_LABELS[serviceType]}

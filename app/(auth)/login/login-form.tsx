@@ -12,9 +12,9 @@ export function LoginForm() {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="flex flex-col gap-3.5">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email" className="text-[12.5px] font-medium text-muted-foreground">
+        <Label htmlFor="email" className="text-[13px] font-medium">
           Work email
         </Label>
         <Input
@@ -24,12 +24,12 @@ export function LoginForm() {
           required
           autoFocus
           autoComplete="username"
-          placeholder="you@avmlabs.com"
-          className="h-[46px] rounded-xl px-3.5 text-[14.5px]"
+          placeholder="name@avmlabs.com"
+          className="h-[42px] rounded-[10px] px-3 text-sm"
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="password" className="text-[12.5px] font-medium text-muted-foreground">
+        <Label htmlFor="password" className="text-[13px] font-medium">
           Password
         </Label>
         <Input
@@ -39,16 +39,13 @@ export function LoginForm() {
           required
           autoComplete="current-password"
           placeholder="••••••••"
-          className="h-[46px] rounded-xl px-3.5 text-[14.5px]"
+          className="h-[42px] rounded-[10px] px-3 text-sm"
         />
       </div>
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      <Button type="submit" size="lg" className="mt-1.5 w-full rounded-xl" disabled={pending}>
+      <Button type="submit" size="lg" className="mt-1 h-11 w-full rounded-[10px]" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
-      <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-        Trouble signing in? Ask an admin to reset your access.
-      </p>
     </form>
   );
 }
