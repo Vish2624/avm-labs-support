@@ -5,7 +5,8 @@ import { SearchIcon, XIcon } from "lucide-react";
 // Search box driving alias/fuzzy test lookup (see lib/search/search-tests.ts
 // via /api/search). Purely controlled — debouncing/fetching happens in the
 // workspace client that owns the query state. Enter fires onSubmit (the
-// client adds the top result); the × clears the box.
+// client adds the top result, or every result for a list of tests); the ×
+// clears the box.
 export function TestSearch({
   value,
   onChange,
@@ -25,13 +26,26 @@ export function TestSearch({
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onPaste={(event) => {
+          // A single-line input silently drops newlines, gluing a pasted
+          // one-test-per-line list into one word ("TSH⏎T3" -> "TSHT3").
+          // Keep each line as its own list item instead.
+          const pasted = event.clipboardData.getData("text");
+          if (!/[\r\n]/.test(pasted)) return;
+          event.preventDefault();
+          const input = event.currentTarget;
+          const start = input.selectionStart ?? value.length;
+          const end = input.selectionEnd ?? value.length;
+          const flattened = pasted.trim().split(/\s*[\r\n]+\s*/).join(", ");
+          onChange(value.slice(0, start) + flattened + value.slice(end));
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             onSubmit?.();
           }
         }}
-        placeholder="Search test name, code or nickname"
+        placeholder="Search a test, or paste a list of codes (TSH, T3, T4…)"
         aria-label="Search tests"
         autoFocus
         className="h-[50px] w-full rounded-xl border border-input bg-card px-11 text-[15px] outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"

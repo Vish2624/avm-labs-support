@@ -1,85 +1,74 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "./test-result-card";
 import { resultsTitleClassName } from "./search-results";
-import { fetcher } from "@/lib/utils/fetcher";
-import type { ServiceType } from "@/lib/constants/service-types";
+import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 
-// Splits a pasted customer message into candidate test-name tokens — the
-// same separators the search box's underlying alias/fuzzy matcher is built
-// to tolerate, just applied to a whole message instead of one query.
-const SPLIT_PATTERN = /[,\n;/?.!]+|\band\b|\bplus\b|\balso\b/i;
-const EXTRACT_DEBOUNCE_MS = 600;
-// One /api/search request per token — cap it so a very long pasted message
-// can't fire an unbounded burst of requests.
-const MAX_TOKENS = 15;
+const EXTRACT_DEBOUNCE_MS = 400;
 
-function tokenize(text: string): string[] {
-  return [
-    ...new Set(
-      text
-        .split(SPLIT_PATTERN)
-        .map((token) => token.trim().toLowerCase())
-        .filter((token) => token.length >= 2)
-    ),
-  ].slice(0, MAX_TOKENS);
+interface Extraction {
+  detected: SearchTestResult[];
+  unmatched: string[];
 }
 
+const EMPTY_EXTRACTION: Extraction = { detected: [], unmatched: [] };
+
 /**
- * Reads test mentions out of a customer's raw message as the agent pastes
- * it, by running each token through the exact same searchTests() pipeline
- * as the search box (via /api/search) and keeping only the top match per
- * token — never a guess, only real alias/catalog matches with a current
- * price at this location + service type.
+ * Reads every test mentioned in a customer's raw message or a pasted list
+ * of codes ("ACCP, ALKP, AMYL, ...") via /api/search/extract — the same
+ * alias/fuzzy matcher as the search box, run server-side over the whole
+ * message in one request (lib/search/extract-tests.ts). Only real
+ * catalog/alias matches with a current price at this location come back;
+ * tokens that matched nothing are returned too, so the agent can see what
+ * still needs a manual search.
  */
-export function useMessageExtraction(text: string, locationId: string, serviceType: ServiceType) {
+export function useMessageExtraction(text: string, locationId: string, serviceType: ServiceTypeFilter) {
   // Results are stored with the request they answer, so "loading" can be
   // derived (does the stored result match the current input?) instead of
   // being reset inside the effect.
-  const [result, setResult] = useState<{ key: string; detected: SearchTestResult[] } | null>(null);
+  const [result, setResult] = useState<{ key: string; extraction: Extraction } | null>(null);
 
-  const tokens = useMemo(() => tokenize(text), [text]);
-  const key = tokens.length > 0 && locationId ? JSON.stringify([tokens, locationId, serviceType]) : null;
+  const trimmed = text.trim();
+  const key = trimmed && locationId ? JSON.stringify([trimmed, locationId, serviceType]) : null;
 
   useEffect(() => {
     if (!key) return;
 
     let cancelled = false;
     const timeout = setTimeout(async () => {
-      const responses = await Promise.all(
-        tokens.map((token) =>
-          fetcher<{ results: SearchTestResult[] }>(
-            `/api/search?${new URLSearchParams({ q: token, locationId, serviceType })}`
-          ).catch(() => ({ results: [] as SearchTestResult[] }))
-        )
-      );
-      if (cancelled) return;
-      const found: SearchTestResult[] = [];
-      for (const response of responses) {
-        const top = response.results[0];
-        if (top && !found.some((existing) => existing.testId === top.testId)) found.push(top);
+      let extraction = EMPTY_EXTRACTION;
+      try {
+        const response = await fetch("/api/search/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: trimmed, locationId, serviceType }),
+        });
+        if (response.ok) extraction = (await response.json()) as Extraction;
+      } catch {
+        // Network error — show nothing found rather than a stale list.
       }
-      setResult({ key, detected: found });
+      if (!cancelled) setResult({ key, extraction });
     }, EXTRACT_DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [key, tokens, locationId, serviceType]);
+  }, [key, trimmed, locationId, serviceType]);
 
-  if (!key) return { detected: [] as SearchTestResult[], loading: false };
+  if (!key) return { ...EMPTY_EXTRACTION, loading: false };
   // While a new read is pending, keep showing the previous matches rather
   // than flashing back to a skeleton on every keystroke.
-  return { detected: result?.detected ?? [], loading: result?.key !== key };
+  return { ...(result?.extraction ?? EMPTY_EXTRACTION), loading: result?.key !== key };
 }
 
 export function MessageExtractionResults({
   text,
   detected,
+  unmatched = [],
   loading,
   addedTestIds,
   onAdd,
@@ -88,6 +77,7 @@ export function MessageExtractionResults({
 }: {
   text: string;
   detected: SearchTestResult[];
+  unmatched?: string[];
   loading: boolean;
   addedTestIds: Set<string>;
   onAdd: (result: SearchTestResult) => void;
@@ -110,7 +100,9 @@ export function MessageExtractionResults({
       <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
         <p className="text-[15px] font-medium">{text.trim() ? "No tests recognised" : "Paste a message to start"}</p>
         <p className="text-[13px] text-muted-foreground">
-          We match test names, codes and common nicknames like &ldquo;sugar test&rdquo;.
+          {unmatched.length > 0
+            ? `Nothing priced at this location for: ${unmatched.join(", ")}`
+            : "We match test names, codes and common nicknames like “sugar test”."}
         </p>
       </div>
     );
@@ -120,7 +112,7 @@ export function MessageExtractionResults({
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-2 pt-1 pb-2">
         <span className={resultsTitleClassName}>
-          Found {detected.length} test{detected.length === 1 ? "" : "s"} in the message
+          Found {detected.length} test{detected.length === 1 ? "" : "s"}
         </span>
         {newDetected.length > 1 ? (
           <button
@@ -132,6 +124,12 @@ export function MessageExtractionResults({
           </button>
         ) : null}
       </div>
+      {unmatched.length > 0 ? (
+        <p className="mx-2 mb-2 rounded-lg bg-muted px-3 py-2 text-[13px] text-muted-foreground">
+          <span className="font-medium text-foreground">Not found here ({unmatched.length}):</span>{" "}
+          {unmatched.join(", ")}
+        </p>
+      ) : null}
       {detected.map((result) => (
         <TestResultCard
           key={result.testId}
