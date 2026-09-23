@@ -18,9 +18,21 @@ const CANDIDATES_PER_TOKEN = 5;
 /** Keeps each price query's `in (...)` list (and its URL) a sane size. */
 const PRICE_CHUNK_SIZE = 150;
 
+/** Below this 0-100 score a no-price fuzzy guess isn't named back to the agent as "the test they meant". */
+const CONFIDENT_SCORE = 70;
+
+export interface NotOfferedTest {
+  /** The text as the customer wrote it. */
+  token: string;
+  code: string;
+  officialName: string;
+}
+
 export interface ExtractTestsResult {
   detected: SearchTestResult[];
-  /** Tokens that named no test with a current price here, as typed. */
+  /** Real catalog tests with no current price at this location/service type. */
+  notOffered: NotOfferedTest[];
+  /** Tokens that don't match any test in the catalog, as typed. */
   unmatched: string[];
 }
 
@@ -42,7 +54,7 @@ export async function extractTests(
   serviceTypes: readonly ServiceType[]
 ): Promise<ExtractTestsResult> {
   const tokens = splitTestList(text).slice(0, MAX_TOKENS);
-  if (tokens.length === 0) return { detected: [], unmatched: [] };
+  if (tokens.length === 0) return { detected: [], notOffered: [], unmatched: [] };
 
   const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
   const testById = new Map(tests.map((test) => [test.id, test]));
@@ -65,7 +77,11 @@ export async function extractTests(
         mentions.push({ token: word, candidates: exact.slice(0, CANDIDATES_PER_TOKEN) });
       }
     } else {
-      mentions.push({ token, candidates: ranked.slice(0, CANDIDATES_PER_TOKEN) });
+      // An exact code/name/alias hit is the test they asked for — if it has
+      // no price here, report it as not offered rather than substituting a
+      // different, merely similar test that does.
+      const exact = ranked.filter(isExact);
+      mentions.push({ token, candidates: (exact.length > 0 ? exact : ranked).slice(0, CANDIDATES_PER_TOKEN) });
     }
   }
 
@@ -83,8 +99,10 @@ export async function extractTests(
   );
 
   const detected: SearchTestResult[] = [];
+  const notOffered: NotOfferedTest[] = [];
   const unmatched: string[] = [];
   const detectedIds = new Set<string>();
+  const notOfferedIds = new Set<string>();
 
   for (const mention of mentions) {
     let found: SearchTestResult | null = null;
@@ -102,12 +120,21 @@ export async function extractTests(
       if (found) break;
     }
 
-    if (!found) unmatched.push(mention.token);
-    else if (!detectedIds.has(found.testId)) {
+    if (!found) {
+      // Name the catalog test only when the match is confident — a loose
+      // fuzzy guess would tell the agent the wrong test isn't offered.
+      const best = mention.candidates[0];
+      const test = best && (isExact(best) || best.score >= CONFIDENT_SCORE) ? testById.get(best.testId) : undefined;
+      if (!test) unmatched.push(mention.token);
+      else if (!notOfferedIds.has(test.id)) {
+        notOfferedIds.add(test.id);
+        notOffered.push({ token: mention.token, code: test.code, officialName: test.officialName });
+      }
+    } else if (!detectedIds.has(found.testId)) {
       detectedIds.add(found.testId);
       detected.push(found);
     }
   }
 
-  return { detected, unmatched };
+  return { detected, notOffered, unmatched };
 }

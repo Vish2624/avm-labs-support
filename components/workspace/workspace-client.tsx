@@ -296,7 +296,9 @@ export function WorkspaceClient() {
   // lets an agent clear a customer's list without touching the mouse.
   function handleSearchSubmit() {
     if (searchIsList) {
-      handleAddMany(extraction.detected.filter((result) => !addedTestIds.has(result.testId)));
+      handleAddMany(
+        extraction.detected.filter((result) => result.availability === "available" && !addedTestIds.has(result.testId))
+      );
       return;
     }
     for (const group of searchGroups) {
@@ -381,7 +383,9 @@ export function WorkspaceClient() {
             <MessageExtractionResults
               text={tab === "paste" ? pasteText : trimmedQuery}
               detected={extraction.detected}
+              notOffered={extraction.notOffered}
               unmatched={extraction.unmatched}
+              locationName={selectedLocation?.name ?? null}
               loading={extraction.loading}
               addedTestIds={addedTestIds}
               onAdd={handleAdd}
