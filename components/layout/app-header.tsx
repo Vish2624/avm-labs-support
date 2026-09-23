@@ -11,7 +11,6 @@ import type { AuthUser } from "@/types/auth";
 
 const navItems = [
   { href: "/workspace", label: "Quote" },
-  { href: "/history", label: "History" },
   { href: "/profiles", label: "Packages" },
   { href: "/updates", label: "Updates" },
 ];

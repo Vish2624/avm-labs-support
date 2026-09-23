@@ -36,9 +36,7 @@ function tierProgress(quotation: Quotation) {
 }
 
 // The in-progress quote: line items, total (with the volume discount), the
-// generated WhatsApp reply and the Copy action. Copying also saves the
-// quote to History (see onCopy) — once per distinct reply, so re-copying
-// the same text doesn't create duplicates.
+// generated WhatsApp reply and the Copy action.
 export function QuotationPanel({
   quotation,
   whatsappMessage,
@@ -47,7 +45,6 @@ export function QuotationPanel({
   onCustomerNameChange,
   onRemove,
   onClear,
-  onCopy,
 }: {
   quotation: Quotation;
   whatsappMessage: string;
@@ -56,8 +53,6 @@ export function QuotationPanel({
   onCustomerNameChange: (name: string) => void;
   onRemove: (item: QuotationLineItem) => void;
   onClear: () => void;
-  /** Called after the reply lands on the clipboard; saves it to History. */
-  onCopy: (message: string) => Promise<void>;
 }) {
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const count = quotation.lineItems.length;
@@ -74,17 +69,8 @@ export function QuotationPanel({
       toast.error("Couldn't copy — select and copy the text manually.");
       return;
     }
-    if (copied) {
-      toast.success("Copied again");
-      return;
-    }
     setCopiedMessage(whatsappMessage);
-    try {
-      await onCopy(whatsappMessage);
-      toast.success("Copied and saved to History");
-    } catch {
-      toast.warning("Copied, but couldn't save it to History.");
-    }
+    toast.success("Copied to clipboard");
   }
 
   const header = (
