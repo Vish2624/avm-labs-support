@@ -12,5 +12,5 @@ export default async function ProfilesPage() {
     return <NoLocations title="Packages" />;
   }
 
-  return <ProfileSearchClient locations={locations} />;
+  return <ProfileSearchClient />;
 }

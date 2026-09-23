@@ -2,7 +2,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "./test-result-card";
-import { ProfileResultCard } from "@/components/profiles/profile-result-card";
+import { PackageResultRow } from "./package-result-row";
 import { SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult } from "@/types/profile";
@@ -16,32 +16,54 @@ export interface SearchResultGroup {
   profilesLoading: boolean;
 }
 
-const sectionLabelClassName = "text-[11px] font-semibold tracking-wide text-muted-foreground uppercase";
-const subsectionLabelClassName = "mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground/80 uppercase";
+export const resultsTitleClassName = "text-xs font-medium tracking-[0.06em] text-muted-foreground uppercase";
 
-// List of matched tests + profiles for the current query, grouped by
-// service type when searching "All" (see ServiceTypeFilterSelector),
-// otherwise shown flat since the single active service type is already
-// named above the search box.
+function ResultSkeletons() {
+  return (
+    <div className="flex flex-col gap-2">
+      <Skeleton className="h-[62px] w-full rounded-xl" />
+      <Skeleton className="h-[62px] w-full rounded-xl" />
+      <Skeleton className="h-[62px] w-full rounded-xl" />
+    </div>
+  );
+}
+
+// Matched tests + packages for the current query, grouped by service type
+// when searching "All" (see ServiceTypeFilterSelector), otherwise shown
+// flat since the single active service type is already selected above.
 export function SearchResults({
   query,
+  locationName,
   groups,
   showGroupHeaders,
   addedTestIds,
+  addedProfileIds,
   onAdd,
   onRemove,
+  onAddPackage,
+  onRemovePackage,
 }: {
   query: string;
+  locationName: string | null;
   groups: SearchResultGroup[];
   showGroupHeaders: boolean;
   addedTestIds: Set<string>;
+  addedProfileIds: Set<string>;
   onAdd: (result: SearchTestResult) => void;
   onRemove: (testId: string) => void;
+  onAddPackage: (result: ProfileSearchResult) => void;
+  onRemovePackage: (profileId: string) => void;
 }) {
   if (!query.trim()) {
-    // Also covers a stale loading/error/results state left over from a
-    // request that was still in flight when the query got cleared.
-    return null;
+    return (
+      <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
+        <p className="text-[15px] font-medium">Search for a test or package</p>
+        <p className="text-[13px] text-muted-foreground">
+          Names, codes and the customer&apos;s own words all work — try &ldquo;sugar test&rdquo;. Press{" "}
+          <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">/</kbd> to jump to search.
+        </p>
+      </div>
+    );
   }
 
   const anyLoading = groups.some((group) => group.testsLoading || group.profilesLoading);
@@ -51,57 +73,54 @@ export function SearchResults({
   // profiles fetch resolved with 0 matches while the (usually slower) tests
   // fetch is still running. Keep showing the skeleton rather than "Nothing
   // found", which would otherwise flash before the test results land.
-  if (totalCount === 0 && anyLoading) {
-    return (
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-16 w-full rounded-xl" />
-        <Skeleton className="h-16 w-full rounded-xl" />
-        <Skeleton className="h-16 w-full rounded-xl" />
-      </div>
-    );
-  }
+  if (totalCount === 0 && anyLoading) return <ResultSkeletons />;
 
   const firstError = groups.find((group) => group.testsError)?.testsError ?? null;
   if (firstError) {
-    return <p className="text-sm text-destructive">{firstError}</p>;
+    return <p className="px-2 text-sm text-destructive">{firstError}</p>;
+  }
+
+  if (totalCount === 0) {
+    return (
+      <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
+        <p className="text-[15px] font-medium">No tests match &ldquo;{query}&rdquo;</p>
+        <p className="text-[13px] text-muted-foreground">
+          Try a test code, a nickname, or switch to All service types.
+        </p>
+      </div>
+    );
   }
 
   const nonEmptyGroups = groups.filter(
     (group) => group.testsLoading || group.profilesLoading || group.tests.length > 0 || group.profiles.length > 0
   );
 
-  if (totalCount === 0) {
-    return (
-      <div className="py-11 text-center leading-relaxed">
-        <p className="text-base font-medium">Nothing found for &ldquo;{query}&rdquo;</p>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Try the customer&apos;s own words — &ldquo;sugar test&rdquo; and &ldquo;vit d&rdquo; are mapped to
-          the right test.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs text-muted-foreground">
-        {totalCount} match{totalCount === 1 ? "" : "es"} · press{" "}
-        <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> to add the top test
-      </p>
-      {nonEmptyGroups.map((group) => (
-        <div key={group.serviceType} className="flex flex-col gap-2.5">
-          {showGroupHeaders ? (
-            <p className={sectionLabelClassName}>{SERVICE_TYPE_LABELS[group.serviceType]}</p>
-          ) : null}
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between px-2 pt-1 pb-2">
+        <span className={resultsTitleClassName}>
+          {totalCount} result{totalCount === 1 ? "" : "s"}
+          {locationName ? ` · ${locationName}` : ""}
+        </span>
+        <span className="text-[11.5px] text-muted-foreground">
+          <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top test
+        </span>
+      </div>
+      {nonEmptyGroups.map((group) => {
+        const count = group.tests.length + group.profiles.length;
+        return (
+          <div key={group.serviceType} className="mb-3 flex flex-col">
+            {showGroupHeaders ? (
+              <div className="flex items-center gap-2 px-2 pt-2 pb-1.5 text-xs font-medium text-muted-foreground">
+                {SERVICE_TYPE_LABELS[group.serviceType]}
+                <span className="font-normal text-muted-foreground/70">{count}</span>
+              </div>
+            ) : null}
 
-          {group.testsLoading ? (
-            <Skeleton className="h-16 w-full rounded-xl" />
-          ) : group.tests.length > 0 ? (
-            <div className="flex flex-col">
-              {group.profiles.length > 0 || group.profilesLoading ? (
-                <p className={subsectionLabelClassName}>Tests</p>
-              ) : null}
-              {group.tests.map((result) => (
+            {group.testsLoading ? (
+              <Skeleton className="h-[62px] w-full rounded-xl" />
+            ) : (
+              group.tests.map((result) => (
                 <TestResultCard
                   key={result.testId}
                   result={result}
@@ -109,23 +128,25 @@ export function SearchResults({
                   onAdd={onAdd}
                   onRemove={onRemove}
                 />
-              ))}
-            </div>
-          ) : null}
+              ))
+            )}
 
-          {group.profilesLoading ? (
-            <Skeleton className="h-16 w-full rounded-xl" />
-          ) : group.profiles.length > 0 ? (
-            <div className="flex flex-col">
-              {group.tests.length > 0 ? <p className={subsectionLabelClassName}>Packages</p> : null}
-              {group.profiles.map((result) => (
-                <ProfileResultCard key={result.profileId} result={result} />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ))}
+            {group.profilesLoading ? (
+              <Skeleton className="mt-1 h-[62px] w-full rounded-xl" />
+            ) : (
+              group.profiles.map((result) => (
+                <PackageResultRow
+                  key={result.profileId}
+                  result={result}
+                  added={addedProfileIds.has(result.profileId)}
+                  onAdd={onAddPackage}
+                  onRemove={onRemovePackage}
+                />
+              ))
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
-

@@ -4,7 +4,18 @@ import { parseTatHours } from "@/lib/utils/parse-tat-hours";
 import { applyDiscount } from "@/lib/pricing/discount";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { WHATSAPP_TEMPLATES } from "./templates";
-import type { Quotation } from "@/types/quotation";
+import type { Quotation, QuotationLineItem } from "@/types/quotation";
+
+// Past this many component tests, naming them all makes the reply a wall
+// of text — the count alone is enough, and the agent can list them on request.
+const MAX_NAMED_PACKAGE_TESTS = 6;
+
+function describePackageContents(item: QuotationLineItem): string | null {
+  if (item.kind !== "package" || item.tests.length === 0) return null;
+  const count = `${item.tests.length} test${item.tests.length === 1 ? "" : "s"}`;
+  if (item.tests.length > MAX_NAMED_PACKAGE_TESTS) return count;
+  return `${count} (${item.tests.map((test) => test.officialName).join(", ")})`;
+}
 
 /**
  * Format a quotation's verified DB fields into a copy-ready WhatsApp
@@ -39,13 +50,14 @@ export function generateWhatsAppResponse(quotation: Quotation): string {
   const lines = quotation.lineItems.map((item, index) =>
     WHATSAPP_TEMPLATES.lineItem(
       index + 1,
-      item.testName,
-      item.testCode,
+      item.name,
+      item.code,
       formatCurrency(item.price),
       sharedTat ? null : formatTat(item.tatText),
       // "Available" is the unremarkable default — only worth telling the
       // customer when a test isn't.
-      item.availability === "available" ? null : AVAILABILITY_LABELS[item.availability]
+      item.availability === "available" ? null : AVAILABILITY_LABELS[item.availability],
+      describePackageContents(item)
     )
   );
 
@@ -59,7 +71,7 @@ export function generateWhatsAppResponse(quotation: Quotation): string {
     : [WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total))];
 
   return [
-    WHATSAPP_TEMPLATES.intro,
+    WHATSAPP_TEMPLATES.intro(quotation.customerName?.trim() || null),
     "",
     ...lines,
     "",

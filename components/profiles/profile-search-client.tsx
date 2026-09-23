@@ -2,20 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { LocationSelector } from "@/components/layout/location-selector";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
+import { useQuote } from "@/components/workspace/quote-provider";
 import { ProfileSearch, type ProfileSearchMode } from "./profile-search";
 import { ProfileResults } from "./profile-results";
 import { fetcher } from "@/lib/utils/fetcher";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/constants/service-types";
-import type { Location } from "@/types/location";
 import type { ProfileSearchResult, ProfileSuggestion } from "@/types/profile";
 import type { ResolvedTestQuery } from "@/lib/search/resolve-test-ids";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-export function ProfileSearchClient({ locations }: { locations: Location[] }) {
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+export function ProfileSearchClient() {
+  // Location comes from the header's picker (shared with the Quote screen).
+  const { locationId } = useQuote();
   const [serviceType, setServiceType] = useState<ServiceType>(SERVICE_TYPES[0]);
   const [mode, setMode] = useState<ProfileSearchMode>("name");
 
@@ -82,7 +82,6 @@ export function ProfileSearchClient({ locations }: { locations: Location[] }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <LocationSelector locations={locations} value={locationId} onChange={setLocationId} />
           <ServiceTypeSelector value={serviceType} onChange={setServiceType} />
         </div>
       </div>

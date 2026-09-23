@@ -15,21 +15,23 @@ export function ProfileTestList({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {tests.map((test) => (
-        <span
-          key={test.testId}
-          title={matchedTestIds?.has(test.testId) ? "Requested" : undefined}
-          className={cn(
-            "rounded-full px-3 py-1.5 text-[13px]",
-            matchedTestIds?.has(test.testId)
-              ? "bg-accent text-accent-foreground"
-              : "bg-muted text-muted-foreground"
-          )}
-        >
-          {test.officialName}
-        </span>
-      ))}
+    <div className="flex flex-wrap gap-1.5">
+      {tests.map((test) => {
+        const matched = matchedTestIds?.has(test.testId) ?? false;
+        return (
+          <span
+            key={test.testId}
+            title={matched ? "Requested" : undefined}
+            className={cn(
+              "rounded-full px-2.5 py-[3px] text-xs",
+              matched ? "bg-success/15 text-success-foreground" : "bg-muted text-muted-foreground"
+            )}
+          >
+            {matchedTestIds ? (matched ? "✓ " : "+ ") : null}
+            {test.officialName}
+          </span>
+        );
+      })}
     </div>
   );
 }
