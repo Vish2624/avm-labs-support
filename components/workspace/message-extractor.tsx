@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "./test-result-card";
 import { resultsTitleClassName } from "./search-results";
@@ -18,6 +19,34 @@ interface Extraction {
 }
 
 const EMPTY_EXTRACTION: Extraction = { detected: [], notOffered: [], unmatched: [] };
+
+// One toast id, so re-reading an edited message replaces the last
+// notification instead of stacking a new one per keystroke pause.
+const EXTRACTION_TOAST_ID = "message-extraction";
+
+/** Pop-up summary of a finished read: how many tests were found, how many weren't. */
+function notifyExtraction(extraction: Extraction, failed: boolean) {
+  if (failed) {
+    toast.error("Couldn't read the tests — please try again.", { id: EXTRACTION_TOAST_ID });
+    return;
+  }
+  const requested = extraction.detected.length + extraction.notOffered.length + extraction.unmatched.length;
+  if (requested === 0) {
+    toast.error("No tests recognised in this message.", { id: EXTRACTION_TOAST_ID });
+    return;
+  }
+  const available = extraction.detected.filter((result) => result.availability === "available").length;
+  const notAvailable = requested - available;
+  const found = `${available} of ${requested} test${requested === 1 ? "" : "s"} found`;
+  if (notAvailable === 0) {
+    toast.success(found, { id: EXTRACTION_TOAST_ID });
+  } else {
+    toast.warning(`${found} · ${notAvailable} not available`, {
+      id: EXTRACTION_TOAST_ID,
+      description: "See the red box above the results for which ones and why.",
+    });
+  }
+}
 
 /**
  * Reads every test mentioned in a customer's raw message or a pasted list
@@ -43,6 +72,7 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
     let cancelled = false;
     const timeout = setTimeout(async () => {
       let extraction = EMPTY_EXTRACTION;
+      let failed = false;
       try {
         const response = await fetch("/api/search/extract", {
           method: "POST",
@@ -50,10 +80,14 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
           body: JSON.stringify({ text: trimmed, locationId, serviceType }),
         });
         if (response.ok) extraction = (await response.json()) as Extraction;
+        else failed = true;
       } catch {
         // Network error — show nothing found rather than a stale list.
+        failed = true;
       }
-      if (!cancelled) setResult({ key, extraction });
+      if (cancelled) return;
+      setResult({ key, extraction });
+      notifyExtraction(extraction, failed);
     }, EXTRACT_DEBOUNCE_MS);
 
     return () => {
