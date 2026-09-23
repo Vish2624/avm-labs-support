@@ -2,6 +2,7 @@ import "server-only";
 import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getProfilePricing } from "./profile-pricing";
 import { hydrateProfileTests } from "./hydrate-profile-tests";
+import { dedupeProfilesByName } from "./dedupe-profiles";
 import { calculateProfileMatch, rankProfileMatches } from "./calculate-profile-match";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { ProfileSuggestion } from "@/types/profile";
@@ -69,5 +70,5 @@ export async function findMatchingProfiles(
     });
   }
 
-  return suggestions;
+  return dedupeProfilesByName(suggestions);
 }

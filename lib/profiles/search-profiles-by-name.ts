@@ -2,6 +2,7 @@ import "server-only";
 import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getProfilePricing } from "./profile-pricing";
 import { hydrateProfileTests } from "./hydrate-profile-tests";
+import { dedupeProfilesByName } from "./dedupe-profiles";
 import { normalizeQuery } from "@/lib/search/normalize-query";
 import { matchScore } from "@/lib/search/fuzzy-match";
 import { FUZZY_THRESHOLD } from "@/lib/search/build-search-candidates";
@@ -72,5 +73,5 @@ export async function searchProfilesByName(
     });
   }
 
-  return results;
+  return dedupeProfilesByName(results);
 }
