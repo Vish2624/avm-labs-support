@@ -11,6 +11,7 @@ interface ImportSummary {
   newAliases: number;
   alreadyCovered: number;
   unknownCodes: string[];
+  conflicts: { testCode: string; alias: string; otherCodes: string[] }[];
   sample: { testCode: string; testName: string; alias: string }[];
 }
 
@@ -118,6 +119,11 @@ export function AliasImportDialog({
                   {summary.unknownCodes.length} unknown test codes skipped
                 </span>
               ) : null}
+              {summary.conflicts.length > 0 ? (
+                <span className="rounded-full bg-warning/25 px-2.5 py-1 text-warning-foreground">
+                  {summary.conflicts.length} skipped — already used by another test
+                </span>
+              ) : null}
             </div>
             {summary.sample.length > 0 ? (
               <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
@@ -138,6 +144,16 @@ export function AliasImportDialog({
               <p className="text-xs text-muted-foreground">
                 Not in the catalog: {summary.unknownCodes.slice(0, 15).join(", ")}
                 {summary.unknownCodes.length > 15 ? "…" : ""}
+              </p>
+            ) : null}
+            {summary.conflicts.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Already name another test:{" "}
+                {summary.conflicts
+                  .slice(0, 15)
+                  .map((conflict) => `${conflict.alias} (${conflict.testCode}; taken by ${conflict.otherCodes.join(", ")})`)
+                  .join(" · ")}
+                {summary.conflicts.length > 15 ? "…" : ""}
               </p>
             ) : null}
             <Button onClick={handleImport} disabled={busy || summary.newAliases === 0} className="self-end">

@@ -89,4 +89,6 @@ export interface ProfileSearchResult {
   tatText: string;
   availability: AvailabilityStatus;
   serviceType: ServiceType;
+  /** Set when the package matched because it contains the searched test/parameter, not by its name. */
+  includedTest: ProfileTestSummary | null;
 }

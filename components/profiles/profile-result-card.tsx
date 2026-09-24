@@ -27,6 +27,11 @@ export function ProfileResultCard({ result }: { result: ProfileSuggestion | Prof
             {match ? <Badge variant="secondary">covers {match.matchPercentage}%</Badge> : null}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-3.5 text-[13.5px] text-muted-foreground">
+            {"includedTest" in result && result.includedTest ? (
+              <span>
+                Includes <span className="font-medium text-foreground">{result.includedTest.officialName}</span>
+              </span>
+            ) : null}
             <span>{result.tests.length} test{result.tests.length === 1 ? "" : "s"} included</span>
             <span>ready in {formatTat(result.tatText)}</span>
           </div>
@@ -50,7 +55,13 @@ export function ProfileResultCard({ result }: { result: ProfileSuggestion | Prof
         <ProfileDetail
           description={result.description}
           tests={result.tests}
-          matchedTestIds={match ? new Set(match.matchedTestIds) : undefined}
+          matchedTestIds={
+            match
+              ? new Set(match.matchedTestIds)
+              : "includedTest" in result && result.includedTest
+                ? new Set([result.includedTest.testId])
+                : undefined
+          }
         />
       ) : null}
     </div>

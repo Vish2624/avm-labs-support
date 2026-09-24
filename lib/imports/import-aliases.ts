@@ -31,6 +31,13 @@ export interface AliasImportPlan {
   alreadyCovered: number;
   /** Test codes in the file that aren't in the catalog — their aliases are skipped, never attached to a guess. */
   unknownCodes: string[];
+  /**
+   * Aliases skipped because they already name a *different* test (its code,
+   * name, short name or an existing alias), or that an earlier row of the
+   * file already claimed for another test — adding them would make that
+   * search ambiguous.
+   */
+  conflicts: { testCode: string; alias: string; otherCodes: string[] }[];
 }
 
 // Short, space-free tokens with a capital or digit ("A2M", "HbA1c", "25OHD")
@@ -62,9 +69,20 @@ export async function planAliasImport(buffer: Buffer): Promise<AliasImportPlan> 
     );
   }
   for (const alias of existing) covered.get(alias.testId)?.add(alias.normalizedAlias);
+  // Reverse view: normalized text -> codes of every test it already names.
+  const codeById = new Map(tests.map((test) => [test.id, test.code]));
+  const ownersByText = new Map<string, Set<string>>();
+  for (const [testId, texts] of covered) {
+    for (const text of texts) {
+      if (!text) continue;
+      if (!ownersByText.has(text)) ownersByText.set(text, new Set());
+      ownersByText.get(text)!.add(codeById.get(testId)!);
+    }
+  }
 
   const toCreate: PlannedAlias[] = [];
   const unknownCodes = new Set<string>();
+  const conflicts: AliasImportPlan["conflicts"] = [];
   let matchedTests = 0;
   let alreadyCovered = 0;
 
@@ -82,7 +100,15 @@ export async function planAliasImport(buffer: Buffer): Promise<AliasImportPlan> 
         alreadyCovered += 1;
         continue;
       }
+      const owners = ownersByText.get(normalizedAlias);
+      const otherCodes = owners ? [...owners].filter((code) => code !== test.code) : [];
+      if (otherCodes.length > 0) {
+        conflicts.push({ testCode: test.code, alias, otherCodes });
+        continue;
+      }
       seen.add(normalizedAlias);
+      if (!owners) ownersByText.set(normalizedAlias, new Set());
+      ownersByText.get(normalizedAlias)!.add(test.code);
       toCreate.push({
         testId: test.id,
         testCode: test.code,
@@ -94,7 +120,14 @@ export async function planAliasImport(buffer: Buffer): Promise<AliasImportPlan> 
     }
   }
 
-  return { rowCount: rows.length, matchedTests, toCreate, alreadyCovered, unknownCodes: [...unknownCodes] };
+  return {
+    rowCount: rows.length,
+    matchedTests,
+    toCreate,
+    alreadyCovered,
+    unknownCodes: [...unknownCodes],
+    conflicts,
+  };
 }
 
 /** Inserts a plan's new aliases. Re-running the same file is safe: (test_id, alias) duplicates are ignored. */

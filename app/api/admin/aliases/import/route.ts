@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       newAliases: plan.toCreate.length,
       alreadyCovered: plan.alreadyCovered,
       unknownCodes: plan.unknownCodes,
+      conflicts: plan.conflicts,
       sample: plan.toCreate.slice(0, 12).map(({ testCode, testName, alias }) => ({ testCode, testName, alias })),
     };
 

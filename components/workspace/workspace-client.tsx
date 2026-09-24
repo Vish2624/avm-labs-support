@@ -14,6 +14,7 @@ import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
 import { SERVICE_TYPES, type ServiceType, type ServiceTypeFilter } from "@/lib/constants/service-types";
+import { isTestList } from "@/lib/search/split-test-list";
 import { cn } from "@/lib/utils";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSuggestion, ProfileSearchResult } from "@/types/profile";
@@ -188,14 +189,14 @@ export function WorkspaceClient() {
 
   function useTestSearchResults(type: ServiceType) {
     const key =
-      trimmedQuery && locationId && isActiveServiceType(type)
+      trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
         ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
         : null;
     return useSWR<{ results: SearchTestResult[] }>(key, fetcher);
   }
   function useProfileSearchResults(type: ServiceType) {
     const key =
-      trimmedQuery && locationId && isActiveServiceType(type)
+      trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
         ? `/api/profiles?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
         : null;
     return useSWR<{ results: ProfileSearchResult[] }>(key, fetcher);
@@ -226,14 +227,15 @@ export function WorkspaceClient() {
   };
   const searchGroups = activeServiceTypes.map((type) => groupDataByType[type]);
 
-  // The pasted-message reader resolves each token through a single
-  // /api/search call — "All" has no one service type to pass, so this falls
-  // back to in_house rather than doubling every extraction into 2N requests
-  // for a rarely-mixed case.
+  // A search-box query holding several tests ("ACCP, ALKP, AMYL, ...") is
+  // read like a pasted message — every test in it, not one fuzzy match for
+  // the whole string. "All" prefers each test's in-house price and falls
+  // back to outsourced.
+  const searchIsList = tab === "search" && isTestList(trimmedQuery);
   const extraction = useMessageExtraction(
-    tab === "paste" ? pasteText : "",
+    tab === "paste" ? pasteText : searchIsList ? trimmedQuery : "",
     locationId,
-    serviceTypeFilter === "all" ? SERVICE_TYPES[0] : serviceTypeFilter
+    serviceTypeFilter
   );
 
   const testLines = useMemo(
@@ -293,6 +295,12 @@ export function WorkspaceClient() {
   // types, in_house before outsource) that isn't already in the quote —
   // lets an agent clear a customer's list without touching the mouse.
   function handleSearchSubmit() {
+    if (searchIsList) {
+      handleAddMany(
+        extraction.detected.filter((result) => result.availability === "available" && !addedTestIds.has(result.testId))
+      );
+      return;
+    }
     for (const group of searchGroups) {
       const next = group.tests.find((result) => !addedTestIds.has(result.testId));
       if (next) {
@@ -358,7 +366,7 @@ export function WorkspaceClient() {
 
         {/* Scrollable: results only. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
-          {tab === "search" ? (
+          {tab === "search" && !searchIsList ? (
             <SearchResults
               query={debouncedQuery}
               locationName={selectedLocation?.name ?? null}
@@ -373,8 +381,11 @@ export function WorkspaceClient() {
             />
           ) : (
             <MessageExtractionResults
-              text={pasteText}
+              text={tab === "paste" ? pasteText : trimmedQuery}
               detected={extraction.detected}
+              notOffered={extraction.notOffered}
+              unmatched={extraction.unmatched}
+              locationName={selectedLocation?.name ?? null}
               loading={extraction.loading}
               addedTestIds={addedTestIds}
               onAdd={handleAdd}

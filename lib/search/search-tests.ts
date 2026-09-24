@@ -6,6 +6,9 @@ import { normalizeQuery } from "./normalize-query";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults } from "./rank-results";
 import type { ServiceType } from "@/lib/constants/service-types";
+import type { SearchCandidate } from "./rank-results";
+import type { Test } from "@/types/test";
+import type { TestPrice } from "@/types/price";
 import type { SearchTestResult } from "@/types/search";
 
 /** Cap on how many ranked candidates get priced/returned per search. */
@@ -54,20 +57,25 @@ export async function searchTests(
     // isn't shown — never backfilled with placeholder data.
     if (!test || !price) continue;
 
-    results.push({
-      testId: test.id,
-      code: test.code,
-      officialName: test.officialName,
-      shortName: test.shortName,
-      category: test.category,
-      matchType: candidate.matchType,
-      matchedAlias: candidate.matchedAlias ?? null,
-      price: { amount: price.price, currency: price.currencyCode },
-      tatText: price.tatText,
-      availability: price.availability,
-      serviceType: price.serviceType,
-    });
+    results.push(toSearchResult(test, candidate, price));
   }
 
   return results;
+}
+
+/** A ranked candidate joined to its test + current price row — the shape the workspace renders. */
+export function toSearchResult(test: Test, candidate: SearchCandidate, price: TestPrice): SearchTestResult {
+  return {
+    testId: test.id,
+    code: test.code,
+    officialName: test.officialName,
+    shortName: test.shortName,
+    category: test.category,
+    matchType: candidate.matchType,
+    matchedAlias: candidate.matchedAlias ?? null,
+    price: { amount: price.price, currency: price.currencyCode },
+    tatText: price.tatText,
+    availability: price.availability,
+    serviceType: price.serviceType,
+  };
 }
