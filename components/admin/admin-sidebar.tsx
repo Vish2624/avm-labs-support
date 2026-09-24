@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 
 const ADMIN_NAV_ITEMS = [
   { href: "/admin/upload", label: "Upload" },
-  { href: "/admin/imports", label: "Import History" },
   { href: "/admin/tests", label: "Tests" },
   { href: "/admin/profiles", label: "Profiles" },
   { href: "/admin/aliases", label: "Aliases" },
