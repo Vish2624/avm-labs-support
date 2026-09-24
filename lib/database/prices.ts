@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TestPrice } from "@/types/price";
 import type { ServiceType } from "@/lib/constants/service-types";
-import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
+import { cachedCatalogRead } from "@/lib/database/catalog-cache";
 import { fetchAllRows } from "./fetch-all-rows";
 
 const PRICE_COLUMNS =
@@ -121,8 +121,8 @@ export interface PriceWithTest extends TestPrice {
 
 /**
  * Every current test price, optionally filtered by location/service type,
- * joined with its test's code/name/category — the Admin Availability table
- * and the Excel export both need this shape.
+ * joined with its test's code/name/category — for the Excel export and the
+ * Test details upload/template.
  */
 export async function listCurrentPricesWithTestInfo(filter?: {
   locationId?: string;
@@ -152,16 +152,3 @@ export async function listCurrentPricesWithTestInfo(filter?: {
     };
   });
 }
-
-/** Directly updates one current price row's availability — an admin quick-edit, not a versioned import. */
-async function updatePriceAvailabilityUncached(
-  priceId: string,
-  availability: TestPrice["availability"]
-): Promise<void> {
-  const supabase = createAdminClient();
-  const { error } = await supabase.from("test_prices").update({ availability }).eq("id", priceId);
-  if (error) throw error;
-}
-
-// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
-export const updatePriceAvailability = invalidatesCatalog(updatePriceAvailabilityUncached);

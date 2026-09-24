@@ -10,9 +10,8 @@ import type { TestInput } from "@/lib/validation/test-schema";
 const EMPTY: TestInput = { code: "", officialName: "", shortName: null, category: null, description: null };
 
 // Add/update a test's catalog metadata (code, name, category, description).
-// Pricing isn't editable here — it only ever comes from the Excel import
-// pipeline (Phase 6) or, for a quick availability-only correction, the
-// Admin Availability page.
+// Pricing isn't editable here — it comes from the Excel uploads (Admin →
+// Upload: Price list or Test details).
 export function TestForm({
   initial,
   onSubmit,
