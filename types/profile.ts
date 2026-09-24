@@ -91,4 +91,6 @@ export interface ProfileSearchResult {
   serviceType: ServiceType;
   /** Set when the package matched because it contains the searched test/parameter, not by its name. */
   includedTest: ProfileTestSummary | null;
+  /** 0-100 strength of the package's own name/code match; null when it matched by containing the test. */
+  nameScore: number | null;
 }

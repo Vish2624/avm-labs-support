@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
 import { TestSearch } from "./test-search";
-import { SearchResults, type SearchResultGroup } from "./search-results";
+import { SearchResults, type AiSearchPayload, type AiSearchState, type SearchResultGroup } from "./search-results";
 import { MessageExtractionResults, useMessageExtraction } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
 import { PackageSuggestions } from "./package-suggestions";
@@ -199,7 +199,7 @@ export function WorkspaceClient() {
       trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
         ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
         : null;
-    return useSWR<{ results: SearchTestResult[]; isList?: boolean }>(key, fetcher);
+    return useSWR<{ results: SearchTestResult[]; isList?: boolean; didYouMean?: string | null }>(key, fetcher);
   }
   function useProfileSearchResults(type: ServiceType) {
     // "All" lists in-house packages only (see SearchResults), so outsourced
@@ -223,6 +223,7 @@ export function WorkspaceClient() {
       tests: inHouseTests.data?.results ?? EMPTY_TEST_RESULTS,
       testsLoading: inHouseTests.isLoading,
       testsError: inHouseTests.error instanceof Error ? inHouseTests.error.message : null,
+      didYouMean: inHouseTests.data?.didYouMean ?? null,
       profiles: inHouseProfiles.data?.results ?? EMPTY_PROFILE_RESULTS,
       profilesLoading: inHouseProfiles.isLoading,
     },
@@ -231,11 +232,46 @@ export function WorkspaceClient() {
       tests: outsourceTests.data?.results ?? EMPTY_TEST_RESULTS,
       testsLoading: outsourceTests.isLoading,
       testsError: outsourceTests.error instanceof Error ? outsourceTests.error.message : null,
+      didYouMean: outsourceTests.data?.didYouMean ?? null,
       profiles: outsourceProfiles.data?.results ?? EMPTY_PROFILE_RESULTS,
       profilesLoading: outsourceProfiles.isLoading,
     },
   };
   const searchGroups = activeServiceTypes.map((type) => groupDataByType[type]);
+
+  // AI fallback: only once the fast rule-based results are in and none of
+  // them is a strong hit (an exact test, an alias typed in full, or a
+  // package whose own name matches) — so common searches never wait on it.
+  const ruleResultsLoaded = searchGroups.every((group) => !group.testsLoading && !group.profilesLoading);
+  const queryCompact = trimmedQuery.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const strongRuleHit = searchGroups.some(
+    (group) =>
+      group.tests.some(
+        (result) =>
+          result.matchType === "exact" ||
+          (result.matchedAlias !== null && result.matchedAlias.toLowerCase().replace(/[^a-z0-9]/g, "") === queryCompact)
+      ) || group.profiles.some((result) => (result.nameScore ?? 0) >= 90)
+  );
+  const aiKey =
+    tab === "search" &&
+    trimmedQuery.length >= 3 &&
+    !isTestList(trimmedQuery) &&
+    !inHouseTests.data?.isList &&
+    !outsourceTests.data?.isList &&
+    locationId &&
+    ruleResultsLoaded &&
+    !strongRuleHit
+      ? `/api/search/ai?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: serviceTypeFilter })}`
+      : null;
+  const aiSearch = useSWR<AiSearchPayload>(aiKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
+  const aiState: AiSearchState | null =
+    aiKey && aiSearch.data?.enabled !== false
+      ? {
+          loading: aiSearch.isLoading,
+          correctedQuery: aiSearch.data?.correctedQuery ?? null,
+          items: aiSearch.data?.items ?? [],
+        }
+      : null;
 
   // A search-box query holding several tests ("ACCP, ALKP, AMYL, ...") is
   // read like a pasted message — every test in it, not one fuzzy match for
@@ -422,6 +458,8 @@ export function WorkspaceClient() {
               onRemove={handleRemoveTest}
               onAddPackage={(result) => applyPackage(toPackageLine(result))}
               onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
+              onSuggestion={setQuery}
+              ai={aiState}
             />
           ) : (
             <MessageExtractionResults

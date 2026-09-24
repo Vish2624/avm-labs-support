@@ -6,7 +6,8 @@
  * to alias matches (admin-curated). Pure algorithm — no database access.
  */
 
-export type SearchMatchType = "exact" | "alias" | "fuzzy";
+// "ai": picked by the semantic fallback (lib/search/ai-search.ts), never by the ranker here.
+export type SearchMatchType = "exact" | "alias" | "fuzzy" | "ai";
 
 export interface SearchCandidate {
   testId: string;

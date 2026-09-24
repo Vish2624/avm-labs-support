@@ -22,6 +22,16 @@ function normalize(raw: string): string {
     .replace(/\p{Diacritic}/gu, "") // strip diacritics (accented Latin letters -> plain)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ") // punctuation/symbols -> space
+    // British -> American medical spellings, so "haemoglobin" = "hemoglobin",
+    // "oestradiol" = "estradiol", "anaemia" = "anemia".
+    .replace(/anaem/g, "anem")
+    .replace(/haem/g, "hem")
+    .replace(/aemia/g, "emia")
+    .replace(/oestr/g, "estr")
+    .replace(/oedem/g, "edem")
+    .replace(/faec/g, "fec")
+    .replace(/paed/g, "ped")
+    .replace(/tumour/g, "tumor")
     .replace(/\s+/g, " ")
     .trim();
 }

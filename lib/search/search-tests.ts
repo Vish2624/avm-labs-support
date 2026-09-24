@@ -2,7 +2,7 @@ import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
-import { normalizeQuery } from "./normalize-query";
+import { queryVariants, VARIANT_SCORE_FACTOR } from "./query-variants";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults } from "./rank-results";
 import { segmentTestNames } from "./segment-tests";
@@ -33,12 +33,18 @@ export async function searchTests(
   locationId: string,
   serviceType: ServiceType
 ): Promise<SearchTestResult[]> {
-  const normalized = normalizeQuery(query);
-  if (!normalized) return [];
+  const variants = queryVariants(query);
+  if (variants.length === 0) return [];
 
   const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
 
-  const candidates = buildSearchCandidates(normalized, tests, aliases);
+  // The query as typed, plus its plain-words phrasings ("I need thyroid
+  // test" -> "thyroid", "sugar" -> "glucose"); a match found only through a
+  // rephrasing scores slightly below the same match on the original.
+  const candidates = variants.flatMap((variant, i) => {
+    const found = buildSearchCandidates(variant, tests, aliases);
+    return i === 0 ? found : found.map((candidate) => ({ ...candidate, score: candidate.score * VARIANT_SCORE_FACTOR }));
+  });
   const ranked = rankResults(candidates).slice(0, MAX_RESULTS);
   if (ranked.length === 0) return [];
 
