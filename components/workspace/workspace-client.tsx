@@ -199,11 +199,14 @@ export function WorkspaceClient() {
       trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
         ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
         : null;
-    return useSWR<{ results: SearchTestResult[] }>(key, fetcher);
+    return useSWR<{ results: SearchTestResult[]; isList?: boolean }>(key, fetcher);
   }
   function useProfileSearchResults(type: ServiceType) {
+    // "All" lists in-house packages only (see SearchResults), so outsourced
+    // packages are only fetched when that filter is picked on its own.
+    const shown = serviceTypeFilter === "all" ? type === "in_house" : isActiveServiceType(type);
     const key =
-      trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
+      trimmedQuery && !isTestList(trimmedQuery) && locationId && shown
         ? `/api/profiles?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
         : null;
     return useSWR<{ results: ProfileSearchResult[] }>(key, fetcher);
@@ -238,7 +241,10 @@ export function WorkspaceClient() {
   // read like a pasted message — every test in it, not one fuzzy match for
   // the whole string. "All" prefers each test's in-house price and falls
   // back to outsourced.
-  const searchIsList = tab === "search" && isTestList(trimmedQuery);
+  // Tests separated only by spaces ("TSH T3 T4") have no separator to spot
+  // here, so the search API says when the query names several tests.
+  const serverSaysList = Boolean(inHouseTests.data?.isList || outsourceTests.data?.isList);
+  const searchIsList = tab === "search" && (isTestList(trimmedQuery) || serverSaysList);
   const extraction = useMessageExtraction(
     tab === "paste" ? submittedPasteText : searchIsList ? trimmedQuery : "",
     locationId,

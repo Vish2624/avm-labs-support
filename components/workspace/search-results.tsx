@@ -28,9 +28,9 @@ function ResultSkeletons() {
   );
 }
 
-// Matched tests + packages for the current query, grouped by service type
-// when searching "All" (see ServiceTypeFilterSelector), otherwise shown
-// flat since the single active service type is already selected above.
+// Matched tests + packages for the current query: tests first, grouped by
+// service type when searching "All" (see ServiceTypeFilterSelector), then
+// packages — in-house only in "All", otherwise the selected type's own.
 export function SearchResults({
   query,
   locationName,
@@ -66,8 +66,11 @@ export function SearchResults({
     );
   }
 
+  const shownPackageGroups = groups.length > 1 ? groups.filter((group) => group.serviceType === "in_house") : groups;
   const anyLoading = groups.some((group) => group.testsLoading || group.profilesLoading);
-  const totalCount = groups.reduce((sum, group) => sum + group.tests.length + group.profiles.length, 0);
+  const totalCount =
+    groups.reduce((sum, group) => sum + group.tests.length, 0) +
+    shownPackageGroups.reduce((sum, group) => sum + group.profiles.length, 0);
 
   // Nothing has come back yet for ANY of the in-flight requests — e.g. the
   // profiles fetch resolved with 0 matches while the (usually slower) tests
@@ -91,6 +94,9 @@ export function SearchResults({
     );
   }
 
+  // With several service types shown ("All"), only in-house packages are
+  // listed; a single selected service type shows its own packages.
+
   const nonEmptyGroups = groups.filter(
     (group) => group.testsLoading || group.profilesLoading || group.tests.length > 0 || group.profiles.length > 0
   );
@@ -106,17 +112,18 @@ export function SearchResults({
           <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top test
         </span>
       </div>
-      {nonEmptyGroups.map((group) => {
-        const count = group.tests.length + group.profiles.length;
-        return (
-          <div key={group.serviceType} className="mb-3 flex flex-col">
+      {/* Tests for every service type first (in-house, then outsourced),
+          then packages. In "All", only in-house packages are listed —
+          outsourced ones appear when the Outsourced filter is picked. */}
+      {nonEmptyGroups.map((group) =>
+        group.testsLoading || group.tests.length > 0 ? (
+          <div key={`tests-${group.serviceType}`} className="mb-3 flex flex-col">
             {showGroupHeaders ? (
               <div className="flex items-center gap-2 px-2 pt-2 pb-1.5 text-xs font-medium text-muted-foreground">
-                {SERVICE_TYPE_LABELS[group.serviceType]}
-                <span className="font-normal text-muted-foreground/70">{count}</span>
+                {SERVICE_TYPE_LABELS[group.serviceType]} tests
+                <span className="font-normal text-muted-foreground/70">{group.tests.length}</span>
               </div>
             ) : null}
-
             {group.testsLoading ? (
               <Skeleton className="h-[62px] w-full rounded-xl" />
             ) : (
@@ -130,23 +137,31 @@ export function SearchResults({
                 />
               ))
             )}
-
-            {group.profilesLoading ? (
-              <Skeleton className="mt-1 h-[62px] w-full rounded-xl" />
-            ) : (
-              group.profiles.map((result) => (
-                <PackageResultRow
-                  key={result.profileId}
-                  result={result}
-                  added={addedProfileIds.has(result.profileId)}
-                  onAdd={onAddPackage}
-                  onRemove={onRemovePackage}
-                />
-              ))
-            )}
           </div>
-        );
-      })}
+        ) : null
+      )}
+
+      {shownPackageGroups.map((group) =>
+        group.profilesLoading ? (
+          <Skeleton key={`packages-${group.serviceType}`} className="mt-1 mb-3 h-[62px] w-full rounded-xl" />
+        ) : group.profiles.length > 0 ? (
+          <div key={`packages-${group.serviceType}`} className="mb-3 flex flex-col gap-2">
+            <div className="px-2 pt-2 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+              {showGroupHeaders ? `${SERVICE_TYPE_LABELS[group.serviceType]} packages` : "Packages"} ·{" "}
+              {group.profiles.length}
+            </div>
+            {group.profiles.map((result) => (
+              <PackageResultRow
+                key={result.profileId}
+                result={result}
+                added={addedProfileIds.has(result.profileId)}
+                onAdd={onAddPackage}
+                onRemove={onRemovePackage}
+              />
+            ))}
+          </div>
+        ) : null
+      )}
     </div>
   );
 }

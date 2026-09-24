@@ -6,6 +6,7 @@ import { normalizeQuery } from "./normalize-query";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults, type SearchCandidate } from "./rank-results";
 import { splitTestList } from "./split-test-list";
+import { segmentTestNames } from "./segment-tests";
 import { toSearchResult } from "./search-tests";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { TestPrice } from "@/types/price";
@@ -45,8 +46,8 @@ export interface ExtractTestsResult {
  *
  * Each token keeps its best-ranked match that has a current price at this
  * location, trying `serviceTypes` in order (so "All" prefers in-house and
- * falls back to outsourced). A multi-word token that matches nothing as a
- * whole ("TSH T3 T4") is retried word by word, accepting exact matches only.
+ * falls back to outsourced). Tests separated only by spaces ("TSH T3 T4",
+ * "cbc esr crp") are split into one per test (see segmentTestNames()).
  */
 export async function extractTests(
   text: string,
@@ -68,21 +69,16 @@ export async function extractTests(
   // Each "mention" is a list of ranked candidates to try, tagged with the
   // token it came from so unmatched tokens can be reported back as typed.
   const mentions: { token: string; candidates: SearchCandidate[] }[] = [];
-  for (const token of tokens) {
+  // Tests typed with only spaces between them ("hba1c lipid profile
+  // vitamin d", "TSH T3 T4") are split into one piece per test first.
+  const pieces = tokens.flatMap((token) => segmentTestNames(token, tests, aliases) ?? [token]);
+  for (const token of pieces) {
+    // An exact code/name/alias hit is the test they asked for — if it has
+    // no price here, report it as not offered rather than substituting a
+    // different, merely similar test that does.
     const ranked = rank(token);
-    const words = token.split(/\s+/);
-    if (ranked.length === 0 && words.length > 1) {
-      for (const word of words) {
-        const exact = rank(word).filter(isExact);
-        mentions.push({ token: word, candidates: exact.slice(0, CANDIDATES_PER_TOKEN) });
-      }
-    } else {
-      // An exact code/name/alias hit is the test they asked for — if it has
-      // no price here, report it as not offered rather than substituting a
-      // different, merely similar test that does.
-      const exact = ranked.filter(isExact);
-      mentions.push({ token, candidates: (exact.length > 0 ? exact : ranked).slice(0, CANDIDATES_PER_TOKEN) });
-    }
+    const exact = ranked.filter(isExact);
+    mentions.push({ token, candidates: (exact.length > 0 ? exact : ranked).slice(0, CANDIDATES_PER_TOKEN) });
   }
 
   const candidateIds = [...new Set(mentions.flatMap((mention) => mention.candidates.map((c) => c.testId)))];

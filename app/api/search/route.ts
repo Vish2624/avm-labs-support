@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
-import { searchTests } from "@/lib/search/search-tests";
+import { queryNamesSeveralTests, searchTests } from "@/lib/search/search-tests";
 import { isServiceType } from "@/lib/constants/service-types";
 
 // Test search endpoint backing the Support Workspace's live search box.
@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "serviceType must be in_house or outsource" }, { status: 400 });
   }
 
-  const results = await searchTests(query, locationId, serviceType);
-  return NextResponse.json({ results });
+  const [results, isList] = await Promise.all([
+    searchTests(query, locationId, serviceType),
+    queryNamesSeveralTests(query),
+  ]);
+  return NextResponse.json({ results, isList });
 }
