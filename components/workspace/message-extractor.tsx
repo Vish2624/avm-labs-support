@@ -218,7 +218,7 @@ export function MessageExtractionResults({
   if (requested === 0) {
     return (
       <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
-        <p className="text-[15px] font-medium">{text.trim() ? "No tests recognised" : "Paste a message to start"}</p>
+        <p className="text-[15px] font-medium">{text.trim() ? "No tests recognised" : "Paste a message, then press Find tests"}</p>
         <p className="text-[13px] text-muted-foreground">
           We match test names, codes and common nicknames like &ldquo;sugar test&rdquo;.
         </p>
