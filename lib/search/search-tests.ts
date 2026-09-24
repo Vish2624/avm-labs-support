@@ -5,6 +5,7 @@ import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { normalizeQuery } from "./normalize-query";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults } from "./rank-results";
+import { segmentTestNames } from "./segment-tests";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { SearchCandidate } from "./rank-results";
 import type { Test } from "@/types/test";
@@ -61,6 +62,17 @@ export async function searchTests(
   }
 
   return results;
+}
+
+/**
+ * True when a search-box query with no commas/line breaks still names
+ * several tests ("TSH T3 T4", "hba1c vitamin d cbc") — the workspace then
+ * reads it like a pasted list instead of one fuzzy search.
+ */
+export async function queryNamesSeveralTests(query: string): Promise<boolean> {
+  if (!query.trim().includes(" ")) return false;
+  const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
+  return segmentTestNames(query.trim(), tests, aliases) !== null;
 }
 
 /** A ranked candidate joined to its test + current price row — the shape the workspace renders. */
