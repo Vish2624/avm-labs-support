@@ -2,8 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, MapPinIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "./theme-toggle";
 import { useQuote } from "@/components/workspace/quote-provider";
 import { signOutAction } from "@/app/(dashboard)/actions";
@@ -36,6 +45,7 @@ export function AppHeader({ user }: { user: AuthUser }) {
   const items = user.role === "admin" ? [...navItems, adminItem] : navItems;
   const showLocation = LOCATION_SCOPED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const name = displayName(user.email);
+  const selectedLocation = locations.find((location) => location.id === locationId);
 
   return (
     <header className="grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-5 border-b border-border bg-card px-5">
@@ -65,22 +75,38 @@ export function AppHeader({ user }: { user: AuthUser }) {
       </div>
 
       {showLocation && locations.length > 0 ? (
-        <label className="relative flex h-8 cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/[0.06] pr-2 pl-3 text-[11px] font-semibold tracking-[0.05em] text-primary uppercase shadow-[0_0_0_3px] shadow-primary/[0.07]">
-          <span className="size-1.5 rounded-full bg-primary" />
-          Location
-          <select
-            value={locationId}
-            onChange={(event) => setLocationId(event.target.value)}
-            className="h-7 cursor-pointer appearance-none bg-transparent pr-5 text-[13px] font-semibold tracking-normal text-foreground normal-case outline-none"
-          >
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name} ({location.currencyCode})
-              </option>
-            ))}
-          </select>
-          <ChevronDownIcon className="pointer-events-none absolute right-2.5 size-3.5 text-muted-foreground" />
-        </label>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="group flex h-8 cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/[0.06] pr-2.5 pl-3 text-[11px] font-semibold tracking-[0.05em] text-primary uppercase shadow-[0_0_0_3px] shadow-primary/[0.07] transition-colors outline-none hover:bg-primary/[0.1] focus-visible:ring-2 focus-visible:ring-primary/40 data-popup-open:bg-primary/[0.1]">
+            <span className="size-1.5 rounded-full bg-primary" />
+            Location
+            <span className="text-[13px] tracking-normal text-foreground normal-case">
+              {selectedLocation ? `${selectedLocation.name} (${selectedLocation.currencyCode})` : "Select"}
+            </span>
+            <ChevronDownIcon className="size-3.5 text-muted-foreground transition-transform duration-150 group-data-popup-open:rotate-180" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center" sideOffset={8} className="w-60">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-[0.05em] uppercase">
+                Pricing location
+              </DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={locationId} onValueChange={(value) => setLocationId(value as string)}>
+                {locations.map((location) => (
+                  <DropdownMenuRadioItem
+                    key={location.id}
+                    value={location.id}
+                    className="h-9 cursor-pointer gap-2.5 pr-9 font-medium data-checked:text-primary"
+                  >
+                    <MapPinIcon className="text-muted-foreground" />
+                    <span className="flex-1">{location.name}</span>
+                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground tabular-nums">
+                      {location.currencyCode}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : (
         <span />
       )}
