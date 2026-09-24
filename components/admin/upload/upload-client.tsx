@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2Icon } from "lucide-react";
+import { CheckCircle2Icon, DownloadIcon, FileSpreadsheetIcon } from "lucide-react";
 import { ExcelUpload } from "./excel-upload";
 import { UploadProgress } from "./upload-progress";
 import { ValidationSummary } from "./validation-summary";
@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/constants/service-types";
 import type { Location } from "@/types/location";
 import type { ImportDiff, ImportValidationReport, PriceListVersion } from "@/types/import";
+
+// A file download (API route), so a plain <a>, not next/link.
+const PRICE_TEMPLATE_URL = "/api/admin/uploads/prices/template";
 
 type Stage =
   | { name: "idle" }
@@ -91,8 +94,25 @@ export function UploadClient({ locations }: { locations: Location[] }) {
     );
   }
 
+  const currentPricesUrl = `/api/exports?${new URLSearchParams({ type: "prices", locationId, serviceType })}`;
+
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        One file per location + service type. Only the tests in the file change; everything else keeps its current
+        price. You&apos;ll see a validation report and a preview before anything goes live.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" nativeButton={false} render={<a href={PRICE_TEMPLATE_URL} />}>
+          <DownloadIcon />
+          Download template
+        </Button>
+        <Button variant="outline" size="sm" nativeButton={false} render={<a href={currentPricesUrl} />}>
+          <FileSpreadsheetIcon />
+          Download current price list
+        </Button>
+      </div>
+
       <ExcelUpload
         locations={locations}
         locationId={locationId}

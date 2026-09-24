@@ -39,6 +39,27 @@ interface ProfileWithTestsRow extends ProfileRow {
 }
 
 /**
+ * Every profile, active or not, with its component tests and their
+ * required flags — read fresh (not from the search cache), for the profile
+ * upload's diff (lib/imports/profile-details-import.ts).
+ */
+export async function listAllProfilesWithTestSelections(): Promise<
+  { profile: Profile; tests: { testId: string; required: boolean }[] }[]
+> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(`${PROFILE_COLUMNS}, profile_tests(test_id, required)`);
+  if (error) throw error;
+
+  type Row = ProfileRow & { profile_tests: { test_id: string; required: boolean }[] };
+  return ((data ?? []) as Row[]).map((row) => ({
+    profile: mapProfile(row),
+    tests: row.profile_tests.map((pt) => ({ testId: pt.test_id, required: pt.required })),
+  }));
+}
+
+/**
  * Every active profile with its component test ids — the candidate set
  * findMatchingProfiles() ranks against (see lib/profiles/calculate-profile-match.ts).
  */
@@ -133,8 +154,8 @@ export interface ProfilePriceWithProfile extends ProfilePrice {
 
 /**
  * Every current profile bundle price, optionally filtered by
- * location/service type, joined with its profile's code/name — the Admin
- * Availability table needs this shape (alongside the equivalent test-price
+ * location/service type, joined with its profile's code/name — for the
+ * Profiles upload's diff and template (alongside the equivalent test-price
  * join in lib/database/prices.ts).
  */
 export async function listCurrentProfilePricesWithProfileInfo(filter?: {
@@ -158,13 +179,6 @@ export async function listCurrentProfilePricesWithProfileInfo(filter?: {
     const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
     return { ...mapProfilePrice(row), profileCode: profile?.code ?? "", profileName: profile?.name ?? "" };
   });
-}
-
-/** Directly updates one current profile-price row's availability — an admin quick-edit, not a versioned import. */
-async function updateProfilePriceAvailabilityUncached(priceId: string, availability: ProfilePrice["availability"]): Promise<void> {
-  const supabase = createAdminClient();
-  const { error } = await supabase.from("profile_prices").update({ availability }).eq("id", priceId);
-  if (error) throw error;
 }
 
 export interface ProfileWithTestCount extends Profile {
@@ -341,7 +355,6 @@ async function upsertProfilePriceUncached(input: {
 }
 
 // Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
-export const updateProfilePriceAvailability = invalidatesCatalog(updateProfilePriceAvailabilityUncached);
 export const createProfile = invalidatesCatalog(createProfileUncached);
 export const updateProfile = invalidatesCatalog(updateProfileUncached);
 export const setProfileActive = invalidatesCatalog(setProfileActiveUncached);
