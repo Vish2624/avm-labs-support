@@ -9,6 +9,7 @@ import { FUZZY_THRESHOLD, buildSearchCandidates } from "@/lib/search/build-searc
 import { rankResults } from "@/lib/search/rank-results";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { queryVariants, VARIANT_SCORE_FACTOR } from "@/lib/search/query-variants";
 import type { Profile } from "@/types/profile";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { ProfileSearchResult, ProfileTestSummary } from "@/types/profile";
@@ -36,8 +37,11 @@ export async function searchProfilesByName(
   locationId: string,
   serviceType: ServiceType
 ): Promise<ProfileSearchResult[]> {
-  const normalized = normalizeQuery(query);
-  if (!normalized) return [];
+  // As typed, then plain-words phrasings with "profile"/"package" dropped
+  // ("thyroid profile" -> Total Thyroid, "female health package" ->
+  // female wellness). Only real package names/codes are ever matched.
+  const variants = queryVariants(query, { forPackages: true });
+  if (variants.length === 0) return [];
 
   const [profiles, tests, aliases] = await Promise.all([
     listActiveProfilesWithTests(),
@@ -49,10 +53,15 @@ export async function searchProfilesByName(
   for (const { profile, testIds } of profiles) {
     const codeNorm = normalizeQuery(profile.code);
     const nameNorm = normalizeQuery(profile.name);
-    const score =
-      normalized === codeNorm || normalized === nameNorm
-        ? 100
-        : Math.max(matchScore(normalized, codeNorm), matchScore(normalized, nameNorm)) * 100;
+    const score = Math.max(
+      ...variants.map((variant, i) => {
+        const variantScore =
+          variant === codeNorm || variant === nameNorm
+            ? 100
+            : Math.max(matchScore(variant, codeNorm), matchScore(variant, nameNorm)) * 100;
+        return i === 0 ? variantScore : variantScore * VARIANT_SCORE_FACTOR;
+      })
+    );
     if (score >= FUZZY_THRESHOLD * 100) scored.push({ profile, testIds, score });
   }
   scored.sort((a, b) => b.score - a.score);
@@ -60,7 +69,8 @@ export async function searchProfilesByName(
   // Packages that contain the test/parameter the query names, even when
   // their own name doesn't match it.
   const testById = new Map(tests.map((test) => [test.id, test]));
-  const containedTestIds = rankResults(buildSearchCandidates(normalized, tests, aliases))
+  const testVariants = queryVariants(query);
+  const containedTestIds = rankResults(testVariants.flatMap((variant) => buildSearchCandidates(variant, tests, aliases)))
     .filter((candidate) => candidate.matchType === "exact" || candidate.exact || candidate.score >= CONTAINED_TEST_MIN_SCORE)
     .slice(0, MAX_CONTAINED_TESTS)
     .map((candidate) => candidate.testId);
@@ -89,7 +99,7 @@ export async function searchProfilesByName(
   ]);
 
   const results: ProfileSearchResult[] = [];
-  for (const { profile, includedTest } of ranked) {
+  for (const { profile, includedTest, score } of ranked) {
     const price = pricingByProfileId.get(profile.id);
     // A matched profile with no current price at this location/service
     // type isn't shown — never backfilled with placeholder data.
@@ -106,6 +116,7 @@ export async function searchProfilesByName(
       availability: price.availability,
       serviceType: price.serviceType,
       includedTest: includedTest ?? null,
+      nameScore: includedTest ? null : Math.round(score),
     });
   }
 
