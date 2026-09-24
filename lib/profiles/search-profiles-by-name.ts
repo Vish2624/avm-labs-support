@@ -5,19 +5,31 @@ import { hydrateProfileTests } from "./hydrate-profile-tests";
 import { dedupeProfilesByName } from "./dedupe-profiles";
 import { normalizeQuery } from "@/lib/search/normalize-query";
 import { matchScore } from "@/lib/search/fuzzy-match";
-import { FUZZY_THRESHOLD } from "@/lib/search/build-search-candidates";
+import { FUZZY_THRESHOLD, buildSearchCandidates } from "@/lib/search/build-search-candidates";
+import { rankResults } from "@/lib/search/rank-results";
+import { listActiveTests } from "@/lib/database/tests";
+import { listActiveAliases } from "@/lib/database/aliases";
 import type { Profile } from "@/types/profile";
 import type { ServiceType } from "@/lib/constants/service-types";
-import type { ProfileSearchResult } from "@/types/profile";
+import type { ProfileSearchResult, ProfileTestSummary } from "@/types/profile";
 
 /** Cap on how many ranked candidates get priced/returned per search. */
 const MAX_RESULTS = 20;
 
+/** A test the query resolves to only counts toward "packages containing it" at or above this match score. */
+const CONTAINED_TEST_MIN_SCORE = 80;
+/** How many of the query's best test matches are looked up inside packages. */
+const MAX_CONTAINED_TESTS = 3;
+
 /**
  * Search profiles by name or code — exact match first, then fuzzy (the same
- * Jaccard trigram scoring searchTests() uses for the test catalog). Powers
- * /profiles' "search by name" mode; ranking by test overlap instead is
- * findMatchingProfiles().
+ * Jaccard trigram scoring searchTests() uses for the test catalog) — and
+ * also by what they contain: when the query names a test or parameter
+ * ("platelet count"), the packages that include it are listed after the
+ * name matches, smallest package first, so a parameter that's never sold
+ * alone still leads the agent to the Hemogram it belongs to. Powers the
+ * Quote search and /profiles' "search by name" mode; ranking by test
+ * overlap instead is findMatchingProfiles().
  */
 export async function searchProfilesByName(
   query: string,
@@ -27,9 +39,13 @@ export async function searchProfilesByName(
   const normalized = normalizeQuery(query);
   if (!normalized) return [];
 
-  const profiles = await listActiveProfilesWithTests();
+  const [profiles, tests, aliases] = await Promise.all([
+    listActiveProfilesWithTests(),
+    listActiveTests(),
+    listActiveAliases(),
+  ]);
 
-  const scored: { profile: Profile; testIds: string[]; score: number }[] = [];
+  const scored: { profile: Profile; testIds: string[]; score: number; includedTest?: ProfileTestSummary }[] = [];
   for (const { profile, testIds } of profiles) {
     const codeNorm = normalizeQuery(profile.code);
     const nameNorm = normalizeQuery(profile.name);
@@ -40,7 +56,26 @@ export async function searchProfilesByName(
     if (score >= FUZZY_THRESHOLD * 100) scored.push({ profile, testIds, score });
   }
   scored.sort((a, b) => b.score - a.score);
-  const ranked = scored.slice(0, MAX_RESULTS);
+
+  // Packages that contain the test/parameter the query names, even when
+  // their own name doesn't match it.
+  const testById = new Map(tests.map((test) => [test.id, test]));
+  const containedTestIds = rankResults(buildSearchCandidates(normalized, tests, aliases))
+    .filter((candidate) => candidate.matchType === "exact" || candidate.exact || candidate.score >= CONTAINED_TEST_MIN_SCORE)
+    .slice(0, MAX_CONTAINED_TESTS)
+    .map((candidate) => candidate.testId);
+  const nameMatchedIds = new Set(scored.map((entry) => entry.profile.id));
+  const containing = profiles
+    .flatMap(({ profile, testIds }) => {
+      if (nameMatchedIds.has(profile.id)) return [];
+      const testId = containedTestIds.find((id) => testIds.includes(id));
+      const test = testId ? testById.get(testId) : undefined;
+      if (!test) return [];
+      return [{ profile, testIds, score: 0, includedTest: { testId: test.id, code: test.code, officialName: test.officialName } }];
+    })
+    .sort((a, b) => a.testIds.length - b.testIds.length);
+
+  const ranked = [...scored, ...containing].slice(0, MAX_RESULTS);
 
   if (ranked.length === 0) return [];
 
@@ -54,7 +89,7 @@ export async function searchProfilesByName(
   ]);
 
   const results: ProfileSearchResult[] = [];
-  for (const { profile } of ranked) {
+  for (const { profile, includedTest } of ranked) {
     const price = pricingByProfileId.get(profile.id);
     // A matched profile with no current price at this location/service
     // type isn't shown — never backfilled with placeholder data.
@@ -70,6 +105,7 @@ export async function searchProfilesByName(
       tatText: price.tatText,
       availability: price.availability,
       serviceType: price.serviceType,
+      includedTest: includedTest ?? null,
     });
   }
 

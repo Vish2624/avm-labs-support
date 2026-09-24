@@ -9,7 +9,8 @@ import { AddToggleButton } from "./test-result-card";
 import { ProfileTestList } from "@/components/profiles/profile-test-list";
 import type { ProfileSearchResult } from "@/types/profile";
 
-// A package (profile) matched by name in the Quote search. Adding it puts
+// A package (profile) matched by name — or by containing the searched
+// test/parameter — in the Quote search. Adding it puts
 // the package itself on the quote at its fixed bundle price.
 export function PackageResultRow({
   result,
@@ -39,6 +40,11 @@ export function PackageResultRow({
               PACKAGE
             </span>
           </div>
+          {result.includedTest ? (
+            <span className="text-[12.5px] text-muted-foreground">
+              Includes <span className="font-medium text-foreground">{result.includedTest.officialName}</span>
+            </span>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] text-muted-foreground">
             <button
               type="button"
