@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "./fetch-all-rows";
 import type { TestAlias, AliasType } from "@/types/test";
+import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
 
 const ALIAS_COLUMNS =
   "id, test_id, alias, normalized_alias, alias_type, confidence, active, created_at, updated_at";
@@ -33,12 +34,14 @@ function mapAlias(row: TestAliasRow): TestAlias {
 }
 
 /** Every active admin-curated alias — the second signal searchTests() ranks against. */
-export async function listActiveAliases(): Promise<TestAlias[]> {
-  const supabase = createAdminClient();
-  const rows = await fetchAllRows<TestAliasRow>((from, to) =>
-    supabase.from("test_aliases").select(ALIAS_COLUMNS).eq("active", true).order("id").range(from, to)
-  );
-  return rows.map(mapAlias);
+export function listActiveAliases(): Promise<TestAlias[]> {
+  return cachedCatalogRead("aliases:active", async () => {
+    const supabase = createAdminClient();
+    const rows = await fetchAllRows<TestAliasRow>((from, to) =>
+      supabase.from("test_aliases").select(ALIAS_COLUMNS).eq("active", true).order("id").range(from, to)
+    );
+    return rows.map(mapAlias);
+  });
 }
 
 /** Every alias (active or not) for one test — the Admin test detail view. */
@@ -86,7 +89,7 @@ export interface AliasInput {
   confidence: number;
 }
 
-export async function createAlias(input: AliasInput): Promise<TestAlias> {
+async function createAliasUncached(input: AliasInput): Promise<TestAlias> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("test_aliases")
@@ -104,7 +107,7 @@ export async function createAlias(input: AliasInput): Promise<TestAlias> {
   return mapAlias(data as TestAliasRow);
 }
 
-export async function updateAlias(id: string, input: AliasInput): Promise<TestAlias> {
+async function updateAliasUncached(id: string, input: AliasInput): Promise<TestAlias> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("test_aliases")
@@ -123,7 +126,7 @@ export async function updateAlias(id: string, input: AliasInput): Promise<TestAl
   return mapAlias(data as TestAliasRow);
 }
 
-export async function setAliasActive(id: string, active: boolean): Promise<TestAlias> {
+async function setAliasActiveUncached(id: string, active: boolean): Promise<TestAlias> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("test_aliases")
@@ -136,8 +139,14 @@ export async function setAliasActive(id: string, active: boolean): Promise<TestA
   return mapAlias(data as TestAliasRow);
 }
 
-export async function deleteAlias(id: string): Promise<void> {
+async function deleteAliasUncached(id: string): Promise<void> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("test_aliases").delete().eq("id", id);
   if (error) throw error;
 }
+
+// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
+export const createAlias = invalidatesCatalog(createAliasUncached);
+export const updateAlias = invalidatesCatalog(updateAliasUncached);
+export const setAliasActive = invalidatesCatalog(setAliasActiveUncached);
+export const deleteAlias = invalidatesCatalog(deleteAliasUncached);

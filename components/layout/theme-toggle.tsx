@@ -15,6 +15,9 @@ export function ThemeToggle() {
       type="button"
       role="switch"
       aria-checked={resolvedTheme === "dark"}
+      // The server can't know the stored theme, so aria-checked legitimately
+      // differs on first client render; the visuals are CSS-driven.
+      suppressHydrationWarning
       aria-label="Dark mode"
       title="Switch light / dark mode"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}

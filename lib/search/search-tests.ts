@@ -1,7 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
-import { getCurrentPrices } from "@/lib/database/prices";
+import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { normalizeQuery } from "./normalize-query";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults } from "./rank-results";
@@ -42,7 +42,7 @@ export async function searchTests(
   if (ranked.length === 0) return [];
 
   const testById = new Map(tests.map((test) => [test.id, test]));
-  const prices = await getCurrentPrices(
+  const prices = await getCurrentPricesForSearch(
     ranked.map((candidate) => candidate.testId),
     locationId,
     serviceType

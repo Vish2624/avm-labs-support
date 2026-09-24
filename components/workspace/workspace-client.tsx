@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SearchIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
@@ -95,6 +96,12 @@ export function WorkspaceClient() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [pasteText, setPasteText] = useState("");
+  // A pasted message is only read when the agent asks for it (Find tests
+  // button / Ctrl+Enter), not on every keystroke while they paste or edit.
+  const [submittedPasteText, setSubmittedPasteText] = useState("");
+  function submitPaste() {
+    setSubmittedPasteText(pasteText.trim());
+  }
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Draggable split between "Find tests" and "Quotation" — remembered per
@@ -233,7 +240,7 @@ export function WorkspaceClient() {
   // back to outsourced.
   const searchIsList = tab === "search" && isTestList(trimmedQuery);
   const extraction = useMessageExtraction(
-    tab === "paste" ? pasteText : searchIsList ? trimmedQuery : "",
+    tab === "paste" ? submittedPasteText : searchIsList ? trimmedQuery : "",
     locationId,
     serviceTypeFilter
   );
@@ -353,14 +360,45 @@ export function WorkspaceClient() {
           {tab === "search" ? (
             <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
           ) : (
-            <textarea
-              value={pasteText}
-              onChange={(event) => setPasteText(event.target.value)}
-              placeholder="Paste the customer's message, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
-              aria-label="Customer message"
-              autoFocus
-              className="h-24 w-full resize-y rounded-xl border border-input bg-card px-3.5 py-3 text-sm leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
-            />
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitPaste();
+              }}
+              className="flex flex-col gap-2.5"
+            >
+              <textarea
+                value={pasteText}
+                onChange={(event) => {
+                  setPasteText(event.target.value);
+                  if (!event.target.value.trim()) setSubmittedPasteText("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    submitPaste();
+                  }
+                }}
+                placeholder="Paste the customer's message, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
+                aria-label="Customer message"
+                autoFocus
+                className="h-24 w-full resize-y rounded-xl border border-input bg-card px-3.5 py-3 text-sm leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
+              />
+              <div className="flex items-center justify-end gap-3">
+                <span className="text-xs text-muted-foreground">
+                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Ctrl</kbd> +{" "}
+                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd>
+                </span>
+                <button
+                  type="submit"
+                  disabled={!pasteText.trim() || extraction.loading}
+                  className="flex h-9 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <SearchIcon className="size-4" />
+                  {extraction.loading ? "Finding…" : "Find tests"}
+                </button>
+              </div>
+            </form>
           )}
         </div>
 
@@ -381,7 +419,7 @@ export function WorkspaceClient() {
             />
           ) : (
             <MessageExtractionResults
-              text={tab === "paste" ? pasteText : trimmedQuery}
+              text={tab === "paste" ? submittedPasteText : trimmedQuery}
               detected={extraction.detected}
               notOffered={extraction.notOffered}
               unmatched={extraction.unmatched}

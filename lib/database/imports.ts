@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ImportStatus, PriceListVersion, PriceListStagingRow, ParsedPriceRow, ImportRowIssue } from "@/types/import";
 import type { ServiceType } from "@/lib/constants/service-types";
+import { invalidatesCatalog } from "@/lib/database/catalog-cache";
 
 const VERSION_COLUMNS =
   "id, version_number, location_id, service_type, original_filename, file_storage_path, file_size, status, record_count, created_by, created_at, validated_at, approved_at, activated_at";
@@ -218,7 +219,7 @@ export async function listStagingRows(versionId: string): Promise<PriceListStagi
  * records an audit_log entry — all inside one Postgres function so a
  * failure rolls back everything (see the migration for the function body).
  */
-export async function activatePriceListVersion(versionId: string, userId: string): Promise<void> {
+async function activatePriceListVersionUncached(versionId: string, userId: string): Promise<void> {
   const supabase = createAdminClient();
   const { error } = await supabase.rpc("activate_price_list_version", {
     p_version_id: versionId,
@@ -232,7 +233,7 @@ export async function activatePriceListVersion(versionId: string, userId: string
  * new active version — an append-only rollback, never rewriting history in
  * place (see the migration for the function body).
  */
-export async function rollbackToPriceListVersion(
+async function rollbackToPriceListVersionUncached(
   targetVersionId: string,
   userId: string
 ): Promise<{ newVersionId: string }> {
@@ -244,3 +245,7 @@ export async function rollbackToPriceListVersion(
   if (error) throw error;
   return { newVersionId: data as string };
 }
+
+// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
+export const activatePriceListVersion = invalidatesCatalog(activatePriceListVersionUncached);
+export const rollbackToPriceListVersion = invalidatesCatalog(rollbackToPriceListVersionUncached);

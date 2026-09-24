@@ -2,6 +2,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Profile, ProfilePrice } from "@/types/profile";
 import type { ServiceType } from "@/lib/constants/service-types";
+import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
+import { fetchAllRows } from "./fetch-all-rows";
 
 const PROFILE_COLUMNS = "id, code, name, description, active, created_at, updated_at";
 
@@ -40,19 +42,21 @@ interface ProfileWithTestsRow extends ProfileRow {
  * Every active profile with its component test ids — the candidate set
  * findMatchingProfiles() ranks against (see lib/profiles/calculate-profile-match.ts).
  */
-export async function listActiveProfilesWithTests(): Promise<ProfileWithTestIds[]> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(`${PROFILE_COLUMNS}, profile_tests(test_id)`)
-    .eq("active", true);
+export function listActiveProfilesWithTests(): Promise<ProfileWithTestIds[]> {
+  return cachedCatalogRead("profiles:active", async () => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(`${PROFILE_COLUMNS}, profile_tests(test_id)`)
+      .eq("active", true);
 
-  if (error) throw error;
+    if (error) throw error;
 
-  return ((data ?? []) as ProfileWithTestsRow[]).map((row) => ({
-    profile: mapProfile(row),
-    testIds: row.profile_tests.map((pt) => pt.test_id),
-  }));
+    return ((data ?? []) as ProfileWithTestsRow[]).map((row) => ({
+      profile: mapProfile(row),
+      testIds: row.profile_tests.map((pt) => pt.test_id),
+    }));
+  });
 }
 
 const PROFILE_PRICE_COLUMNS =
@@ -102,17 +106,24 @@ export async function getCurrentProfilePrices(
 ): Promise<ProfilePrice[]> {
   if (profileIds.length === 0) return [];
 
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("profile_prices")
-    .select(PROFILE_PRICE_COLUMNS)
-    .in("profile_id", profileIds)
-    .eq("location_id", locationId)
-    .eq("service_type", serviceType)
-    .is("effective_to", null);
-
-  if (error) throw error;
-  return ((data ?? []) as ProfilePriceRow[]).map(mapProfilePrice);
+  // Served from the catalog cache: every current bundle price at this
+  // location/service type, filtered in memory.
+  const all = await cachedCatalogRead(`profile-prices:${locationId}:${serviceType}`, async () => {
+    const supabase = createAdminClient();
+    const rows = await fetchAllRows<ProfilePriceRow>((from, to) =>
+      supabase
+        .from("profile_prices")
+        .select(PROFILE_PRICE_COLUMNS)
+        .eq("location_id", locationId)
+        .eq("service_type", serviceType)
+        .is("effective_to", null)
+        .order("id")
+        .range(from, to)
+    );
+    return rows.map(mapProfilePrice);
+  });
+  const wanted = new Set(profileIds);
+  return all.filter((price) => wanted.has(price.profileId));
 }
 
 export interface ProfilePriceWithProfile extends ProfilePrice {
@@ -150,7 +161,7 @@ export async function listCurrentProfilePricesWithProfileInfo(filter?: {
 }
 
 /** Directly updates one current profile-price row's availability — an admin quick-edit, not a versioned import. */
-export async function updateProfilePriceAvailability(priceId: string, availability: ProfilePrice["availability"]): Promise<void> {
+async function updateProfilePriceAvailabilityUncached(priceId: string, availability: ProfilePrice["availability"]): Promise<void> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("profile_prices").update({ availability }).eq("id", priceId);
   if (error) throw error;
@@ -202,7 +213,7 @@ export interface ProfileInput {
   description: string | null;
 }
 
-export async function createProfile(input: ProfileInput): Promise<Profile> {
+async function createProfileUncached(input: ProfileInput): Promise<Profile> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("profiles")
@@ -213,7 +224,7 @@ export async function createProfile(input: ProfileInput): Promise<Profile> {
   return mapProfile(data as ProfileRow);
 }
 
-export async function updateProfile(id: string, input: ProfileInput): Promise<Profile> {
+async function updateProfileUncached(id: string, input: ProfileInput): Promise<Profile> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("profiles")
@@ -225,7 +236,7 @@ export async function updateProfile(id: string, input: ProfileInput): Promise<Pr
   return mapProfile(data as ProfileRow);
 }
 
-export async function setProfileActive(id: string, active: boolean): Promise<Profile> {
+async function setProfileActiveUncached(id: string, active: boolean): Promise<Profile> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("profiles")
@@ -244,7 +255,7 @@ export async function setProfileActive(id: string, active: boolean): Promise<Pro
  * unlike price activation, a partial failure here just means the admin
  * retries, with no pricing-correctness risk.
  */
-export async function setProfileTests(
+async function setProfileTestsUncached(
   profileId: string,
   tests: { testId: string; required: boolean }[]
 ): Promise<void> {
@@ -281,7 +292,7 @@ export async function listProfilePricesForProfile(profileId: string): Promise<Pr
  * admin-form-managed by design (assumption 5, AVM_PLAN.md), so there's no
  * "previous version" to preserve the way there is for Excel-driven prices.
  */
-export async function upsertProfilePrice(input: {
+async function upsertProfilePriceUncached(input: {
   profileId: string;
   locationId: string;
   serviceType: ServiceType;
@@ -328,3 +339,11 @@ export async function upsertProfilePrice(input: {
   if (error) throw error;
   return mapProfilePrice(data as ProfilePriceRow);
 }
+
+// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
+export const updateProfilePriceAvailability = invalidatesCatalog(updateProfilePriceAvailabilityUncached);
+export const createProfile = invalidatesCatalog(createProfileUncached);
+export const updateProfile = invalidatesCatalog(updateProfileUncached);
+export const setProfileActive = invalidatesCatalog(setProfileActiveUncached);
+export const setProfileTests = invalidatesCatalog(setProfileTestsUncached);
+export const upsertProfilePrice = invalidatesCatalog(upsertProfilePriceUncached);

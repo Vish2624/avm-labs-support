@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { CheckCircle2Icon } from "lucide-react";
 import { ExcelUpload } from "./excel-upload";
@@ -85,9 +84,6 @@ export function UploadClient({ locations }: { locations: Location[] }) {
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={reset}>
               Upload another file
-            </Button>
-            <Button size="sm" variant="outline" render={<Link href="/admin/imports" />}>
-              View import history
             </Button>
           </div>
         </AlertDescription>
