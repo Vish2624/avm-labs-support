@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "./fetch-all-rows";
 import type { Test } from "@/types/test";
+import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
 
 const TEST_COLUMNS =
   "id, code, official_name, short_name, category, description, active, created_at, updated_at";
@@ -33,12 +34,14 @@ function mapTest(row: TestRow): Test {
 }
 
 /** Every active test in the master catalog — the candidate set searchTests() ranks against. */
-export async function listActiveTests(): Promise<Test[]> {
-  const supabase = createAdminClient();
-  const rows = await fetchAllRows<TestRow>((from, to) =>
-    supabase.from("tests").select(TEST_COLUMNS).eq("active", true).order("id").range(from, to)
-  );
-  return rows.map(mapTest);
+export function listActiveTests(): Promise<Test[]> {
+  return cachedCatalogRead("tests:active", async () => {
+    const supabase = createAdminClient();
+    const rows = await fetchAllRows<TestRow>((from, to) =>
+      supabase.from("tests").select(TEST_COLUMNS).eq("active", true).order("id").range(from, to)
+    );
+    return rows.map(mapTest);
+  });
 }
 
 /** Fetch specific tests by id (e.g. to hydrate profile_tests/quotation line items). */
@@ -69,7 +72,7 @@ export interface TestInput {
   description: string | null;
 }
 
-export async function createTest(input: TestInput): Promise<Test> {
+async function createTestUncached(input: TestInput): Promise<Test> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("tests")
@@ -87,7 +90,7 @@ export async function createTest(input: TestInput): Promise<Test> {
   return mapTest(data as TestRow);
 }
 
-export async function updateTest(id: string, input: TestInput): Promise<Test> {
+async function updateTestUncached(id: string, input: TestInput): Promise<Test> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("tests")
@@ -106,7 +109,7 @@ export async function updateTest(id: string, input: TestInput): Promise<Test> {
   return mapTest(data as TestRow);
 }
 
-export async function setTestActive(id: string, active: boolean): Promise<Test> {
+async function setTestActiveUncached(id: string, active: boolean): Promise<Test> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("tests")
@@ -126,3 +129,8 @@ export async function getTestById(id: string): Promise<Test | null> {
   if (error) throw error;
   return data ? mapTest(data as TestRow) : null;
 }
+
+// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
+export const createTest = invalidatesCatalog(createTestUncached);
+export const updateTest = invalidatesCatalog(updateTestUncached);
+export const setTestActive = invalidatesCatalog(setTestActiveUncached);

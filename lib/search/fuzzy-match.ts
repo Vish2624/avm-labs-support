@@ -119,31 +119,35 @@ function wordScore(query: string, candidate: string): number {
  * adjacent letters, "thyriod", counts as one edit). Stops early and
  * returns max + 1 once the distance must exceed `max`.
  */
+// Three reusable rows (two back, previous, current) — search runs this
+// thousands of times per query, so it shouldn't allocate a matrix each call.
+let rowBuffers: [Int32Array, Int32Array, Int32Array] = [new Int32Array(64), new Int32Array(64), new Int32Array(64)];
+
 function damerauLevenshtein(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
-  const rows = a.length + 1;
   const cols = b.length + 1;
-  const d: number[][] = Array.from({ length: rows }, (_, i) => {
-    const row = new Array<number>(cols).fill(0);
-    row[0] = i;
-    return row;
-  });
-  for (let j = 0; j < cols; j++) d[0][j] = j;
+  if (rowBuffers[0].length < cols) {
+    rowBuffers = [new Int32Array(cols * 2), new Int32Array(cols * 2), new Int32Array(cols * 2)];
+  }
+  let [twoBack, previous, current] = rowBuffers;
+  for (let j = 0; j < cols; j++) previous[j] = j;
 
-  for (let i = 1; i < rows; i++) {
-    let rowMin = Infinity;
+  for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+    let rowMin = i;
     for (let j = 1; j < cols; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let value = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      let value = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-        value = Math.min(value, d[i - 2][j - 2] + 1);
+        value = Math.min(value, twoBack[j - 2] + 1);
       }
-      d[i][j] = value;
-      rowMin = Math.min(rowMin, value);
+      current[j] = value;
+      if (value < rowMin) rowMin = value;
     }
     if (rowMin > max) return max + 1;
+    [twoBack, previous, current] = [previous, current, twoBack];
   }
-  return d[a.length][b.length];
+  return previous[b.length];
 }
 
 /**
@@ -164,8 +168,22 @@ function trigramSimilarity(query: string, candidate: string): number {
   return union === 0 ? 0 : shared / union;
 }
 
+// Catalog strings are scored against every query, so their trigram sets
+// are memoized. Bounded so arbitrary query text can't grow it forever.
+const TRIGRAM_CACHE_LIMIT = 20_000;
+const trigramCache = new Map<string, Set<string>>();
+
 /** Character trigrams of a padded string, e.g. "cbc" -> {"  c", " cb", "cbc", "bc "}. */
 function trigrams(value: string): Set<string> {
+  const cached = trigramCache.get(value);
+  if (cached) return cached;
+  if (trigramCache.size >= TRIGRAM_CACHE_LIMIT) trigramCache.clear();
+  const grams = computeTrigrams(value);
+  trigramCache.set(value, grams);
+  return grams;
+}
+
+function computeTrigrams(value: string): Set<string> {
   const padded = `  ${value} `;
   const grams = new Set<string>();
   for (let i = 0; i <= padded.length - 3; i++) {

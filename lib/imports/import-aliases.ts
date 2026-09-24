@@ -5,6 +5,7 @@ import { listAllAliasesWithTest } from "@/lib/database/aliases";
 import { normalizeQuery } from "@/lib/search/normalize-query";
 import { parseAliasWorkbook } from "@/lib/excel/parse-alias-workbook";
 import type { AliasType } from "@/lib/constants/alias-types";
+import { invalidatesCatalog } from "@/lib/database/catalog-cache";
 
 // Aliases from a curated file are trusted, but a hair below a hand-entered
 // admin alias (100) so a deliberate manual alias still wins a tie.
@@ -131,7 +132,7 @@ export async function planAliasImport(buffer: Buffer): Promise<AliasImportPlan> 
 }
 
 /** Inserts a plan's new aliases. Re-running the same file is safe: (test_id, alias) duplicates are ignored. */
-export async function commitAliasImport(plan: AliasImportPlan): Promise<number> {
+async function commitAliasImportUncached(plan: AliasImportPlan): Promise<number> {
   const supabase = createAdminClient();
   let inserted = 0;
   for (let start = 0; start < plan.toCreate.length; start += INSERT_CHUNK_SIZE) {
@@ -154,3 +155,6 @@ export async function commitAliasImport(plan: AliasImportPlan): Promise<number> 
   }
   return inserted;
 }
+
+// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
+export const commitAliasImport = invalidatesCatalog(commitAliasImportUncached);

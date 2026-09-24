@@ -1,7 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
-import { getCurrentPrices } from "@/lib/database/prices";
+import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { normalizeQuery } from "./normalize-query";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults, type SearchCandidate } from "./rank-results";
@@ -93,7 +93,7 @@ export async function extractTests(
       for (let i = 0; i < candidateIds.length; i += PRICE_CHUNK_SIZE) {
         chunks.push(candidateIds.slice(i, i + PRICE_CHUNK_SIZE));
       }
-      const prices = (await Promise.all(chunks.map((ids) => getCurrentPrices(ids, locationId, serviceType)))).flat();
+      const prices = (await Promise.all(chunks.map((ids) => getCurrentPricesForSearch(ids, locationId, serviceType)))).flat();
       priceByType.set(serviceType, new Map(prices.map((price) => [price.testId, price])));
     })
   );

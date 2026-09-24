@@ -2,6 +2,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TestPrice } from "@/types/price";
 import type { ServiceType } from "@/lib/constants/service-types";
+import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
+import { fetchAllRows } from "./fetch-all-rows";
 
 const PRICE_COLUMNS =
   "id, test_id, location_id, service_type, price, currency_code, tat_text, availability, effective_from, effective_to, version_id, created_at, updated_at";
@@ -67,6 +69,37 @@ export async function getCurrentPrices(
   return ((data ?? []) as TestPriceRow[]).map(mapPrice);
 }
 
+/**
+ * Same result as getCurrentPrices(), served from the catalog cache (every
+ * current price at this location/service type, filtered in memory) — for
+ * search, which runs on every keystroke. Anything that must see the very
+ * latest row (import validation/diffs) uses getCurrentPrices() instead.
+ */
+export async function getCurrentPricesForSearch(
+  testIds: string[],
+  locationId: string,
+  serviceType: ServiceType
+): Promise<TestPrice[]> {
+  if (testIds.length === 0) return [];
+
+  const all = await cachedCatalogRead(`test-prices:${locationId}:${serviceType}`, async () => {
+    const supabase = createAdminClient();
+    const rows = await fetchAllRows<TestPriceRow>((from, to) =>
+      supabase
+        .from("test_prices")
+        .select(PRICE_COLUMNS)
+        .eq("location_id", locationId)
+        .eq("service_type", serviceType)
+        .is("effective_to", null)
+        .order("id")
+        .range(from, to)
+    );
+    return rows.map(mapPrice);
+  });
+  const wanted = new Set(testIds);
+  return all.filter((price) => wanted.has(price.testId));
+}
+
 /** Every current price row for one test, across all locations/service types — for the Admin test detail view. */
 export async function listCurrentPricesForTest(testId: string): Promise<TestPrice[]> {
   const supabase = createAdminClient();
@@ -121,7 +154,7 @@ export async function listCurrentPricesWithTestInfo(filter?: {
 }
 
 /** Directly updates one current price row's availability — an admin quick-edit, not a versioned import. */
-export async function updatePriceAvailability(
+async function updatePriceAvailabilityUncached(
   priceId: string,
   availability: TestPrice["availability"]
 ): Promise<void> {
@@ -129,3 +162,6 @@ export async function updatePriceAvailability(
   const { error } = await supabase.from("test_prices").update({ availability }).eq("id", priceId);
   if (error) throw error;
 }
+
+// Writes drop the search catalog cache (lib/database/catalog-cache.ts) once they settle.
+export const updatePriceAvailability = invalidatesCatalog(updatePriceAvailabilityUncached);

@@ -1,5 +1,5 @@
 import "server-only";
-import { getTestsByIds } from "@/lib/database/tests";
+import { getTestsByIds, listActiveTests } from "@/lib/database/tests";
 import type { ProfileTestSummary } from "@/types/profile";
 
 /**
@@ -12,8 +12,11 @@ export async function hydrateProfileTests(
   testIdsByProfileId: Map<string, string[]>
 ): Promise<Map<string, ProfileTestSummary[]>> {
   const allTestIds = [...new Set([...testIdsByProfileId.values()].flat())];
-  const tests = await getTestsByIds(allTestIds);
-  const testById = new Map(tests.map((test) => [test.id, test]));
+  // Active tests come from the cached catalog; only a roster member that's
+  // since been deactivated needs a round trip.
+  const testById = new Map((await listActiveTests()).map((test) => [test.id, test]));
+  const missing = allTestIds.filter((id) => !testById.has(id));
+  for (const test of await getTestsByIds(missing)) testById.set(test.id, test);
 
   const summariesByProfileId = new Map<string, ProfileTestSummary[]>();
   for (const [profileId, testIds] of testIdsByProfileId) {
