@@ -28,7 +28,9 @@ export function PackageResultRow({
   return (
     <div
       className={cn(
-        "rounded-xl px-2.5 py-3 transition-colors hover:bg-muted/70",
+        // Bordered and lightly tinted so packages read as distinct from the
+        // plain test rows listed above them.
+        "rounded-xl border border-primary/20 bg-primary/[0.03] px-3 py-3 transition-colors hover:border-primary/35 hover:bg-primary/[0.06] dark:border-primary/25 dark:bg-primary/[0.06]",
         result.availability === "unavailable" && "opacity-60"
       )}
     >
