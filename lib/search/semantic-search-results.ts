@@ -5,40 +5,40 @@ import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { getProfilePricing } from "@/lib/profiles/profile-pricing";
 import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
 import { toSearchResult } from "./search-tests";
-import { aiSearch, type AiConfidence } from "./ai-search";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult } from "@/types/profile";
 
-export type AiSearchItem =
-  | { kind: "test"; confidence: AiConfidence; result: SearchTestResult }
-  | { kind: "package"; confidence: AiConfidence; result: ProfileSearchResult };
+export type SemanticConfidence = "high" | "low";
 
-export interface AiSearchResponse {
-  correctedQuery: string | null;
-  /** Best first, in the model's order. Only items priced at this location/service type. */
-  items: AiSearchItem[];
+/** One catalog item the in-browser model picked for a query (see lib/search/semantic-worker.ts). */
+export interface SemanticMatch {
+  kind: "test" | "package";
+  id: string;
+  confidence: SemanticConfidence;
 }
 
+export type SemanticSearchItem =
+  | { kind: "test"; confidence: SemanticConfidence; result: SearchTestResult }
+  | { kind: "package"; confidence: SemanticConfidence; result: ProfileSearchResult };
+
 /**
- * The AI's picks for a query, joined to real prices exactly like the
+ * The in-browser model's picks, joined to real prices exactly like the
  * rule-based search: a test is shown at the first of `testServiceTypes`
  * that prices it here, a package at `packageServiceType`, and anything not
- * priced here is dropped — never shown with placeholder data. Null when
- * the AI layer is off or failed.
+ * priced here — or not an active catalog item at all — is dropped, never
+ * shown with placeholder data. Keeps the model's order.
  */
-export async function aiSearchResults(
-  query: string,
+export async function priceSemanticMatches(
+  matches: SemanticMatch[],
   locationId: string,
   testServiceTypes: readonly ServiceType[],
   packageServiceType: ServiceType
-): Promise<AiSearchResponse | null> {
-  const answer = await aiSearch(query);
-  if (!answer) return null;
-  if (answer.matches.length === 0) return { correctedQuery: answer.correctedQuery, items: [] };
+): Promise<SemanticSearchItem[]> {
+  if (matches.length === 0) return [];
 
-  const testIds = answer.matches.filter((match) => match.kind === "test").map((match) => match.id);
-  const profileIds = answer.matches.filter((match) => match.kind === "package").map((match) => match.id);
+  const testIds = matches.filter((match) => match.kind === "test").map((match) => match.id);
+  const profileIds = matches.filter((match) => match.kind === "package").map((match) => match.id);
 
   const [tests, profiles, pricesByType, profilePricing] = await Promise.all([
     listActiveTests(),
@@ -52,8 +52,8 @@ export async function aiSearchResults(
     new Map(profileIds.map((id) => [id, profileById.get(id)?.testIds ?? []]))
   );
 
-  const items: AiSearchItem[] = [];
-  for (const match of answer.matches) {
+  const items: SemanticSearchItem[] = [];
+  for (const match of matches) {
     if (match.kind === "test") {
       const test = testById.get(match.id);
       const price = pricesByType.flat().find((row) => row.testId === match.id);
@@ -86,5 +86,5 @@ export async function aiSearchResults(
       });
     }
   }
-  return { correctedQuery: answer.correctedQuery, items };
+  return items;
 }

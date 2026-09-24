@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SparklesIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "./test-result-card";
+import { PackageResultRow } from "./package-result-row";
+import type { MessageAiState } from "./use-semantic-search";
+import type { ProfileSearchResult } from "@/types/profile";
 import { resultsTitleClassName } from "./search-results";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
@@ -14,11 +18,19 @@ const EXTRACT_DEBOUNCE_MS = 400;
 
 interface Extraction {
   detected: SearchTestResult[];
+  packages: { token: string; result: ProfileSearchResult }[];
   notOffered: NotOfferedTest[];
   unmatched: string[];
 }
 
-const EMPTY_EXTRACTION: Extraction = { detected: [], notOffered: [], unmatched: [] };
+const EMPTY_EXTRACTION: Extraction = { detected: [], packages: [], notOffered: [], unmatched: [] };
+
+/** Packages grouped by the message name they matched ("women package" can match several). */
+function groupPackages(packages: Extraction["packages"]) {
+  const groups = new Map<string, ProfileSearchResult[]>();
+  for (const { token, result } of packages) groups.set(token, [...(groups.get(token) ?? []), result]);
+  return [...groups].map(([token, results]) => ({ token, results }));
+}
 
 // One toast id, so re-reading an edited message replaces the last
 // notification instead of stacking a new one per keystroke pause.
@@ -31,12 +43,16 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
     toast.error("Couldn't read the tests — please try again.", { id: EXTRACTION_TOAST_ID });
     return;
   }
-  const requested = extraction.detected.length + extraction.notOffered.length + extraction.unmatched.length;
+  const packageNames = groupPackages(extraction.packages);
+  const requested =
+    extraction.detected.length + packageNames.length + extraction.notOffered.length + extraction.unmatched.length;
   if (requested === 0) {
     toast.error("No tests recognised in this message.", { id: EXTRACTION_TOAST_ID });
     return;
   }
-  const available = extraction.detected.filter((result) => result.availability === "available").length;
+  const available =
+    extraction.detected.filter((result) => result.availability === "available").length +
+    packageNames.filter(({ results }) => results.some((result) => result.availability === "available")).length;
   const notAvailable = requested - available;
   const found = `${available} of ${requested} test${requested === 1 ? "" : "s"} found`;
   if (notAvailable === 0) {
@@ -48,12 +64,17 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
       ...extraction.unmatched,
       ...extraction.notOffered.map((test) => test.code),
       ...extraction.detected.filter((result) => result.availability !== "available").map((result) => result.code),
+      ...packageNames
+        .filter(({ results }) => results.every((result) => result.availability !== "available"))
+        .map(({ token }) => token),
     ];
     const shown = names.slice(0, MAX_TOAST_NAMES).join(", ");
     const more = names.length > MAX_TOAST_NAMES ? ` +${names.length - MAX_TOAST_NAMES} more` : "";
     toast.warning(`${found} · ${notAvailable} not available`, {
       id: EXTRACTION_TOAST_ID,
-      description: `Not available: ${shown}${more}`,
+      description: `Not available: ${shown}${more}${
+        extraction.unmatched.length > 0 ? " — checking unrecognised names with AI" : ""
+      }`,
       duration: 10_000,
     });
   }
@@ -180,17 +201,23 @@ function NotAvailableSummary({
 export function MessageExtractionResults({
   text,
   detected,
+  packages = [],
   notOffered = [],
   unmatched = [],
   loading,
   locationName = null,
   addedTestIds,
+  addedProfileIds,
   onAdd,
   onRemove,
   onAddMany,
+  onAddPackage,
+  onRemovePackage,
+  ai = null,
 }: {
   text: string;
   detected: SearchTestResult[];
+  packages?: { token: string; result: ProfileSearchResult }[];
   notOffered?: NotOfferedTest[];
   unmatched?: string[];
   loading: boolean;
@@ -199,12 +226,27 @@ export function MessageExtractionResults({
   onAdd: (result: SearchTestResult) => void;
   onRemove: (testId: string) => void;
   onAddMany: (results: SearchTestResult[]) => void;
+  addedProfileIds: Set<string>;
+  onAddPackage: (result: ProfileSearchResult) => void;
+  onRemovePackage: (profileId: string) => void;
+  /** The in-browser AI's picks for the names the reader couldn't recognise. */
+  ai?: MessageAiState | null;
 }) {
+  // Names the AI placed leave "Not in our test list" and show as AI matches.
+  const aiTokens = new Set((ai?.matches ?? []).map((match) => match.token));
+  const stillUnmatched = unmatched.filter((token) => !aiTokens.has(token));
+  const aiFound = (ai?.matches ?? []).filter(
+    (match) => match.confidence === "high" && match.item.result.availability === "available"
+  ).length;
   const available = detected.filter((result) => result.availability === "available");
   const unavailable = detected.filter((result) => result.availability !== "available");
   const newAvailable = available.filter((result) => !addedTestIds.has(result.testId));
-  const requested = detected.length + notOffered.length + unmatched.length;
-  const notAvailableCount = requested - available.length;
+  const packageNames = groupPackages(packages);
+  const availablePackages = packageNames.filter(({ results }) =>
+    results.some((result) => result.availability === "available")
+  ).length;
+  const requested = detected.length + packageNames.length + notOffered.length + unmatched.length;
+  const notAvailableCount = requested - available.length - availablePackages - aiFound;
 
   if (loading && requested === 0) {
     return (
@@ -230,7 +272,7 @@ export function MessageExtractionResults({
     <div className="flex flex-col">
       <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-2">
         <span className={resultsTitleClassName}>
-          {requested} requested · {available.length} available
+          {requested} requested · {available.length + availablePackages + aiFound} available
           {notAvailableCount > 0 ? <span className="text-destructive"> · {notAvailableCount} not available</span> : null}
         </span>
         {newAvailable.length > 1 ? (
@@ -244,7 +286,7 @@ export function MessageExtractionResults({
         ) : null}
       </div>
       <NotAvailableSummary
-        notFound={unmatched}
+        notFound={stillUnmatched}
         notOffered={notOffered}
         unavailable={unavailable}
         locationName={locationName}
@@ -257,6 +299,98 @@ export function MessageExtractionResults({
           onAdd={onAdd}
           onRemove={onRemove}
         />
+      ))}
+      {packages.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="px-2 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+            Packages · {packageNames.length}
+          </div>
+          {packageNames.map(({ token, results }) => (
+            <div key={token} className="flex flex-col gap-1.5">
+              <p className="px-1.5 text-[12px] text-muted-foreground">
+                For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;
+                {results.length > 1 ? ` · ${results.length} packages match equally — choose one` : ""}
+              </p>
+              {results.map((result) => (
+                <PackageResultRow
+                  key={result.profileId}
+                  result={result}
+                  added={addedProfileIds.has(result.profileId)}
+                  onAdd={onAddPackage}
+                  onRemove={onRemovePackage}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {ai && (ai.loading || ai.matches.length > 0) ? (
+        <AiMessageMatches
+          ai={ai}
+          addedTestIds={addedTestIds}
+          addedProfileIds={addedProfileIds}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          onAddPackage={onAddPackage}
+          onRemovePackage={onRemovePackage}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Names from the message the reader couldn't recognise, matched by meaning
+// by the free in-browser AI. Each is shown with the words the customer used
+// and is never added automatically: the agent confirms with + Add.
+function AiMessageMatches({
+  ai,
+  addedTestIds,
+  addedProfileIds,
+  onAdd,
+  onRemove,
+  onAddPackage,
+  onRemovePackage,
+}: {
+  ai: MessageAiState;
+  addedTestIds: Set<string>;
+  addedProfileIds: Set<string>;
+  onAdd: (result: SearchTestResult) => void;
+  onRemove: (testId: string) => void;
+  onAddPackage: (result: ProfileSearchResult) => void;
+  onRemovePackage: (profileId: string) => void;
+}) {
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-primary/15 bg-primary/[0.025] p-2 dark:bg-primary/[0.05]">
+      <div className="flex items-center gap-2 px-1.5 pt-1 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+        <SparklesIcon className={ai.loading ? "size-3.5 animate-pulse" : "size-3.5"} />
+        {ai.loading
+          ? ai.preparing
+            ? "Getting AI ready (first time on this computer only)…"
+            : "Checking unrecognised names with AI…"
+          : "AI matched"}
+      </div>
+      {ai.matches.map(({ token, confidence, item }) => (
+        <div key={token} className="flex flex-col gap-1">
+          <p className="px-1.5 text-[12px] text-muted-foreground">
+            For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;
+            {confidence === "low" ? " · possible match, please check" : ""}
+          </p>
+          {item.kind === "test" ? (
+            <TestResultCard
+              result={item.result}
+              added={addedTestIds.has(item.result.testId)}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+          ) : (
+            <PackageResultRow
+              result={item.result}
+              added={addedProfileIds.has(item.result.profileId)}
+              onAdd={onAddPackage}
+              onRemove={onRemovePackage}
+            />
+          )}
+        </div>
       ))}
     </div>
   );

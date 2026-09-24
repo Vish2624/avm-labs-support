@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SERVICE_TYPES } from "@/lib/constants/service-types";
+import { parseServiceType } from "@/lib/imports/upload-values";
 
 /**
  * Schema for one parsed Excel price-list row (before minor-unit conversion
@@ -22,7 +23,11 @@ export const priceRowSchema = z.object({
     .transform((value) => (value ? value : null)),
   price: z.coerce.number("Price must be a number").min(0, "Price cannot be negative"),
   tat: z.string().trim().min(1, "TAT is required"),
-  serviceType: z.enum(SERVICE_TYPES, "Service Type must be in_house or outsource"),
+  // "In-House", "IST", "Outsource", "OST"... as well as in_house / outsource.
+  serviceType: z.preprocess(
+    (value) => (typeof value === "string" ? (parseServiceType(value) ?? value) : value),
+    z.enum(SERVICE_TYPES, "Service Type must be In-House or Outsource")
+  ),
   available: z
     .union([z.boolean(), z.string()])
     .refine((value) => typeof value === "boolean" || isYesNo(value), {

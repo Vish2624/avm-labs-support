@@ -72,9 +72,8 @@ export async function exportPriceList(locationId: string, serviceType: ServiceTy
       price: price.price / 10 ** fractionDigits,
       tat: price.tatText,
       serviceType: price.serviceType,
-      // The sheet's Available column is binary — temporarily_unavailable
-      // (only settable via the Admin Availability page) collapses to "No"
-      // here rather than being silently upgraded to "Yes".
+      // The sheet's Available column is binary — any not-available status
+      // (including a legacy temporarily_unavailable) exports as "No".
       available: price.availability === "available" ? "Yes" : "No",
       notes: "",
     });

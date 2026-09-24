@@ -1,9 +1,9 @@
 import { listActiveLocations } from "@/lib/database/locations";
-import { UploadClient } from "@/components/admin/upload/upload-client";
+import { UploadTabs } from "@/components/admin/upload/upload-tabs";
 
-// Upload — Upload a location's price list Excel file. Feeds into staging ->
-// validate -> preview -> confirm -> activate. Auth is enforced by the
-// parent (admin) layout's requireAdmin().
+// Upload — Excel uploads for price lists, test details and profiles, each
+// previewed before anything is saved. Auth is enforced by the parent
+// (admin) layout's requireAdmin().
 export default async function UploadPage() {
   const locations = await listActiveLocations();
 
@@ -12,15 +12,15 @@ export default async function UploadPage() {
       <div>
         <h1 className="text-xl font-semibold">Upload</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a location&apos;s price list Excel file. A validation report and diff preview come back before
-          anything touches live pricing.
+          Upload price lists, test details or profiles from Excel. Every upload shows a preview of the changes before
+          anything is saved.
         </p>
       </div>
 
       {locations.length === 0 ? (
         <p className="text-sm text-muted-foreground">No active locations are configured yet.</p>
       ) : (
-        <UploadClient locations={locations} />
+        <UploadTabs locations={locations} />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { queryVariants, VARIANT_SCORE_FACTOR } from "./query-variants";
 import { buildSearchCandidates } from "./build-search-candidates";
@@ -77,8 +78,9 @@ export async function searchTests(
  */
 export async function queryNamesSeveralTests(query: string): Promise<boolean> {
   if (!query.trim().includes(" ")) return false;
-  const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
-  return segmentTestNames(query.trim(), tests, aliases) !== null;
+  const [tests, aliases, profiles] = await Promise.all([listActiveTests(), listActiveAliases(), listActiveProfilesWithTests()]);
+  const packageNames = profiles.map(({ profile }) => profile);
+  return segmentTestNames(query.trim(), tests, aliases, packageNames) !== null;
 }
 
 /** A ranked candidate joined to its test + current price row — the shape the workspace renders. */

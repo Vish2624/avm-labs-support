@@ -7,21 +7,8 @@ import { PackageResultRow } from "./package-result-row";
 import { SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult } from "@/types/profile";
-import type { AiSearchItem } from "@/lib/search/ai-search-results";
-
-/** /api/search/ai response. */
-export interface AiSearchPayload {
-  enabled: boolean;
-  correctedQuery: string | null;
-  items: AiSearchItem[];
-}
-
-/** The AI fallback's state for the current query; null when it wasn't asked. */
-export interface AiSearchState {
-  loading: boolean;
-  correctedQuery: string | null;
-  items: AiSearchItem[];
-}
+import type { SemanticSearchItem } from "@/lib/search/semantic-search-results";
+import type { SemanticSearchState } from "./use-semantic-search";
 
 export interface SearchResultGroup {
   serviceType: ServiceType;
@@ -79,7 +66,7 @@ export function SearchResults({
   onAddPackage: (result: ProfileSearchResult) => void;
   onRemovePackage: (profileId: string) => void;
   onSuggestion: (text: string) => void;
-  ai: AiSearchState | null;
+  ai: SemanticSearchState | null;
 }) {
   if (!query.trim()) {
     return (
@@ -116,7 +103,7 @@ export function SearchResults({
   if (totalCount === 0 && (anyLoading || ai?.loading)) {
     return (
       <div className="flex flex-col gap-2">
-        {ai?.loading ? <AiLoadingHint /> : null}
+        {ai?.loading ? <AiLoadingHint preparing={ai.preparing} /> : null}
         <ResultSkeletons />
       </div>
     );
@@ -281,17 +268,17 @@ function PackageSection({
   );
 }
 
-function AiLoadingHint() {
+function AiLoadingHint({ preparing }: { preparing: boolean }) {
   return (
     <div className="flex items-center gap-2 px-2 text-[12.5px] text-muted-foreground">
       <SparklesIcon className="size-3.5 animate-pulse text-primary" />
-      Finding the closest matches with AI…
+      {preparing ? "Getting AI search ready (first time on this computer only)…" : "Finding related tests with AI…"}
     </div>
   );
 }
 
-// The AI fallback's picks, best first. Only real catalog items priced here
-// ever reach this list (see lib/search/ai-search-results.ts).
+// The in-browser AI's picks, best first. Only real catalog items priced
+// here ever reach this list (see lib/search/semantic-search-results.ts).
 function AiSection({
   ai,
   addedTestIds,
@@ -301,7 +288,7 @@ function AiSection({
   onAddPackage,
   onRemovePackage,
 }: {
-  ai: AiSearchState;
+  ai: SemanticSearchState;
   addedTestIds: Set<string>;
   addedProfileIds: Set<string>;
   onAdd: (result: SearchTestResult) => void;
@@ -312,14 +299,14 @@ function AiSection({
   if (ai.loading) {
     return (
       <div className="mb-3 flex flex-col gap-2">
-        <AiLoadingHint />
+        <AiLoadingHint preparing={ai.preparing} />
       </div>
     );
   }
-  const confident = ai.items.filter((item) => item.confidence !== "low");
+  const confident = ai.items.filter((item) => item.confidence === "high");
   const possible = ai.items.filter((item) => item.confidence === "low");
 
-  const renderItem = (item: AiSearchItem) =>
+  const renderItem = (item: SemanticSearchItem) =>
     item.kind === "test" ? (
       <TestResultCard
         key={item.result.testId}
@@ -343,11 +330,6 @@ function AiSection({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1.5 pt-1 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
         <SparklesIcon className="size-3.5" />
         {confident.length > 0 ? "AI best match" : "No exact match found — possible matches"}
-        {ai.correctedQuery ? (
-          <span className="font-normal tracking-normal text-muted-foreground normal-case">
-            · showing results for &ldquo;{ai.correctedQuery}&rdquo;
-          </span>
-        ) : null}
       </div>
       {confident.map(renderItem)}
       {confident.length > 0 && possible.length > 0 ? (

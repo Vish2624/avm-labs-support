@@ -6,7 +6,8 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
 import { TestSearch } from "./test-search";
-import { SearchResults, type AiSearchPayload, type AiSearchState, type SearchResultGroup } from "./search-results";
+import { SearchResults, type SearchResultGroup } from "./search-results";
+import { useSemanticMessageMatches, useSemanticSearch } from "./use-semantic-search";
 import { MessageExtractionResults, useMessageExtraction } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
 import { PackageSuggestions } from "./package-suggestions";
@@ -40,6 +41,7 @@ const DEFAULT_LEFT_PERCENT = 55.5;
 const EMPTY_PROFILE_SUGGESTIONS: ProfileSuggestion[] = [];
 const EMPTY_TEST_RESULTS: SearchTestResult[] = [];
 const EMPTY_PROFILE_RESULTS: ProfileSearchResult[] = [];
+const EMPTY_TOKENS: string[] = [];
 
 function toTestLine(result: SearchTestResult): QuotationTestLine {
   return {
@@ -239,8 +241,8 @@ export function WorkspaceClient() {
   };
   const searchGroups = activeServiceTypes.map((type) => groupDataByType[type]);
 
-  // AI fallback: only once the fast rule-based results are in and none of
-  // them is a strong hit (an exact test, an alias typed in full, or a
+  // Free in-browser AI fallback (use-semantic-search.ts): only once the fast
+  // rule-based results are in and none of them is a strong hit (an exact test, an alias typed in full, or a
   // package whose own name matches) — so common searches never wait on it.
   const ruleResultsLoaded = searchGroups.every((group) => !group.testsLoading && !group.profilesLoading);
   const queryCompact = trimmedQuery.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -252,26 +254,16 @@ export function WorkspaceClient() {
           (result.matchedAlias !== null && result.matchedAlias.toLowerCase().replace(/[^a-z0-9]/g, "") === queryCompact)
       ) || group.profiles.some((result) => (result.nameScore ?? 0) >= 90)
   );
-  const aiKey =
+  const semanticEnabled =
     tab === "search" &&
     trimmedQuery.length >= 3 &&
     !isTestList(trimmedQuery) &&
     !inHouseTests.data?.isList &&
     !outsourceTests.data?.isList &&
-    locationId &&
+    Boolean(locationId) &&
     ruleResultsLoaded &&
-    !strongRuleHit
-      ? `/api/search/ai?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: serviceTypeFilter })}`
-      : null;
-  const aiSearch = useSWR<AiSearchPayload>(aiKey, fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
-  const aiState: AiSearchState | null =
-    aiKey && aiSearch.data?.enabled !== false
-      ? {
-          loading: aiSearch.isLoading,
-          correctedQuery: aiSearch.data?.correctedQuery ?? null,
-          items: aiSearch.data?.items ?? [],
-        }
-      : null;
+    !strongRuleHit;
+  const aiState = useSemanticSearch(trimmedQuery, semanticEnabled, locationId, serviceTypeFilter);
 
   // A search-box query holding several tests ("ACCP, ALKP, AMYL, ...") is
   // read like a pasted message — every test in it, not one fuzzy match for
@@ -283,6 +275,13 @@ export function WorkspaceClient() {
   const searchIsList = tab === "search" && (isTestList(trimmedQuery) || serverSaysList);
   const extraction = useMessageExtraction(
     tab === "paste" ? submittedPasteText : searchIsList ? trimmedQuery : "",
+    locationId,
+    serviceTypeFilter
+  );
+
+  // Same free AI for pasted messages: names the reader couldn't recognise.
+  const messageAi = useSemanticMessageMatches(
+    extraction.loading ? EMPTY_TOKENS : extraction.unmatched,
     locationId,
     serviceTypeFilter
   );
@@ -465,6 +464,7 @@ export function WorkspaceClient() {
             <MessageExtractionResults
               text={tab === "paste" ? submittedPasteText : trimmedQuery}
               detected={extraction.detected}
+              packages={extraction.packages}
               notOffered={extraction.notOffered}
               unmatched={extraction.unmatched}
               locationName={selectedLocation?.name ?? null}
@@ -473,6 +473,10 @@ export function WorkspaceClient() {
               onAdd={handleAdd}
               onRemove={handleRemoveTest}
               onAddMany={handleAddMany}
+              addedProfileIds={addedProfileIds}
+              onAddPackage={(result) => applyPackage(toPackageLine(result))}
+              onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
+              ai={messageAi}
             />
           )}
         </div>
