@@ -35,7 +35,7 @@ export function AddToggleButton({
       type="button"
       aria-label={`Add ${label}`}
       onClick={onAdd}
-      className="h-8 w-20 shrink-0 rounded-[9px] bg-primary/10 text-[13px] font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+      className="h-8 w-20 shrink-0 rounded-[9px] bg-primary/10 text-[13px] font-medium text-primary dark:bg-primary/15 transition-colors hover:bg-primary hover:text-primary-foreground"
     >
       + Add
     </button>

@@ -52,7 +52,7 @@ export function AppHeader({ user }: { user: AuthUser }) {
       <div className="flex min-w-0 items-center gap-5">
         <Link href="/workspace" className="shrink-0" title="AVM Labs">
           {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no benefit from next/image */}
-          <img src="/logo/avm-labs-logo-full.svg" alt="AVM Labs" className="h-14 w-auto" />
+          <img src="/logo/avm-labs-logo-full.svg" alt="AVM Labs" className="h-14 w-auto dark:h-12 dark:rounded-lg dark:bg-white dark:p-1" />
         </Link>
         <nav className="flex min-w-0 gap-0.5 overflow-x-auto">
           {items.map(({ href, label }) => {

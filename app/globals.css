@@ -123,61 +123,71 @@
   /* WhatsApp-style reply bubble. */
   --bubble: oklch(0.96 0.03 150);
   --bubble-foreground: oklch(0.26 0.03 160);
+
+  --scrollbar: oklch(0.2 0.02 258 / 0.2);
 }
 
 .dark {
-  --background: oklch(0.16 0.012 258);
-  --foreground: oklch(0.96 0.004 258);
+  /* Soft slate rather than near-black: the canvas, panels and popovers
+     step up in lightness so they read as layers without heavy borders. */
+  color-scheme: dark;
 
-  --card: oklch(0.2 0.014 258);
-  --card-foreground: oklch(0.96 0.004 258);
-  --popover: oklch(0.22 0.016 258);
-  --popover-foreground: oklch(0.96 0.004 258);
+  --background: oklch(0.185 0.01 262);
+  --foreground: oklch(0.95 0.005 262);
 
-  --primary: oklch(0.64 0.15 258);
+  --card: oklch(0.215 0.011 262);
+  --card-foreground: oklch(0.95 0.005 262);
+  --popover: oklch(0.24 0.012 262);
+  --popover-foreground: oklch(0.95 0.005 262);
+
+  --primary: oklch(0.66 0.15 258);
   --primary-foreground: oklch(0.99 0 0);
 
-  --secondary: oklch(0.26 0.014 258);
-  --secondary-foreground: oklch(0.96 0.004 258);
+  --secondary: oklch(0.27 0.012 262);
+  --secondary-foreground: oklch(0.95 0.005 262);
 
-  --muted: oklch(0.25 0.012 258);
-  --muted-foreground: oklch(0.72 0.014 258);
+  --muted: oklch(0.265 0.011 262);
+  --muted-foreground: oklch(0.75 0.012 262);
 
-  --accent: oklch(0.28 0.03 258);
-  --accent-foreground: oklch(0.96 0.004 258);
+  --accent: oklch(0.3 0.035 258);
+  --accent-foreground: oklch(0.97 0.004 262);
 
-  --success: oklch(0.6 0.14 150);
-  --success-foreground: oklch(0.86 0.08 150);
+  --success: oklch(0.66 0.14 150);
+  --success-foreground: oklch(0.85 0.1 150);
 
-  --warning: oklch(0.7 0.14 80);
-  --warning-foreground: oklch(0.9 0.07 80);
+  --warning: oklch(0.74 0.14 80);
+  --warning-foreground: oklch(0.88 0.09 80);
 
-  --destructive: oklch(0.68 0.19 25);
+  --destructive: oklch(0.7 0.18 25);
 
-  --border: oklch(1 0 0 / 0.12);
-  --input: oklch(1 0 0 / 0.18);
-  --ring: oklch(0.64 0.15 258);
+  --border: oklch(1 0 0 / 0.09);
+  --input: oklch(1 0 0 / 0.14);
+  --ring: oklch(0.66 0.15 258);
 
-  --chart-1: oklch(0.62 0.15 258);
-  --chart-2: oklch(0.68 0.14 230);
-  --chart-3: oklch(0.72 0.12 200);
-  --chart-4: oklch(0.64 0.16 300);
-  --chart-5: oklch(0.6 0.18 340);
+  --chart-1: oklch(0.66 0.15 258);
+  --chart-2: oklch(0.7 0.13 230);
+  --chart-3: oklch(0.74 0.11 200);
+  --chart-4: oklch(0.68 0.15 300);
+  --chart-5: oklch(0.66 0.17 340);
 
-  --sidebar: oklch(0.2 0.014 258);
-  --sidebar-foreground: oklch(0.96 0.004 258);
-  --sidebar-primary: oklch(0.64 0.15 258);
+  --sidebar: oklch(0.215 0.011 262);
+  --sidebar-foreground: oklch(0.95 0.005 262);
+  --sidebar-primary: oklch(0.66 0.15 258);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.28 0.03 258);
-  --sidebar-accent-foreground: oklch(0.96 0.004 258);
-  --sidebar-border: oklch(1 0 0 / 0.12);
-  --sidebar-ring: oklch(0.64 0.15 258);
+  --sidebar-accent: oklch(0.3 0.035 258);
+  --sidebar-accent-foreground: oklch(0.97 0.004 262);
+  --sidebar-border: oklch(1 0 0 / 0.09);
+  --sidebar-ring: oklch(0.66 0.15 258);
 
-  --glass: oklch(0.2 0.014 258 / 0.85);
-  --glass-border: oklch(1 0 0 / 0.12);
+  --glass: oklch(0.215 0.011 262 / 0.85);
+  --glass-border: oklch(1 0 0 / 0.09);
 
-  --bubble: oklch(0.3 0.05 155);
-  --bubble-foreground: oklch(0.93 0.03 150);
+  /* Quiet green tint instead of a solid block — reads as the WhatsApp
+     bubble without dominating the quote panel. */
+  --bubble: oklch(0.27 0.035 160);
+  --bubble-foreground: oklch(0.93 0.02 150);
+
+  --scrollbar: oklch(1 0 0 / 0.16);
 }
 
 @layer base {
@@ -187,7 +197,14 @@
   body {
     @apply bg-background text-foreground;
   }
+  html:not(.dark) {
+    color-scheme: light;
+  }
   html {
     @apply font-sans;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
   }
 }

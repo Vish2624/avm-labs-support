@@ -192,7 +192,7 @@ export function QuotationPanel({
               className="h-[30px] w-[180px] rounded-lg border border-input bg-card px-2.5 text-[12.5px] outline-none focus:border-primary"
             />
           </div>
-          <div className="rounded-[4px_14px_14px_14px] bg-bubble px-4 py-3.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
+          <div className="rounded-[4px_14px_14px_14px] bg-bubble px-4 dark:ring-1 dark:ring-success/20 py-3.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
             {whatsappMessage}
           </div>
         </div>
