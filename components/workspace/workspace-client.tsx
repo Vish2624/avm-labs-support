@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SearchIcon, SparklesIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
@@ -19,6 +19,7 @@ import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
 import { SERVICE_TYPES, type ServiceType, type ServiceTypeFilter } from "@/lib/constants/service-types";
 import { isTestList } from "@/lib/search/split-test-list";
 import { cn } from "@/lib/utils";
+import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSuggestion, ProfileSearchResult } from "@/types/profile";
 import type {
@@ -73,8 +74,9 @@ function toPackageLine(result: ProfileSearchResult | ProfileSuggestion): Quotati
 
 const segmentClassName = (active: boolean) =>
   cn(
-    "h-[30px] rounded-lg px-3.5 text-[13px] font-medium transition-colors",
-    active ? "bg-card text-foreground shadow-[0_1px_2px_oklch(0.2_0.02_258/0.12)]" : "text-muted-foreground hover:text-foreground"
+    // The white "card" behind the active tab is a separate sliding element.
+    "relative h-[34px] rounded-[9px] px-3.5 text-sm font-medium whitespace-nowrap transition-colors duration-250",
+    active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
   );
 
 export function WorkspaceClient() {
@@ -330,6 +332,12 @@ export function WorkspaceClient() {
 
   function handleAdd(result: SearchTestResult) {
     addLineItem(toTestLine(result));
+    // Still added (the agent may be quoting ahead), but flagged right away.
+    if (result.availability !== "available") {
+      toast.warning(`${result.code} is ${AVAILABILITY_LABELS[result.availability].toLowerCase()}`, {
+        description: "Added — the quotation flags it before you send.",
+      });
+    }
   }
 
   function handleAddMany(results: SearchTestResult[]) {
@@ -360,6 +368,7 @@ export function WorkspaceClient() {
       const next = group.tests.find((result) => !addedTestIds.has(result.testId));
       if (next) {
         handleAdd(next);
+        toast.success(`Added ${next.code}`);
         return;
       }
     }
@@ -385,17 +394,30 @@ export function WorkspaceClient() {
     : null;
 
   return (
-    <div ref={columnsRef} className="flex h-full items-stretch overflow-hidden">
+    <div ref={columnsRef} className="flex h-full items-stretch overflow-hidden avm-fade-up [animation-duration:.45s]">
       <section
         style={{ width: `${leftColumnPercent}%` }}
         className="flex h-full min-w-[380px] flex-none flex-col overflow-hidden"
       >
         {/* Static: mode tabs, filters and the search/paste box never scroll —
             only the results below them do. */}
-        <div className="flex shrink-0 flex-col gap-3.5 border-b border-border px-7 pt-5 pb-4">
+        <div
+          className="flex shrink-0 flex-col gap-4 border-b border-border px-7 pt-[22px] pb-[18px] avm-fade-up"
+          style={{ animationDelay: "50ms" }}
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex gap-0.5 rounded-[10px] bg-muted p-[3px]">
+              {/* Two equal segments with a card that slides under the active one
+                  (hidden while the separate AI assistant is open). */}
+              <div className="relative grid grid-cols-2 rounded-xl bg-muted p-1">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-[9px] bg-card shadow-[0_1px_3px_rgb(0_0_0/0.08)] transition-[transform,translate,scale,rotate,opacity] duration-400 ease-[cubic-bezier(.34,1.3,.64,1)]",
+                    tab === "paste" && "translate-x-full",
+                    tab === "ai" && "opacity-0"
+                  )}
+                />
                 <button type="button" onClick={() => setTab("search")} className={segmentClassName(tab === "search")}>
                   Search tests
                 </button>
@@ -410,13 +432,16 @@ export function WorkspaceClient() {
                 onClick={() => setTab("ai")}
                 aria-pressed={tab === "ai"}
                 className={cn(
-                  "flex h-9 items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-medium transition-colors",
+                  "flex h-[42px] items-center gap-2 rounded-xl border px-4 text-sm font-medium whitespace-nowrap transition-[transform,translate,scale,rotate,box-shadow,background] duration-250 hover:-translate-y-px",
                   tab === "ai"
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                    : "border-primary/30 bg-primary/[0.06] text-primary hover:border-primary/60 hover:bg-primary/10"
+                    ? "border-primary bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_var(--primary)]"
+                    : "border-border text-primary avm-shimmer-bg hover:shadow-[0_8px_20px_-10px_var(--primary)]"
                 )}
               >
-                <SparklesIcon className="size-4" />
+                <span
+                  aria-hidden
+                  className={cn("size-2.5 rotate-45 rounded-[2px]", tab === "ai" ? "bg-primary-foreground" : "bg-primary")}
+                />
                 AI Test Assistant
               </button>
             </div>
@@ -424,21 +449,26 @@ export function WorkspaceClient() {
           </div>
 
           {tab === "search" ? (
-            <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
+            <div key="search" className="avm-fade-up [animation-duration:.35s]">
+              <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
+            </div>
           ) : tab === "ai" ? (
+            <div key="ai" className="avm-fade-up [animation-duration:.35s]">
             <AiQuestionForm
               value={aiQuestion}
               onChange={setAiQuestion}
               onSubmit={() => aiAssistant.ask(aiQuestion)}
               loading={aiAssistant.loading}
             />
+            </div>
           ) : (
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 submitPaste();
               }}
-              className="flex flex-col gap-2.5"
+              key="paste"
+              className="flex flex-col gap-2.5 avm-fade-up [animation-duration:.35s]"
             >
               <textarea
                 value={pasteText}
@@ -455,7 +485,7 @@ export function WorkspaceClient() {
                 placeholder="Paste the customer's message, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
                 aria-label="Customer message"
                 autoFocus
-                className="h-24 w-full resize-y rounded-xl border border-input bg-card px-3.5 py-3 text-sm leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
+                className="min-h-28 w-full resize-y rounded-[14px] border border-input bg-card px-4 py-3.5 text-[14.5px] leading-relaxed outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15"
               />
               <div className="flex items-center justify-end gap-3">
                 <span className="text-xs text-muted-foreground">
@@ -465,7 +495,7 @@ export function WorkspaceClient() {
                 <button
                   type="submit"
                   disabled={!pasteText.trim() || extraction.loading}
-                  className="flex h-9 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-[38px] items-center gap-2 rounded-[11px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-[transform,translate,scale,rotate,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_-10px_var(--primary)] active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                 >
                   <SearchIcon className="size-4" />
                   {extraction.loading ? "Finding…" : "Find tests"}
@@ -556,7 +586,10 @@ export function WorkspaceClient() {
         />
       </div>
 
-      <aside className="h-full min-w-[340px] flex-1 overflow-hidden bg-card">
+      <aside
+        className="h-full min-w-[340px] flex-1 overflow-hidden bg-card transition-colors duration-300 avm-fade-up"
+        style={{ animationDelay: "120ms" }}
+      >
         <QuotationPanel
           quotation={quotation}
           whatsappMessage={whatsappMessage}

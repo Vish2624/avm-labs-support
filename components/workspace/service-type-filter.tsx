@@ -29,10 +29,10 @@ export function ServiceTypeFilterSelector({
             aria-pressed={active}
             onClick={() => onChange(serviceType)}
             className={cn(
-              "h-[30px] rounded-full border px-3 text-[13px] whitespace-nowrap transition-colors",
+              "h-[34px] rounded-full border px-[13px] text-[13.5px] font-medium whitespace-nowrap transition-all duration-250",
               active
-                ? "border-primary/30 bg-primary/10 font-medium text-primary"
-                : "border-input bg-card text-secondary-foreground hover:border-foreground/40"
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-card text-foreground hover:border-primary"
             )}
           >
             {SERVICE_TYPE_FILTER_LABELS[serviceType]}

@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AVM Labs Support Assistant",
-  description: "Internal test search, pricing, and quotation tool for AVM Labs support.",
+  title: "AVM Support",
+  description: "Internal test search, pricing, and quotation tool for the AVM Labs support team.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -34,7 +34,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           attribute="class"
           defaultTheme="light"
           enableSystem
-          disableTransitionOnChange
         >
           <TooltipProvider>
             {children}

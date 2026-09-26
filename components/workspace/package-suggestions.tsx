@@ -48,7 +48,7 @@ function PriceAndSavings({ suggestion, savings }: { suggestion: ProfileSuggestio
 }
 
 const useButtonClassName =
-  "h-8 shrink-0 rounded-[9px] bg-primary px-3 text-[13px] font-medium whitespace-nowrap text-primary-foreground transition-colors hover:bg-primary/90";
+  "h-8 shrink-0 rounded-[9px] bg-primary px-3 text-[13px] font-medium whitespace-nowrap text-primary-foreground transition-[background,translate,scale,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_18px_-10px_var(--primary)] active:scale-95";
 
 // Packages covering the tests on the quote, pinned to the bottom of the
 // "Find tests" column: the best match with a one-click "Use" (swaps the

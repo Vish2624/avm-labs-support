@@ -25,17 +25,17 @@ export function AddToggleButton({
       type="button"
       aria-label={`Remove ${label}`}
       onClick={onRemove}
-      className="group/added h-8 w-20 shrink-0 rounded-[9px] bg-success/15 text-[13px] font-medium text-success-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+      className="group/added h-[34px] w-[84px] shrink-0 rounded-[10px] bg-success/15 text-[13px] font-medium text-success-foreground transition-[background,color,scale] duration-200 avm-added hover:bg-destructive/10 hover:text-destructive active:scale-95"
     >
-      <span className="group-hover/added:hidden">Added ✓</span>
-      <span className="hidden group-hover/added:inline">Remove</span>
+      <span className="inline-block group-hover/added:hidden avm-check">Added ✓</span>
+      <span className="hidden group-hover/added:inline-block group-hover/added:avm-fade-in">Remove</span>
     </button>
   ) : (
     <button
       type="button"
       aria-label={`Add ${label}`}
       onClick={onAdd}
-      className="h-8 w-20 shrink-0 rounded-[9px] bg-primary/10 text-[13px] font-medium text-primary dark:bg-primary/15 transition-colors hover:bg-primary hover:text-primary-foreground"
+      className="h-[34px] w-[84px] shrink-0 rounded-[10px] bg-primary/10 text-[13px] font-medium text-primary transition-[background,color,transform,translate,scale,rotate,box-shadow] duration-200 avm-fade-in hover:scale-[1.04] hover:bg-primary hover:text-primary-foreground hover:shadow-[0_6px_16px_-8px_var(--primary)] active:scale-95 dark:bg-primary/15"
     >
       + Add
     </button>
@@ -48,11 +48,14 @@ export function TestResultCard({
   added,
   onAdd,
   onRemove,
+  index = 0,
 }: {
   result: SearchTestResult;
   added: boolean;
   onAdd: (result: SearchTestResult) => void;
   onRemove: (testId: string) => void;
+  /** Position in the list — staggers the rows' entrance. */
+  index?: number;
 }) {
   const showAlias =
     result.matchType === "alias" &&
@@ -62,10 +65,13 @@ export function TestResultCard({
   return (
     <div
       className={cn(
-        "flex items-center gap-3.5 rounded-xl px-2.5 py-3 transition-colors hover:bg-muted/70",
+        "relative flex items-center gap-3.5 rounded-[14px] border border-transparent px-3 py-[13px] avm-row-in",
+        "transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-border hover:bg-card hover:shadow-elevated",
         result.availability === "unavailable" && "opacity-60"
       )}
+      style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
     >
+      {added ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[14px] avm-flash" /> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[15px] font-medium">{result.officialName}</span>

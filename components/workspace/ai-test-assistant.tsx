@@ -167,7 +167,7 @@ export function AiQuestionForm({
         <button
           type="submit"
           disabled={!value.trim() || loading}
-          className="flex h-9 shrink-0 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-9 shrink-0 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-[background,translate,scale,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_-10px_var(--primary)] active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
         >
           <SparklesIcon className="size-4" />
           {loading ? "Thinking…" : "Ask AI"}
@@ -295,7 +295,7 @@ function SuggestionRow({
   return (
     <label
       className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-xl px-2.5 py-3 transition-colors hover:bg-muted/70",
+        "flex cursor-pointer items-start gap-3 rounded-[14px] px-2.5 py-3 transition-colors hover:bg-muted/70 avm-row-in",
         checked && "bg-primary/[0.04]",
         item.availability === "unavailable" && "opacity-60"
       )}
@@ -420,7 +420,7 @@ export function AiAssistantResults({
         type="button"
         onClick={openInSearch}
         disabled={selectedItems.length === 0}
-        className="flex h-9 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-9 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-[background,translate,scale,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_-10px_var(--primary)] active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
       >
         <SearchIcon className="size-4" />
         Open selected in Test search ({selectedItems.length})
@@ -428,7 +428,7 @@ export function AiAssistantResults({
       <button
         type="button"
         onClick={() => selectAll(!allSelected)}
-        className="h-9 rounded-[10px] border border-input px-4 text-[13.5px] font-medium transition-colors hover:bg-muted"
+        className="h-9 rounded-[10px] border border-input px-4 text-[13.5px] font-medium transition-[background,translate,scale] duration-200 hover:-translate-y-px hover:bg-muted active:scale-[0.97]"
       >
         {allSelected ? "Clear selection" : "Select all"}
       </button>
@@ -515,7 +515,7 @@ export function AiAssistantResults({
             <button
               type="button"
               onClick={copyMessage}
-              className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-primary transition-colors hover:bg-primary/10"
+              className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-primary transition-[background,scale] duration-200 hover:bg-primary/10 active:scale-95"
             >
               <CopyIcon className="size-3.5" /> Copy
             </button>

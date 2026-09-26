@@ -17,11 +17,11 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-3", className)}>
+    <div className={cn("flex flex-wrap items-center justify-between gap-3 avm-fade-up", className)}>
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em]">{title}</h1>
         {description ? (
-          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 text-[14.5px] text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {children ? <div className="flex items-center gap-2">{children}</div> : null}

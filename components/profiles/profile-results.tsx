@@ -40,9 +40,9 @@ export function ProfileResults({
   }
 
   return (
-    <div className="flex flex-col">
-      {results.map((result) => (
-        <ProfileResultCard key={result.profileId} result={result} />
+    <div className="flex flex-col gap-1.5">
+      {results.map((result, index) => (
+        <ProfileResultCard key={result.profileId} result={result} index={index} />
       ))}
     </div>
   );

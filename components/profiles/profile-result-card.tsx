@@ -11,12 +11,22 @@ import type { ProfileSearchResult, ProfileSuggestion } from "@/types/profile";
 // Single profile result — works for both "search by name" (ProfileSearchResult,
 // no match info) and "search by test names" (ProfileSuggestion, ranked by
 // overlap) modes. Expands in place to show the profile's full test roster.
-export function ProfileResultCard({ result }: { result: ProfileSuggestion | ProfileSearchResult }) {
+export function ProfileResultCard({
+  result,
+  index = 0,
+}: {
+  result: ProfileSuggestion | ProfileSearchResult;
+  /** Position in the list — staggers the cards' entrance. */
+  index?: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   const match = "matchedCount" in result ? result : null;
 
   return (
-    <div className="border-b border-border/60 py-3.5 last:border-b-0">
+    <div
+      className="rounded-[14px] border border-transparent px-4 py-3.5 avm-row-in transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-border hover:bg-card hover:shadow-elevated"
+      style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
+    >
       <div className="flex flex-wrap items-center gap-4">
         <div className="min-w-0 flex-1 basis-60">
           <div className="flex flex-wrap items-center gap-2">
@@ -36,11 +46,11 @@ export function ProfileResultCard({ result }: { result: ProfileSuggestion | Prof
             <span>ready in {formatTat(result.tatText)}</span>
           </div>
         </div>
-        <span className="text-[15.5px] font-semibold tabular-nums">{formatCurrency(result.price)}</span>
+        <span className="text-[15.5px] font-semibold text-primary tabular-nums">{formatCurrency(result.price)}</span>
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
-          className="rounded-xl border border-border px-4 py-2.5 text-[13.5px] font-medium transition-colors hover:border-primary/60"
+          className="rounded-[10px] bg-primary/10 px-4 py-2.5 text-[13.5px] font-medium text-primary transition-[background,color,transform,translate,scale,rotate] duration-200 hover:scale-[1.03] hover:bg-primary hover:text-primary-foreground active:scale-95"
         >
           {expanded ? "Hide tests" : "See tests"}
         </button>

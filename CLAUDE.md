@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-AVM Labs Support Assistant — an internal tool for a 5-person WhatsApp support team to search
+AVM Support (formerly "AVM Labs Support Assistant") — an internal tool for a 5-person WhatsApp support team to search
 diagnostic tests, get location-specific price/TAT/availability, build a quotation, and generate
 a WhatsApp-ready reply, plus an Admin section for updating pricing via a validated Excel pipeline.
 `AVM_PLAN.md` is the source of truth for the data model, phased build plan, and a per-phase

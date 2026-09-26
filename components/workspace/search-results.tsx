@@ -198,17 +198,18 @@ export function SearchResults({
         group.testsLoading || group.tests.length > 0 ? (
           <div key={`tests-${group.serviceType}`} className="mb-3 flex flex-col">
             {showGroupHeaders ? (
-              <div className="flex items-center gap-2 px-2 pt-2 pb-1.5 text-xs font-medium text-muted-foreground">
+              <div className="flex items-center gap-2 px-2 pt-1 pb-2 text-[13.5px] font-medium">
                 {SERVICE_TYPE_LABELS[group.serviceType]} tests
-                <span className="font-normal text-muted-foreground/70">{group.tests.length}</span>
+                <span className="text-xs font-normal text-muted-foreground">{group.tests.length}</span>
               </div>
             ) : null}
             {group.testsLoading ? (
               <Skeleton className="h-[62px] w-full rounded-xl" />
             ) : (
-              group.tests.map((result) => (
+              group.tests.map((result, index) => (
                 <TestResultCard
                   key={result.testId}
+                  index={index}
                   result={result}
                   added={addedTestIds.has(result.testId)}
                   onAdd={onAdd}

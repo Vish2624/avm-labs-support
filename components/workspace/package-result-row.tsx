@@ -30,11 +30,12 @@ export function PackageResultRow({
       className={cn(
         // Bordered and lightly tinted so packages read as distinct from the
         // plain test rows listed above them.
-        "rounded-xl border border-primary/20 bg-primary/[0.03] px-3 py-3 transition-colors hover:border-primary/35 hover:bg-primary/[0.06] dark:border-primary/25 dark:bg-primary/[0.06]",
+        "relative rounded-[14px] border border-primary/20 bg-primary/[0.03] px-3 py-3 avm-row-in transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-primary/35 hover:bg-primary/[0.06] hover:shadow-elevated dark:border-primary/25 dark:bg-primary/[0.06]",
         result.availability === "unavailable" && "opacity-60"
       )}
     >
-      <div className="flex items-center gap-3.5">
+      {added ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[14px] avm-flash" /> : null}
+      <div className="relative flex items-center gap-3.5">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-medium">{result.name}</span>

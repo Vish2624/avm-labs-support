@@ -11,7 +11,7 @@ export default function NotFound() {
       <p className="max-w-sm text-sm text-muted-foreground">
         The page you&rsquo;re looking for doesn&rsquo;t exist or may have moved.
       </p>
-      <Button variant="outline" size="sm" className="mt-1" render={<Link href="/workspace" />}>
+      <Button variant="outline" size="sm" className="mt-1" nativeButton={false} render={<Link href="/workspace" />}>
         Back to workspace
       </Button>
     </main>
