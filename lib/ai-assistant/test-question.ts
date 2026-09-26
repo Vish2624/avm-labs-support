@@ -28,7 +28,7 @@ const SUBJECT_PATTERNS: [TestQuestionSubject, RegExp][] = [
 
 // Words around a test name in a question about it: "does the thyroid test
 // need fasting", "how much is vitamin d", "when will hba1c report be ready".
-const QUESTION_FILLER = new Set([
+export const QUESTION_FILLER = new Set([
   "what", "whats", "is", "are", "the", "a", "an", "of", "for", "to", "be", "it", "its", "in", "at", "on", "with", "and",
   "or", "do", "does", "did", "should", "can", "could", "will", "would", "i", "we", "you", "he", "she", "they", "my",
   "me", "your", "our", "customer", "patient", "client", "he", "his", "her", "test", "tests", "testing", "need", "needs",
