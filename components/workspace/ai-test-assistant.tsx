@@ -152,9 +152,10 @@ export function AiQuestionForm({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          // Enter asks; Shift+Enter is a new line (not mid IME composition).
+          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
-            onSubmit();
+            if (value.trim() && !loading) onSubmit();
           }
         }}
         placeholder="Ask about the customer's need, e.g. “I want to lose weight, which tests should I check before taking any medicine?”"
@@ -163,7 +164,9 @@ export function AiQuestionForm({
         className="h-24 w-full resize-y rounded-xl border border-input bg-card px-3.5 py-3 text-sm leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
       />
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">Suggests tests from our own test list — you choose what goes on the quote.</span>
+        <span className="text-xs text-muted-foreground">
+          Suggests tests from our own test list — you choose what goes on the quote. Enter to ask · Shift+Enter for a new line.
+        </span>
         <button
           type="submit"
           disabled={!value.trim() || loading}
