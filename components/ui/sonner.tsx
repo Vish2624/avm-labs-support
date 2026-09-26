@@ -24,7 +24,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // Top centre, just under the header — clear of the quotation's Copy
       // reply button and the package bar along the bottom.
       position="top-center"
-      offset={{ top: 88 }}
+      offset={{ top: 100 }}
       mobileOffset={{ top: 72 }}
       // Stacked toasts are shown in full, not tucked behind each other.
       expand

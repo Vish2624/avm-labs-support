@@ -26,9 +26,9 @@ export default async function UpdatesPage() {
   const updates = await listRecentUpdates();
 
   return (
-    <main className="mx-auto flex h-full max-w-[1000px] flex-col gap-2 overflow-y-auto px-7 py-6">
-      <div className="mb-3">
-        <h1 className="text-xl font-semibold tracking-tight">What changed</h1>
+    <main className="mx-auto flex h-full max-w-[1000px] flex-col gap-1 overflow-y-auto px-7 py-7">
+      <div className="mb-4 avm-fade-up">
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em]">What changed</h1>
         <p className="mt-1.5 text-[14.5px] text-muted-foreground">
           Price and availability changes across all locations.
         </p>
@@ -37,10 +37,11 @@ export default async function UpdatesPage() {
       {updates.length === 0 ? (
         <p className="py-11 text-center text-[15px] text-muted-foreground">No changes recorded yet.</p>
       ) : (
-        updates.map((u) => (
+        updates.map((u, index) => (
           <div
             key={u.id}
-            className="flex items-center gap-3.5 border-b border-border/60 py-3 transition-transform last:border-b-0 hover:translate-x-0.5"
+            className="flex items-center gap-3.5 rounded-[14px] border border-transparent px-3.5 py-3 avm-row-in transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-border hover:bg-card hover:shadow-elevated"
+            style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
           >
             <span
               className={`shrink-0 rounded-full px-3 py-1 text-[12.5px] font-medium ${KIND_TAG_CLASSNAME[u.kind]}`}

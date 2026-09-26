@@ -60,8 +60,8 @@ export function ProfileSearch({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="name" className="mt-3">
-        <InputGroup className="h-[60px] rounded-[18px] px-3.5">
+      <TabsContent value="name" className="mt-3 avm-fade-up [animation-duration:.35s]">
+        <InputGroup className="h-[56px] rounded-[14px] px-3.5 transition-[border-color,box-shadow] duration-200 has-[input:focus]:border-primary has-[input:focus]:ring-4 has-[input:focus]:ring-primary/15">
           <InputGroupAddon>
             <SearchIcon className="size-5" />
           </InputGroupAddon>
@@ -75,7 +75,7 @@ export function ProfileSearch({
         </InputGroup>
       </TabsContent>
 
-      <TabsContent value="tests" className="mt-3">
+      <TabsContent value="tests" className="mt-3 avm-fade-up [animation-duration:.35s]">
         <div className="flex flex-col gap-2.5">
           <Input
             placeholder="Type the tests the customer asked for, press Enter after each"
@@ -87,7 +87,7 @@ export function ProfileSearch({
                 addChip();
               }
             }}
-            className="h-[60px] rounded-[18px] px-5 text-base"
+            className="h-[56px] rounded-[14px] px-5 text-base transition-[border-color,box-shadow] duration-200 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
           />
           {testQueries.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">

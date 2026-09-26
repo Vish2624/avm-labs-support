@@ -1,4 +1,4 @@
-# AVM Labs Support Assistant
+# AVM Support
 
 Internal tool for the AVM Labs WhatsApp support team: search diagnostic tests, get
 location-specific pricing/TAT/availability, build a quotation, and generate a

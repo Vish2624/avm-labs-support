@@ -73,10 +73,10 @@ export function ProfileSearchClient() {
         : "No package covers any of the resolved tests.";
 
   return (
-    <div className="mx-auto flex h-full max-w-[1000px] flex-col gap-5 overflow-y-auto px-7 py-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto flex h-full max-w-[1000px] flex-col gap-5 overflow-y-auto px-7 py-7">
+      <div className="flex flex-wrap items-end justify-between gap-4 avm-fade-up">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Packages</h1>
+          <h1 className="text-[26px] font-semibold tracking-[-0.02em]">Packages</h1>
           <p className="mt-1.5 text-[14.5px] text-muted-foreground">
             Find a package by its name, or by the tests the customer asked for.
           </p>

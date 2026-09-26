@@ -48,14 +48,14 @@ export function TestSearch({
         placeholder="Search a test, or paste a list of codes (TSH, T3, T4…)"
         aria-label="Search tests"
         autoFocus
-        className="h-[50px] w-full rounded-xl border border-input bg-card px-11 text-[15px] outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
+        className="h-[52px] w-full rounded-[14px] border border-input bg-card pr-12 pl-[46px] text-[15px] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15"
       />
       {value ? (
         <button
           type="button"
           aria-label="Clear search"
           onClick={() => onChange("")}
-          className="absolute top-1/2 right-2.5 grid size-[30px] -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+          className="absolute top-1/2 right-2.5 grid size-[30px] -translate-y-1/2 place-items-center rounded-[9px] text-muted-foreground transition-colors hover:bg-muted avm-check"
         >
           <XIcon className="size-4" />
         </button>

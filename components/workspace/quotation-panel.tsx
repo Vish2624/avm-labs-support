@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,39 @@ function tierProgress(quotation: Quotation) {
   };
 }
 
+/**
+ * Eases a displayed number towards `target` over ~0.55s, so the total
+ * counts up/down as tests are added. Display only — always settles on the
+ * exact integer amount, and jumps straight there for reduced motion.
+ */
+function useCountUp(target: number): number {
+  const [shown, setShown] = useState(target);
+  const shownRef = useRef(target);
+
+  useEffect(() => {
+    const from = shownRef.current;
+    if (from === target) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let frame = 0;
+    const start = performance.now();
+    const step = (now: number) => {
+      const progress = reduced ? 1 : Math.min(1, (now - start) / 550);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const value = progress >= 1 ? target : Math.round(from + (target - from) * eased);
+      shownRef.current = value;
+      setShown(value);
+      if (progress < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [target]);
+
+  return shown;
+}
+
+/** Length of a line's slide-out (matches avm-item-out in globals.css). */
+const EXIT_MS = 260;
+
 // The in-progress quote: line items, total (with the volume discount), the
 // generated WhatsApp reply and the Copy action.
 export function QuotationPanel({
@@ -55,12 +88,37 @@ export function QuotationPanel({
   onClear: () => void;
 }) {
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
+  // Lines playing their slide-out before they're actually removed.
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
+
+  function removeWithExit(item: QuotationLineItem) {
+    const key = lineItemKey(item);
+    setLeaving((prev) => new Set(prev).add(key));
+    setTimeout(() => {
+      onRemove(item);
+      setLeaving((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }, EXIT_MS);
+  }
+
+  function clearWithExit() {
+    setLeaving(new Set(quotation.lineItems.map(lineItemKey)));
+    setTimeout(() => {
+      onClear();
+      setLeaving(new Set());
+    }, EXIT_MS);
+  }
   const count = quotation.lineItems.length;
   const copied = copiedMessage === whatsappMessage;
 
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
   const { tier, discountedTotal } = applyDiscount(quotation.total);
   const progress = tierProgress(quotation);
+  const finalTotal = tier ? discountedTotal : quotation.total;
+  const shownTotal = useCountUp(finalTotal.amount);
 
   async function handleCopy() {
     try {
@@ -74,18 +132,18 @@ export function QuotationPanel({
   }
 
   const header = (
-    <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-3.5">
+    <div className="flex items-start justify-between gap-3 px-7 pt-6 pb-3.5">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Quotation</h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
+        <h1 className="text-[19px] font-semibold tracking-[-0.01em]">Quotation</h1>
+        <p className="mt-1 text-[13.5px] text-muted-foreground">
           {count > 0 ? `${count} item${count === 1 ? "" : "s"}${locationLabel ? ` · ${locationLabel}` : ""}` : locationLabel}
         </p>
       </div>
       {count > 0 ? (
         <button
           type="button"
-          onClick={onClear}
-          className="h-[30px] rounded-lg px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          onClick={clearWithExit}
+          className="h-[30px] rounded-lg px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive avm-check"
         >
           Clear all
         </button>
@@ -97,10 +155,12 @@ export function QuotationPanel({
     return (
       <div className="flex h-full flex-col">
         {header}
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-10 py-6 text-center">
-          <div className="size-11 rounded-xl border-[1.5px] border-dashed border-input" />
-          <p className="mt-1.5 text-[15px] font-medium">Nothing added yet</p>
-          <p className="max-w-[320px] text-[13px] leading-relaxed text-muted-foreground">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-10 py-6 text-center avm-fade-up">
+          <div className="grid size-[52px] place-items-center rounded-[14px] border-[1.5px] border-dashed border-input">
+            <span className="size-3.5 rounded bg-primary/15" style={{ animation: "avm-drift-sm 5s ease-in-out infinite" }} />
+          </div>
+          <p className="mt-2 text-base font-medium">Nothing added yet</p>
+          <p className="max-w-[320px] text-[13.5px] leading-relaxed text-pretty text-muted-foreground">
             Search or paste the customer&apos;s message, then add tests. Price, discount and the reply update as
             you go.
           </p>
@@ -113,9 +173,16 @@ export function QuotationPanel({
     <div className="flex h-full flex-col">
       {header}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="px-6">
+        <div className="px-7">
           {quotation.lineItems.map((item) => (
-            <div key={lineItemKey(item)} className="flex items-center gap-2.5 border-b border-border/60 py-[11px]">
+            <div
+              key={lineItemKey(item)}
+              className={cn(
+                "flex items-center gap-2.5 border-b border-border py-3",
+                leaving.has(lineItemKey(item)) ? "pointer-events-none avm-item-out" : "avm-item-in"
+              )}
+              style={{ animationDelay: leaving.has(lineItemKey(item)) ? "0ms" : undefined }}
+            >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-sm font-medium">{item.name}</span>
@@ -133,8 +200,8 @@ export function QuotationPanel({
               <button
                 type="button"
                 aria-label={`Remove ${item.name}`}
-                onClick={() => onRemove(item)}
-                className="grid size-[26px] shrink-0 place-items-center rounded-[7px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => removeWithExit(item)}
+                className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-[background,color,transform,translate,scale,rotate] duration-200 hover:rotate-90 hover:bg-destructive/10 hover:text-destructive"
               >
                 <XIcon className="size-4" />
               </button>
@@ -143,19 +210,19 @@ export function QuotationPanel({
         </div>
 
         {flagged.length > 0 ? (
-          <p className="mx-6 mt-3 rounded-[10px] bg-warning/20 px-3 py-2.5 text-[12.5px] leading-relaxed text-warning-foreground">
+          <p className="mx-7 mt-3.5 rounded-[11px] bg-warning/20 px-3 py-2.5 text-[12.5px] leading-relaxed text-warning-foreground avm-fade-up">
             Check before sending:{" "}
             {flagged.map((item) => `${item.name} is ${AVAILABILITY_LABELS[item.availability].toLowerCase()}`).join(", ")}.
           </p>
         ) : null}
 
-        <div className="mx-6 mt-3 flex flex-col gap-2 rounded-xl bg-muted/60 px-3.5 py-2.5">
+        <div className="mx-7 mt-3.5 flex flex-col gap-2.5 rounded-[14px] bg-muted/70 px-4 py-3.5">
           <div className="flex items-center justify-between gap-2.5">
-            <span className="text-[13px] font-medium">Total</span>
+            <span className="text-[13.5px] font-medium">Total</span>
             <div className="flex items-baseline gap-2 tabular-nums">
               {tier ? (
                 <>
-                  <span className="rounded-full bg-success/15 px-1.5 py-px text-[11.5px] font-semibold text-success-foreground">
+                  <span className="rounded-full bg-success/15 px-[7px] py-px text-[11.5px] font-semibold text-success-foreground avm-check">
                     −{tier.percent}%
                   </span>
                   <span className="text-[12.5px] text-muted-foreground line-through">
@@ -163,16 +230,16 @@ export function QuotationPanel({
                   </span>
                 </>
               ) : null}
-              <span className="text-[19px] font-semibold tracking-tight">
-                {formatCurrency(tier ? discountedTotal : quotation.total)}
+              <span className="text-[21px] font-semibold tracking-[-0.01em]">
+                {formatCurrency({ amount: shownTotal, currency: finalTotal.currency })}
               </span>
             </div>
           </div>
           {progress ? (
             <div className="flex items-center gap-2.5">
-              <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
+              <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-border">
                 <div
-                  className="h-full rounded-full bg-success transition-[width] duration-300"
+                  className="h-full rounded-full bg-success transition-[width] duration-600 ease-[cubic-bezier(.2,.8,.2,1)]"
                   style={{ width: `${progress.percent.toFixed(1)}%` }}
                 />
               </div>
@@ -181,7 +248,7 @@ export function QuotationPanel({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2.5 px-6 pt-[18px] pb-2">
+        <div className="flex flex-col gap-2.5 px-7 pt-5 pb-2.5">
           <div className="flex items-center justify-between gap-2.5">
             <h2 className="text-sm font-semibold">Reply to send</h2>
             <input
@@ -189,24 +256,30 @@ export function QuotationPanel({
               onChange={(event) => onCustomerNameChange(event.target.value)}
               placeholder="Customer name (optional)"
               aria-label="Customer name"
-              className="h-[30px] w-[180px] rounded-lg border border-input bg-card px-2.5 text-[12.5px] outline-none focus:border-primary"
+              className="h-8 w-[190px] rounded-[9px] border border-input bg-card px-2.5 text-[12.5px] outline-none transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-[3px] focus:ring-primary/15"
             />
           </div>
-          <div className="rounded-[4px_14px_14px_14px] bg-bubble px-4 dark:ring-1 dark:ring-success/20 py-3.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
+          <div className="rounded-[4px_16px_16px_16px] bg-bubble px-4 py-3.5 transition-colors duration-300 dark:ring-1 dark:ring-success/20 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
             {whatsappMessage}
           </div>
         </div>
       </div>
-      <div className="shrink-0 border-t border-border px-6 pt-3.5 pb-[18px]">
+      <div className="shrink-0 border-t border-border px-7 pt-3.5 pb-5">
         <button
           type="button"
           onClick={handleCopy}
           className={cn(
-            "h-[46px] w-full rounded-xl text-[14.5px] font-medium text-white transition-colors",
-            copied ? "bg-success" : "bg-primary hover:bg-primary/90"
+            "h-12 w-full rounded-[13px] text-[14.5px] font-medium text-white transition-[background,transform,translate,scale,rotate,box-shadow] duration-250 hover:-translate-y-px hover:shadow-[0_10px_24px_-12px_var(--primary)] active:scale-[0.985]",
+            copied ? "bg-success" : "bg-primary"
           )}
         >
-          {copied ? "Copied — paste it into WhatsApp" : "Copy reply"}
+          {copied ? (
+            <span key="copied" className="inline-flex items-center gap-2 avm-check">
+              ✓ Copied — paste it into WhatsApp
+            </span>
+          ) : (
+            "Copy reply"
+          )}
         </button>
       </div>
     </div>
