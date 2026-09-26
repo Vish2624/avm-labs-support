@@ -1,5 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
+import { listActiveProfilesWithTests } from "@/lib/database/profiles";
+import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
 import { listActiveAliases } from "@/lib/database/aliases";
 import { normalizeQuery } from "@/lib/search/normalize-query";
 import { matchScore } from "@/lib/search/fuzzy-match";
@@ -11,9 +13,14 @@ import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import { matchTopics } from "./builtin-engine";
 import { findPriced, suggestionKey, toSuggestion, type PricedCatalog, type PricedItem } from "./priced-catalog";
 import type { AiAnswer, AiSuggestion, TestQuestionSubject } from "@/types/ai-assistant";
+import type { ProfileTestSummary } from "@/types/profile";
 
 const SUBJECT_PATTERNS: [TestQuestionSubject, RegExp][] = [
   ["fasting", /\b(fasting|fast|empty stomach|eat|eating|ate|food|breakfast|meal|drink|drinking|water|tea|coffee)\b/],
+  [
+    "components",
+    /\b(param\w*|components?|includes?|included|including|contains?|containing|consists?|covers?|covered|inside|breakdown|tests? (in|of|under|inside)|what s in)\b/,
+  ],
   ["tat", /\b(tat|how long|how many days|how many hours|report time|turnaround|result time|results? ready|report ready|when will|when can)\b/],
   ["price", /\b(price|prices|cost|costs|rate|rates|charge|charges|how much|fee|fees)\b/],
   ["availability", /\b(available|availability|do you have|do you do|do you offer)\b/],
@@ -32,7 +39,13 @@ const QUESTION_FILLER = new Set([
   "ready", "time", "turnaround", "when", "available", "availability", "have", "has", "offer", "please", "pls", "tell",
   "know", "want", "wants", "ok", "okay", "allowed", "taking", "take", "doing", "done", "go", "come", "yes", "no",
   "check", "this", "that", "which", "kind", "type", "sample", "blood", "level", "levels", "also", "just", "only",
+  "give", "show", "list", "all", "every", "full", "complete", "include", "includes", "included", "including", "contain",
+  "contains", "containing", "consist", "consists", "cover", "covers", "covered", "inside", "breakdown", "component",
+  "components", "items", "things", "under", "part", "parts", "normal", "range", "ranges", "reference", "value",
+  "values", "mean", "means", "meaning", "why", "high", "low", "purpose", "used", "use", "explain", "about", "s",
 ]);
+/** "parameters", and misspellings like "paramters" / "params". */
+const PARAMETER_WORD = /^param/;
 const PACKAGE_WORDS = /\b(profile|package|panel|pack)\b/g;
 
 /** Test named exactly or by an exact alias (score 100), or a package name matching at least this well (0-100). */
@@ -48,9 +61,27 @@ export function detectSubject(question: string): TestQuestionSubject | null {
 export function testNameIn(question: string): string {
   return normalizeQuery(question)
     .split(" ")
-    .filter((word) => word && !QUESTION_FILLER.has(word))
+    .filter((word) => word && !QUESTION_FILLER.has(word) && !PARAMETER_WORD.test(word))
     .join(" ");
 }
+
+/**
+ * Is the name exactly one of the catalog's packages, by code or full name
+ * ("avm diabetic profile 1 2", "adp1 1")? Such a question with no question
+ * words ("avm diabetic profile 1.2 tests") is asking what the package holds.
+ */
+export function namesPackageExactly(name: string, catalog: PricedCatalog): boolean {
+  const packageName = name.replace(PACKAGE_WORDS, " ").replace(/\s+/g, " ").trim();
+  return catalog.items.some((item) => {
+    if (item.kind !== "package") return false;
+    const full = normalizeQuery(item.name);
+    const bare = full.replace(PACKAGE_WORDS, " ").replace(/\s+/g, " ").trim();
+    return name === normalizeQuery(item.code) || name === full || (packageName !== "" && packageName === bare);
+  });
+}
+
+/** "avm 1 1" -> "1 1": the numbers in a name, in order. */
+const digitGroups = (text: string) => (text.match(/\d+/g) ?? []).join(" ");
 
 /**
  * The catalog items a short name refers to — only confident matches: a
@@ -73,8 +104,18 @@ export async function resolveNamedItems(
   };
 
   const packageName = name.replace(PACKAGE_WORDS, " ").replace(/\s+/g, " ").trim();
+  // Fuzzy scores ignore version numbers ("avm 1.1" scores the same against
+  // 1.1, 1.2 and 1.3), so a name with numbers only matches a package whose
+  // name or code has exactly those numbers.
+  const numbers = digitGroups(name);
   const packages = catalog.items
     .filter((item) => item.kind === "package")
+    .filter(
+      (item) =>
+        numbers === "" ||
+        digitGroups(normalizeQuery(item.name)) === numbers ||
+        digitGroups(normalizeQuery(item.code)) === numbers
+    )
     .map((item) => {
       const code = normalizeQuery(item.code);
       const full = normalizeQuery(item.name);
@@ -94,7 +135,7 @@ export async function resolveNamedItems(
 
   // Exact tests first, then packages — unless the package is the exact match ("lipid profile", "lft").
   const exactPackage = packages.length > 0 && packages[0].score >= 100;
-  if (exactPackage) packages.slice(0, 2).forEach(({ item }) => add(item));
+  if (exactPackage) packages.filter(({ score }) => score >= 100).slice(0, 2).forEach(({ item }) => add(item));
   for (const candidate of exactTests) {
     const test = testById.get(candidate.testId);
     if (test) add(findPriced(catalog, test.code));
@@ -141,6 +182,45 @@ export function toDetailSuggestions(items: PricedItem[]): AiSuggestion[] {
   );
 }
 
+function componentLines(name: string, tests: ProfileTestSummary[]): string {
+  if (tests.length === 0) return `${name}: no parameter list in our records — please confirm with the lab team.`;
+  const list = tests.map((test, index) => `${index + 1}. ${test.officialName}`).join("\n");
+  return `${name} includes ${tests.length} parameter${tests.length === 1 ? "" : "s"}:\n${list}`;
+}
+
+/**
+ * "What parameters are in CBC?" — a package lists its own tests; a single
+ * test uses the package stored under the same code or name (the parameter
+ * roster lives in profile_tests). Only stored data, never a guessed list.
+ */
+export async function componentsAnswer(items: AiSuggestion[]): Promise<AiAnswer> {
+  const profiles = await listActiveProfilesWithTests();
+  const matchFor = (item: AiSuggestion) =>
+    profiles.find(
+      ({ profile, testIds }) =>
+        testIds.length > 0 &&
+        (normalizeQuery(profile.code) === normalizeQuery(item.code) ||
+          normalizeQuery(profile.name) === normalizeQuery(item.name))
+    );
+  const testItems = items.filter((item) => item.kind === "test");
+  const rosters = await hydrateProfileTests(
+    new Map(
+      testItems.flatMap((item) => {
+        const match = matchFor(item);
+        return match ? [[match.profile.id, match.testIds] as const] : [];
+      })
+    )
+  );
+  const text = items
+    .map((item) => {
+      if (item.kind === "package") return componentLines(item.name, item.tests);
+      const match = matchFor(item);
+      return componentLines(item.name, match ? (rosters.get(match.profile.id) ?? []) : []);
+    })
+    .join("\n\n");
+  return { subject: "components", verdict: null, text };
+}
+
 const FASTING_WORD = { yes: "Yes", no: "No", recommended: "Preferred" } as const;
 
 /** The built-in reply, from the fasting guide and the items' own DB fields. */
@@ -169,6 +249,14 @@ export function builtinAnswer(subject: TestQuestionSubject, items: AiSuggestion[
         ),
       };
     }
+    case "components":
+      return {
+        subject,
+        verdict: null,
+        text: items
+          .map((item) => componentLines(item.name, item.kind === "package" ? item.tests : []))
+          .join("\n\n"),
+      };
     case "price":
       // Prices stay in Test search, not in the assistant.
       return {
@@ -187,6 +275,7 @@ export function builtinAnswer(subject: TestQuestionSubject, items: AiSuggestion[
         ),
       };
     case "details":
+    case "general":
       return { subject, verdict: null, text: "Here are the details from our test list." };
   }
 }

@@ -98,6 +98,12 @@
 
   --destructive: oklch(0.5 0.17 25);
 
+  /* One colour per pricing location — header location picker only. */
+  --loc-dub: oklch(0.52 0.19 25);
+  --loc-ruh: oklch(0.52 0.14 150);
+  --loc-kho: oklch(0.5 0.2 300);
+  --loc-bah: oklch(0.55 0.15 235);
+
   --border: oklch(0.92 0.006 258);
   --input: oklch(0.89 0.006 258);
   --ring: oklch(0.5 0.16 258);
@@ -159,6 +165,11 @@
   --warning-foreground: oklch(0.88 0.09 80);
 
   --destructive: oklch(0.7 0.18 25);
+
+  --loc-dub: oklch(0.7 0.18 25);
+  --loc-ruh: oklch(0.74 0.15 150);
+  --loc-kho: oklch(0.72 0.16 300);
+  --loc-bah: oklch(0.74 0.13 235);
 
   --border: oklch(1 0 0 / 0.09);
   --input: oklch(1 0 0 / 0.14);
@@ -255,7 +266,7 @@
 @keyframes avm-location-shine { 0%, 55% { transform: translateX(-120%); } 85%, 100% { transform: translateX(360%); } }
 @utility avm-location-ring { animation: avm-location-ring 2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; }
 @utility avm-location-shine {
-  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--destructive) 22%, transparent), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--loc, var(--destructive)) 22%, transparent), transparent);
   animation: avm-location-shine 3.6s ease-in-out infinite;
 }
 @utility avm-pulse { animation: avm-pulse 2.4s ease-in-out infinite; }

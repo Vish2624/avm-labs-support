@@ -51,7 +51,11 @@ export interface AiSource {
   uri: string;
 }
 
-export type TestQuestionSubject = "fasting" | "price" | "tat" | "availability" | "details";
+/**
+ * "components" = which parameters/tests a test or package includes ("parameters in CBC").
+ * "general" = any other blood-test question (normal range, what high/low means, sample, purpose…).
+ */
+export type TestQuestionSubject = "fasting" | "components" | "price" | "tat" | "availability" | "details" | "general";
 
 /** The assistant's direct reply to a question about named test(s): "Does TSH need fasting?" -> No. */
 export interface AiAnswer {
