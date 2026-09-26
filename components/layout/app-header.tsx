@@ -76,15 +76,26 @@ export function AppHeader({ user }: { user: AuthUser }) {
 
       {showLocation && locations.length > 0 ? (
         <DropdownMenu>
-          <DropdownMenuTrigger className="group flex h-[34px] cursor-pointer items-center gap-2 rounded-full border border-border bg-primary/10 pr-2.5 pl-3 text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-primary uppercase transition-[background,transform,translate,scale,rotate] duration-200 outline-none hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary/40 data-popup-open:bg-primary/15">
-            <span className="size-1.5 rounded-full bg-primary avm-pulse" />
-            Location
-            <span className="text-[13px] tracking-normal text-foreground normal-case">
+          <DropdownMenuTrigger aria-label="Pricing location" className="group relative flex h-11 cursor-pointer items-center gap-2.5 rounded-full border border-destructive/35 bg-destructive/[0.07] pr-3.5 pl-4 text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-destructive uppercase shadow-[0_2px_10px_-4px] shadow-destructive/30 transition-[background,border-color,box-shadow,transform,translate,scale,rotate] duration-200 outline-none hover:-translate-y-px hover:border-destructive/60 hover:bg-destructive/[0.12] hover:shadow-[0_8px_20px_-8px] hover:shadow-destructive/40 focus-visible:ring-2 focus-visible:ring-destructive/40 data-popup-open:border-destructive/60 data-popup-open:bg-destructive/[0.14]">
+            {/* Attention motion: a red ring ripples out, a light sweeps across,
+                and the dot pings — so the pricing location is never missed. */}
+            <span aria-hidden className="pointer-events-none absolute -inset-px rounded-full border-2 border-destructive/50 avm-location-ring" />
+            <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+              <span className="absolute inset-y-0 left-0 w-1/3 avm-location-shine" />
+            </span>
+            <span aria-hidden className="relative grid size-2.5 place-items-center">
+              <span className="absolute size-full animate-ping rounded-full bg-destructive/60" />
+              <span className="relative size-2.5 rounded-full bg-destructive" />
+            </span>
+            <span
+              key={locationId}
+              className="relative text-[15px] font-semibold tracking-normal text-destructive normal-case avm-check"
+            >
               {selectedLocation ? `${selectedLocation.name} (${selectedLocation.currencyCode})` : "Select"}
             </span>
-            <ChevronDownIcon className="size-3.5 text-muted-foreground transition-transform duration-250 group-data-popup-open:rotate-180" />
+            <ChevronDownIcon className="relative size-4 text-destructive/70 transition-transform duration-250 group-data-popup-open:rotate-180" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" sideOffset={8} className="w-60 rounded-[14px] p-1.5 shadow-elevated avm-pop">
+          <DropdownMenuContent align="center" sideOffset={8} className="w-64 rounded-[14px] p-1.5 shadow-elevated avm-pop">
             <DropdownMenuGroup>
               <DropdownMenuLabel className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold tracking-[0.05em] uppercase">
                 Pricing location
@@ -94,7 +105,7 @@ export function AppHeader({ user }: { user: AuthUser }) {
                   <DropdownMenuRadioItem
                     key={location.id}
                     value={location.id}
-                    className="h-9 cursor-pointer gap-2.5 pr-9 font-medium data-checked:text-primary"
+                    className="h-9 cursor-pointer gap-2.5 pr-9 font-medium data-checked:text-destructive"
                   >
                     <span className="flex-1">{location.name}</span>
                     <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-muted-foreground">
