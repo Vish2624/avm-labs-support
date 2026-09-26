@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, SparklesIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
@@ -11,6 +11,7 @@ import { useSemanticMessageMatches, useSemanticSearch } from "./use-semantic-sea
 import { MessageExtractionResults, useMessageExtraction } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
 import { PackageSuggestions } from "./package-suggestions";
+import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./ai-test-assistant";
 import { useQuote } from "./quote-provider";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
@@ -94,7 +95,7 @@ export function WorkspaceClient() {
   // it's a search-time filter only, not a property of the quote itself
   // (each line item already carries its own real ServiceType).
   const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("all");
-  const [tab, setTab] = useState<"search" | "paste">("search");
+  const [tab, setTab] = useState<"search" | "paste" | "ai">("search");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [pasteText, setPasteText] = useState("");
@@ -105,6 +106,9 @@ export function WorkspaceClient() {
     setSubmittedPasteText(pasteText.trim());
   }
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // AI Test Assistant: its own question box and results, separate from the
+  // search box and the pasted-message reader.
+  const [aiQuestion, setAiQuestion] = useState("");
 
   // Draggable split between "Find tests" and "Quotation" — remembered per
   // browser so an agent who prefers a wider search column doesn't have to
@@ -320,6 +324,9 @@ export function WorkspaceClient() {
   );
 
   const addedTestIds = useMemo(() => new Set(selectedTestIds), [selectedTestIds]);
+  const aiAssistant = useAiAssistant(locationId, serviceTypeFilter);
+
+
 
   function handleAdd(result: SearchTestResult) {
     addLineItem(toTestLine(result));
@@ -387,12 +394,30 @@ export function WorkspaceClient() {
             only the results below them do. */}
         <div className="flex shrink-0 flex-col gap-3.5 border-b border-border px-7 pt-5 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-0.5 rounded-[10px] bg-muted p-[3px]">
-              <button type="button" onClick={() => setTab("search")} className={segmentClassName(tab === "search")}>
-                Search tests
-              </button>
-              <button type="button" onClick={() => setTab("paste")} className={segmentClassName(tab === "paste")}>
-                Paste a message
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex gap-0.5 rounded-[10px] bg-muted p-[3px]">
+                <button type="button" onClick={() => setTab("search")} className={segmentClassName(tab === "search")}>
+                  Search tests
+                </button>
+                <button type="button" onClick={() => setTab("paste")} className={segmentClassName(tab === "paste")}>
+                  Paste a message
+                </button>
+              </div>
+              {/* Kept apart from the search/paste switch: a separate module,
+                  not another way of searching. */}
+              <button
+                type="button"
+                onClick={() => setTab("ai")}
+                aria-pressed={tab === "ai"}
+                className={cn(
+                  "flex h-9 items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-medium transition-colors",
+                  tab === "ai"
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    : "border-primary/30 bg-primary/[0.06] text-primary hover:border-primary/60 hover:bg-primary/10"
+                )}
+              >
+                <SparklesIcon className="size-4" />
+                AI Test Assistant
               </button>
             </div>
             <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
@@ -400,6 +425,13 @@ export function WorkspaceClient() {
 
           {tab === "search" ? (
             <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
+          ) : tab === "ai" ? (
+            <AiQuestionForm
+              value={aiQuestion}
+              onChange={setAiQuestion}
+              onSubmit={() => aiAssistant.ask(aiQuestion)}
+              loading={aiAssistant.loading}
+            />
           ) : (
             <form
               onSubmit={(event) => {
@@ -445,7 +477,18 @@ export function WorkspaceClient() {
 
         {/* Scrollable: results only. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
-          {tab === "search" && !searchIsList ? (
+          {tab === "ai" ? (
+            <AiAssistantResults
+              loading={aiAssistant.loading}
+              error={aiAssistant.error}
+              response={aiAssistant.response}
+              locationName={selectedLocation?.name ?? null}
+              onOpenInSearch={(lookup) => {
+                setQuery(lookup);
+                setTab("search");
+              }}
+            />
+          ) : tab === "search" && !searchIsList ? (
             <SearchResults
               query={debouncedQuery}
               locationName={selectedLocation?.name ?? null}
