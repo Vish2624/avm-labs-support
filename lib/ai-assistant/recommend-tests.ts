@@ -1,6 +1,7 @@
 import "server-only";
 import { normalizeQuery } from "@/lib/search/normalize-query";
 import { loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
+import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
 import { answerTestQuestionWithGemini, geminiConfigured, recommendWithGemini } from "./gemini-engine";
 import {
@@ -42,17 +43,16 @@ async function answerTestQuestion(
   const name = forcedName ? normalizeQuery(forcedName) : testNameIn(question);
   if (!name) return null;
 
+  // A package named in full ("lipid profile", "avm diabetic profile 1.2
+  // tests") with no other question -> the tests it includes.
+  if (!subject && namesPackageExactly(name, catalog)) subject = "components";
   if (!subject) {
     // No question words: only a short, bare test name counts ("hba1c").
     const bare =
       normalizeQuery(question).split(" ").length <= SHORT_QUESTION_WORDS &&
       matchTopics(question).length === 0 &&
       !asksBeforeTreatment(question);
-    if (!bare) {
-      // A package named in full ("avm diabetic profile 1.2 tests") -> its tests.
-      if (!namesPackageExactly(name, catalog)) return null;
-      subject = "components";
-    }
+    if (!bare) return null;
   }
 
   // "Does sugar test need fasting?" names its tests loosely — its topic's
@@ -114,19 +114,22 @@ async function answerTestQuestion(
  * prices — never an invented test, code or price.
  */
 export async function recommendTests(
-  question: string,
+  rawQuestion: string,
   locationId: string,
   serviceTypes: readonly ServiceType[]
 ): Promise<AiAssistantResponse> {
-  const base = { query: question, warning: MEDICAL_NOTICE, unavailableNote: null };
+  const base = { query: rawQuestion, warning: MEDICAL_NOTICE, unavailableNote: null };
   const catalog = await loadPricedCatalog(locationId, serviceTypes);
+  // The built-in rules read the spell-corrected question ("lipd profle" ->
+  // "lipid profile"); Gemini gets the agent's own words and copes with typos.
+  const question = await correctSpelling(rawQuestion, catalog);
 
   const testQuestion = await answerTestQuestion(question, catalog, null);
   if (testQuestion) return { ...base, ...testQuestion };
 
   if (geminiConfigured()) {
     try {
-      const gemini = await recommendWithGemini(question, catalog);
+      const gemini = await recommendWithGemini(rawQuestion, catalog);
       if (gemini.requestType === "direct_lookup" && gemini.lookupQuery) {
         const lookup = await answerTestQuestion(question, catalog, gemini.lookupQuery);
         if (lookup) return { ...base, ...lookup, engine: "gemini" };
