@@ -102,7 +102,7 @@ export function WorkspaceClient() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [pasteText, setPasteText] = useState("");
   // A pasted message is only read when the agent asks for it (Find tests
-  // button / Ctrl+Enter), not on every keystroke while they paste or edit.
+  // button / Enter), not on every keystroke while they paste or edit.
   const [submittedPasteText, setSubmittedPasteText] = useState("");
   function submitPaste() {
     setSubmittedPasteText(pasteText.trim());
@@ -477,9 +477,10 @@ export function WorkspaceClient() {
                   if (!event.target.value.trim()) setSubmittedPasteText("");
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  // Enter searches; Shift+Enter is a new line (not mid IME composition).
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault();
-                    submitPaste();
+                    if (pasteText.trim() && !extraction.loading) submitPaste();
                   }
                 }}
                 placeholder="Paste the customer's message, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
@@ -489,8 +490,9 @@ export function WorkspaceClient() {
               />
               <div className="flex items-center justify-end gap-3">
                 <span className="text-xs text-muted-foreground">
-                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Ctrl</kbd> +{" "}
-                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd>
+                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> to search ·{" "}
+                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Shift</kbd> +{" "}
+                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> new line
                 </span>
                 <button
                   type="submit"
