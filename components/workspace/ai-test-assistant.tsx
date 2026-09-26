@@ -248,9 +248,11 @@ const VERDICT_HEADLINE: Record<TestQuestionSubject, Partial<Record<NonNullable<A
     depends: "Depends on the test",
   },
   availability: { yes: "Yes — available", no: "Not available", depends: "Depends" },
+  components: {},
   price: {},
   tat: {},
   details: {},
+  general: {},
 };
 
 /** The direct reply to a question about named tests: a Yes/No headline plus the per-test lines. */
@@ -488,7 +490,7 @@ export function AiAssistantResults({
 
       {response.kind === "test_question" ? (
         <>
-          {renderGroup("Test details", results)}
+          {renderGroup(response.answer?.subject === "general" ? "Related tests in our list" : "Test details", results)}
           {actions}
         </>
       ) : results.length === 0 ? (

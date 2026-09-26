@@ -3,7 +3,15 @@ import { normalizeQuery } from "@/lib/search/normalize-query";
 import { loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
 import { answerTestQuestionWithGemini, geminiConfigured, recommendWithGemini } from "./gemini-engine";
-import { builtinAnswer, detectSubject, resolveNamedItems, testNameIn, toDetailSuggestions } from "./test-question";
+import {
+  builtinAnswer,
+  componentsAnswer,
+  detectSubject,
+  namesPackageExactly,
+  resolveNamedItems,
+  testNameIn,
+  toDetailSuggestions,
+} from "./test-question";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { AiAssistantResponse, AiSource, TestQuestionSubject } from "@/types/ai-assistant";
 
@@ -30,7 +38,7 @@ async function answerTestQuestion(
   catalog: PricedCatalog,
   forcedName: string | null
 ): Promise<Pick<AiAssistantResponse, "kind" | "lookupQuery" | "answer" | "results" | "engine" | "sources" | "topic" | "intent"> | null> {
-  const subject: TestQuestionSubject | null = forcedName ? "details" : detectSubject(question);
+  let subject: TestQuestionSubject | null = forcedName ? "details" : detectSubject(question);
   const name = forcedName ? normalizeQuery(forcedName) : testNameIn(question);
   if (!name) return null;
 
@@ -40,7 +48,11 @@ async function answerTestQuestion(
       normalizeQuery(question).split(" ").length <= SHORT_QUESTION_WORDS &&
       matchTopics(question).length === 0 &&
       !asksBeforeTreatment(question);
-    if (!bare) return null;
+    if (!bare) {
+      // A package named in full ("avm diabetic profile 1.2 tests") -> its tests.
+      if (!namesPackageExactly(name, catalog)) return null;
+      subject = "components";
+    }
   }
 
   // "Does sugar test need fasting?" names its tests loosely — its topic's
@@ -51,7 +63,9 @@ async function answerTestQuestion(
 
   const results = toDetailSuggestions(items);
   const effectiveSubject = subject ?? "details";
-  let answer = builtinAnswer(effectiveSubject, results);
+  // Parameters come only from our own records: a package's tests, or the
+  // package stored under the same code/name as a test (CBC -> Hemogram).
+  let answer = effectiveSubject === "components" ? await componentsAnswer(results) : builtinAnswer(effectiveSubject, results);
   let engine: AiAssistantResponse["engine"] = "builtin";
   let sources: AiSource[] = [];
 
@@ -78,10 +92,12 @@ async function answerTestQuestion(
     topic: results.map((item) => item.name).join(", "),
     intent: {
       fasting: "Fasting / preparation question",
+      components: "Parameters included",
       price: "Price question",
       tat: "Report time question",
       availability: "Availability question",
       details: "Test details",
+      general: "Blood test question",
     }[effectiveSubject],
   };
 }
@@ -115,9 +131,23 @@ export async function recommendTests(
         const lookup = await answerTestQuestion(question, catalog, gemini.lookupQuery);
         if (lookup) return { ...base, ...lookup, engine: "gemini" };
       }
+      if (gemini.requestType === "general_question" && gemini.answer) {
+        return {
+          ...base,
+          kind: "test_question",
+          lookupQuery: null,
+          answer: { subject: "general", verdict: null, text: gemini.answer },
+          topic: gemini.topic,
+          intent: gemini.intent,
+          results: gemini.results,
+          unavailableNote: null,
+          engine: "gemini",
+          sources: gemini.sources,
+        };
+      }
       return {
         ...base,
-        kind: gemini.requestType === "direct_lookup" ? "not_a_test_request" : gemini.requestType,
+        kind: gemini.requestType === "recommendation" ? "recommendation" : "not_a_test_request",
         lookupQuery: null,
         answer: null,
         topic: gemini.topic,
@@ -134,6 +164,30 @@ export async function recommendTests(
   }
 
   const guide = recommendFromGuide(question, catalog);
+  if (!guide.topicLabel) {
+    // No topic and not a question type the guide knows: still show any test
+    // the question names, so the agent isn't left with nothing.
+    const items = await resolveNamedItems(testNameIn(question), catalog, false);
+    if (items.length > 0) {
+      const results = toDetailSuggestions(items);
+      return {
+        ...base,
+        kind: "test_question",
+        lookupQuery: testNameIn(question),
+        answer: {
+          subject: "general",
+          verdict: null,
+          text: "The built-in guide can't answer this kind of question in detail. Here is the test from our list — please confirm specifics with the lab team.",
+        },
+        topic: results.map((item) => item.name).join(", "),
+        intent: "Test details",
+        results,
+        unavailableNote: null,
+        engine: "builtin",
+        sources: [],
+      };
+    }
+  }
   return {
     ...base,
     kind: guide.topicLabel ? "recommendation" : "not_a_test_request",

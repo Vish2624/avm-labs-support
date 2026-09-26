@@ -15,8 +15,10 @@ export function geminiConfigured(): boolean {
 }
 
 export interface GeminiResult {
-  requestType: "recommendation" | "direct_lookup" | "not_a_test_request";
+  requestType: "recommendation" | "direct_lookup" | "general_question" | "not_a_test_request";
   lookupQuery: string | null;
+  /** The written reply to a general_question. */
+  answer: string | null;
   topic: string | null;
   intent: string | null;
   results: AiSuggestion[];
@@ -27,6 +29,7 @@ export interface GeminiResult {
 interface GeminiJson {
   request_type?: unknown;
   lookup_query?: unknown;
+  answer?: unknown;
   topic?: unknown;
   intent?: unknown;
   results?: { code?: unknown; relevance_score?: unknown; reason?: unknown }[];
@@ -45,18 +48,20 @@ Rules:
 - relevance_score: 0.75-1 = highly relevant, 0.5-0.74 = may be relevant. Omit anything weaker. Return at most 12, best first.
 - reason: one short neutral phrase (max 10 words), e.g. "Blood glucose assessment". No diagnosis, no medicine advice, no "you need".
 - If the question simply names one specific test or asks its price/TAT/availability (e.g. "price of HbA1c"), set request_type "direct_lookup" and lookup_query to that test name, with no results.
-- If it is not about health or lab tests, set request_type "not_a_test_request".
+- If it is any other question about blood/lab tests, results or sample collection — what a test is or why it is done, normal/reference ranges, what a high or low value can mean, sample type, preparation, how often to test, the difference between tests, which test to choose, in any wording or language — set request_type "general_question": write "answer" and put the catalog tests it is about (or that fit it) in "results".
+- "answer" (general_question only): a clear, plain reply for a support agent to pass on — 2-6 short sentences, or short "- " lines for lists. Reference ranges vary by lab, age and sex: say they are typical. No diagnosis, no prescription or medicine advice; for interpreting a patient's own result, advise consulting their doctor. Do not mention prices, report times or availability.
+- If it is not about health or lab tests at all, set request_type "not_a_test_request".
 - missing_relevant_tests: plain names of clearly relevant tests you could not find in the catalog (max 5).
 
 Reply with ONLY this JSON object, no markdown:
-{"request_type":"recommendation"|"direct_lookup"|"not_a_test_request","lookup_query":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
+{"request_type":"recommendation"|"direct_lookup"|"general_question"|"not_a_test_request","lookup_query":string|null,"answer":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
 "topic" is a short label (e.g. "Weight management"); "intent" is the purpose (e.g. "Checks before starting medication").`;
 
 function catalogListing(catalog: PricedCatalog): string {
   return catalog.items
     .map((item) =>
       item.kind === "package"
-        ? `${item.code} | ${item.name} | package: ${item.tests.map((test) => test.officialName).slice(0, 12).join(", ")}`
+        ? `${item.code} | ${item.name} | package: ${item.tests.map((test) => test.officialName).join(", ")}`
         : `${item.code} | ${item.name}`
     )
     .join("\n");
@@ -161,7 +166,11 @@ export async function recommendWithGemini(question: string, catalog: PricedCatal
   const json = parseJson(text);
 
   const requestType =
-    json.request_type === "direct_lookup" || json.request_type === "not_a_test_request" ? json.request_type : "recommendation";
+    json.request_type === "direct_lookup" ||
+    json.request_type === "general_question" ||
+    json.request_type === "not_a_test_request"
+      ? json.request_type
+      : "recommendation";
 
   const byKey = new Map<string, AiSuggestion>();
   for (const pick of Array.isArray(json.results) ? json.results : []) {
@@ -184,9 +193,10 @@ export async function recommendWithGemini(question: string, catalog: PricedCatal
   return {
     requestType,
     lookupQuery: str(json.lookup_query),
+    answer: requestType === "general_question" ? str(json.answer) : null,
     topic: str(json.topic),
     intent: str(json.intent),
-    results: requestType === "recommendation" ? results : [],
+    results: requestType === "recommendation" || requestType === "general_question" ? results : [],
     unavailable: Array.isArray(json.missing_relevant_tests)
       ? json.missing_relevant_tests.filter((name): name is string => typeof name === "string").slice(0, 5)
       : [],
