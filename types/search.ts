@@ -42,3 +42,32 @@ export interface SearchEvent {
   previousMissQuery: string | null;
   createdAt: string;
 }
+
+/** A search agents made that found nothing — Admin > Missed searches, "No results". */
+export interface MissedSearch {
+  normalizedQuery: string;
+  /** The most recent wording as typed — what becomes the alias. */
+  query: string;
+  count: number;
+  lastSeenAt: string;
+  /** The test agents most often picked right after this miss, if any. */
+  suggestedTestId: string | null;
+  suggestedCount: number;
+}
+
+/** A test agents picked from below the top result for a query — "Wrong top result". */
+export interface MisrankedSearch {
+  normalizedQuery: string;
+  query: string;
+  testId: string;
+  /** Picks of this test from below the top result (or from the AI list). */
+  count: number;
+  /** Every pick made for this query, whichever test. */
+  totalPicks: number;
+  lastSeenAt: string;
+}
+
+export interface SearchLearningSummary {
+  missed: MissedSearch[];
+  misranked: MisrankedSearch[];
+}
