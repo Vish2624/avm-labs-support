@@ -16,6 +16,12 @@ export const searchEventInputSchema = z.object({
 
 export type SearchEventInput = z.infer<typeof searchEventInputSchema>;
 
+/** Zod schema for dismissing one Admin > Missed searches entry. */
+export const dismissSearchSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("missed"), normalizedQuery: z.string().min(1).max(100) }),
+  z.object({ kind: z.literal("misranked"), normalizedQuery: z.string().min(1).max(100), testId: z.guid() }),
+]);
+
 /**
  * True when a search-box query holds 6+ digits in a row (single spaces or
  * dashes allowed between them) — most likely a customer's pasted phone
