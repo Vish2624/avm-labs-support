@@ -1,11 +1,15 @@
 import { z } from "zod";
 
-/** Zod schema for one finished Support Workspace search, posted by use-search-telemetry.ts. */
+/**
+ * Zod schema for one finished Support Workspace search, posted by use-search-telemetry.ts.
+ * IDs use z.guid(), not z.uuid(): the seeded locations have fixed ids like
+ * 00000000-0000-0000-0000-000000000001, which z.uuid()'s RFC version check rejects.
+ */
 export const searchEventInputSchema = z.object({
   query: z.string().trim().min(1).max(100),
-  locationId: z.uuid().nullable(),
+  locationId: z.guid().nullable(),
   resultCount: z.number().int().min(0).max(1000),
-  pickedTestId: z.uuid().nullable(),
+  pickedTestId: z.guid().nullable(),
   pickedRank: z.number().int().min(1).nullable(),
   previousMissQuery: z.string().trim().min(1).max(100).nullable(),
 });
