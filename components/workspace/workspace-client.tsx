@@ -13,6 +13,7 @@ import { QuotationPanel } from "./quotation-panel";
 import { PackageSuggestions } from "./package-suggestions";
 import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./ai-test-assistant";
 import { useQuote } from "./quote-provider";
+import { useSearchTelemetry } from "./use-search-telemetry";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
@@ -279,6 +280,20 @@ export function WorkspaceClient() {
   // here, so the search API says when the query names several tests.
   const serverSaysList = Boolean(inHouseTests.data?.isList || outsourceTests.data?.isList);
   const searchIsList = tab === "search" && (isTestList(trimmedQuery) || serverSaysList);
+
+  // Missed-search log for the admin (use-search-telemetry.ts): what agents
+  // pick, and what they search for and fail to find. "All" can list a test
+  // under both service types, so a pick's rank counts each test once.
+  const rankedTestIds = [...new Set(searchGroups.flatMap((group) => group.tests.map((result) => result.testId)))];
+  const ruleProfileCount = new Set(searchGroups.flatMap((group) => group.profiles.map((result) => result.profileId))).size;
+  const searchTelemetry = useSearchTelemetry({
+    query: trimmedQuery,
+    enabled: tab === "search" && !searchIsList,
+    loaded: ruleResultsLoaded,
+    resultCount: rankedTestIds.length + ruleProfileCount,
+    rankedTestIds,
+    locationId: locationId || null,
+  });
   const extraction = useMessageExtraction(
     tab === "paste" ? submittedPasteText : searchIsList ? trimmedQuery : "",
     locationId,
@@ -368,6 +383,7 @@ export function WorkspaceClient() {
       const next = group.tests.find((result) => !addedTestIds.has(result.testId));
       if (next) {
         handleAdd(next);
+        searchTelemetry.recordPick(next.testId);
         toast.success(`Added ${next.code}`);
         return;
       }
@@ -528,7 +544,10 @@ export function WorkspaceClient() {
               showGroupHeaders={serviceTypeFilter === "all"}
               addedTestIds={addedTestIds}
               addedProfileIds={addedProfileIds}
-              onAdd={handleAdd}
+              onAdd={(result) => {
+                handleAdd(result);
+                searchTelemetry.recordPick(result.testId);
+              }}
               onRemove={handleRemoveTest}
               onAddPackage={(result) => applyPackage(toPackageLine(result))}
               onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
