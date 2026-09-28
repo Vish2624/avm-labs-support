@@ -60,15 +60,12 @@ export function TestResultCard({
   added,
   onAdd,
   onRemove,
-  index = 0,
   exact = false,
 }: {
   result: SearchTestResult;
   added: boolean;
   onAdd: (result: SearchTestResult) => void;
   onRemove: (testId: string) => void;
-  /** Position in the list — staggers the rows' entrance. */
-  index?: number;
   /** The search matched this test exactly — shown with a green border. */
   exact?: boolean;
 }) {
@@ -80,12 +77,12 @@ export function TestResultCard({
   return (
     <div
       className={cn(
-        "relative flex items-center gap-3.5 rounded-[14px] border border-transparent px-3 py-[13px] avm-row-in",
+        // A quick fade, no stagger — results change on every keystroke.
+        "relative flex items-center gap-3.5 rounded-[14px] border border-transparent px-3 py-[13px] avm-row-quick",
         "transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-border hover:bg-card hover:shadow-elevated",
         exact && EXACT_MATCH_ROW_CLASS,
         result.availability === "unavailable" && "opacity-60"
       )}
-      style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
     >
       {added ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[14px] avm-flash" /> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">

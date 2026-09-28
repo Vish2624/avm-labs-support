@@ -33,8 +33,8 @@ import type {
   QuotationTestLine,
 } from "@/types/quotation";
 
-// Search runs locally in the browser now, so only a short pause is needed.
-const SEARCH_DEBOUNCE_MS = 120;
+// Search runs locally in the browser (~10 ms), so only a tiny pause is needed.
+const SEARCH_DEBOUNCE_MS = 50;
 /** How often the loaded search catalog is refreshed in the background (so price changes come through). */
 const CATALOG_REFRESH_MS = 2 * 60_000;
 /** A profile whose own name matches the search at least this well (0-100) counts as an exact match. */
@@ -150,9 +150,12 @@ export type WorkspaceTab = "search" | "paste" | "ai";
 export function WorkspaceClient({
   initialTab = "search",
   initialServiceType = "all",
+  initialCatalogs = {},
 }: {
   initialTab?: WorkspaceTab;
   initialServiceType?: ServiceTypeFilter;
+  /** Search catalogs rendered into the page, keyed by their /api/search/catalog URL. */
+  initialCatalogs?: Record<string, SearchCatalog>;
 }) {
   const {
     locationId,
@@ -397,7 +400,14 @@ export function WorkspaceClient({
       locationId && isActiveServiceType(type)
         ? `/api/search/catalog?${new URLSearchParams({ locationId, serviceType: type })}`
         : null;
-    return useSWR<SearchCatalog>(key, fetcher, { refreshInterval: CATALOG_REFRESH_MS, keepPreviousData: false });
+    // The page arrives with the current location's catalog already in it
+    // (initialCatalogs), so the first search doesn't wait for a download.
+    return useSWR<SearchCatalog>(key, fetcher, {
+      refreshInterval: CATALOG_REFRESH_MS,
+      keepPreviousData: false,
+      fallbackData: key ? initialCatalogs[key] : undefined,
+      revalidateOnMount: !(key && initialCatalogs[key]),
+    });
   }
   const inHouseCatalog = useSearchCatalog("in_house");
   const outsourceCatalog = useSearchCatalog("outsource");

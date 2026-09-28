@@ -33,7 +33,7 @@ export function PackageResultRow({
       className={cn(
         // Bordered and lightly tinted so packages read as distinct from the
         // plain test rows listed above them.
-        "relative rounded-[14px] border border-primary/20 bg-primary/[0.03] px-3 py-3 avm-row-in transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-primary/35 hover:bg-primary/[0.06] hover:shadow-elevated dark:border-primary/25 dark:bg-primary/[0.06]",
+        "relative rounded-[14px] border border-primary/20 bg-primary/[0.03] px-3 py-3 avm-row-quick transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-primary/35 hover:bg-primary/[0.06] hover:shadow-elevated dark:border-primary/25 dark:bg-primary/[0.06]",
         exact && EXACT_MATCH_ROW_CLASS,
         result.availability === "unavailable" && "opacity-60"
       )}

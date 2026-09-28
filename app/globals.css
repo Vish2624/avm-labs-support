@@ -257,6 +257,9 @@
 @utility avm-flash { animation: avm-flash 0.9s ease-out; }
 @utility avm-fade-up { animation: avm-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility avm-row-in { animation: avm-row-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+/* Search/paste result rows: they change on every keystroke, so a quick fade
+   that never makes the list feel slow to appear. */
+@utility avm-row-quick { animation: avm-fade-in 0.16s ease-out both; }
 @utility avm-item-in { animation: avm-item-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility avm-pop { animation: avm-pop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility avm-check { animation: avm-check 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }

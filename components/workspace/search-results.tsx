@@ -189,10 +189,9 @@ export function SearchResults({
           {group.testsLoading ? (
             <Skeleton className="h-[62px] w-full rounded-xl" />
           ) : (
-            group.tests.map((result, index) => (
+            group.tests.map((result) => (
               <TestResultCard
                 key={result.testId}
-                index={index}
                 result={result}
                 added={addedTestIds.has(result.testId)}
                 exact={exactMatch}
