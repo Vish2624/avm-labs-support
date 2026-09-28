@@ -1,6 +1,7 @@
 "use client";
 
 import { SearchIcon, XIcon } from "lucide-react";
+import { imageFromDataTransfer } from "./image-reader";
 
 // Search box driving alias/fuzzy test lookup (see lib/search/search-tests.ts
 // via /api/search). Purely controlled — debouncing/fetching happens in the
@@ -12,11 +13,14 @@ export function TestSearch({
   onChange,
   onSubmit,
   inputRef,
+  onPasteImage,
 }: {
   value: string;
   onChange: (query: string) => void;
   onSubmit?: () => void;
   inputRef?: React.Ref<HTMLInputElement>;
+  /** A pasted screenshot/photo goes to the image reader instead. */
+  onPasteImage?: (image: File) => void;
 }) {
   return (
     <div className="relative">
@@ -27,6 +31,12 @@ export function TestSearch({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onPaste={(event) => {
+          const image = onPasteImage ? imageFromDataTransfer(event.clipboardData) : null;
+          if (image) {
+            event.preventDefault();
+            onPasteImage?.(image);
+            return;
+          }
           // A single-line input silently drops newlines, gluing a pasted
           // one-test-per-line list into one word ("TSH⏎T3" -> "TSHT3").
           // Keep each line as its own list item instead.

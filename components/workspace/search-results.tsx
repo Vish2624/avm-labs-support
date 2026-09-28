@@ -43,6 +43,7 @@ function ResultSkeletons() {
 // in "All", otherwise the selected type's own.
 export function SearchResults({
   query,
+  browsing = false,
   locationName,
   groups: allGroups,
   showGroupHeaders,
@@ -56,6 +57,8 @@ export function SearchResults({
   ai,
 }: {
   query: string;
+  /** Empty query with one service type picked: its full priced list. */
+  browsing?: boolean;
   locationName: string | null;
   groups: SearchResultGroup[];
   showGroupHeaders: boolean;
@@ -68,7 +71,7 @@ export function SearchResults({
   onSuggestion: (text: string) => void;
   ai: SemanticSearchState | null;
 }) {
-  if (!query.trim()) {
+  if (!query.trim() && !browsing) {
     return (
       <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
         <p className="text-[15px] font-medium">Search for a test or package</p>
@@ -116,6 +119,17 @@ export function SearchResults({
 
   const didYouMean = groups.find((group) => group.didYouMean)?.didYouMean ?? null;
 
+  if (totalCount === 0 && browsing) {
+    return (
+      <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
+        <p className="text-[15px] font-medium">
+          No {SERVICE_TYPE_LABELS[groups[0]?.serviceType ?? "in_house"].toLowerCase()} tests or packages
+          {locationName ? ` at ${locationName}` : ""}
+        </p>
+      </div>
+    );
+  }
+
   if (totalCount === 0) {
     return (
       <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
@@ -162,12 +176,16 @@ export function SearchResults({
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-2 pt-1 pb-2">
         <span className={resultsTitleClassName}>
-          {totalCount} result{totalCount === 1 ? "" : "s"}
+          {browsing ? `All ${SERVICE_TYPE_LABELS[groups[0]?.serviceType ?? "in_house"]} · ` : ""}
+          {totalCount} {browsing ? "item" : "result"}
+          {totalCount === 1 ? "" : "s"}
           {locationName ? ` · ${locationName}` : ""}
         </span>
-        <span className="text-[11.5px] text-muted-foreground">
-          <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top test
-        </span>
+        {browsing ? null : (
+          <span className="text-[11.5px] text-muted-foreground">
+            <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top test
+          </span>
+        )}
       </div>
       {ai && (ai.loading || aiItems.length > 0) ? (
         <AiSection

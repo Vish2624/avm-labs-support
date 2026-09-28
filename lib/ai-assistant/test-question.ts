@@ -8,6 +8,8 @@ import { matchScore } from "@/lib/search/fuzzy-match";
 import { buildSearchCandidates } from "@/lib/search/build-search-candidates";
 import { rankResults } from "@/lib/search/rank-results";
 import { formatTat } from "@/lib/utils/format-tat";
+import { formatCurrency } from "@/lib/utils/format-currency";
+import { customerName, friendlyName } from "./customer-labels";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import { matchTopics } from "./builtin-engine";
@@ -219,6 +221,42 @@ export async function componentsAnswer(items: AiSuggestion[]): Promise<AiAnswer>
     })
     .join("\n\n");
   return { subject: "components", verdict: null, text };
+}
+
+/**
+ * The customer reply for a question answered from our own records — price,
+ * report time, availability, parameters, or just a test name. Built only
+ * from DB fields (never Gemini), so every price and time is exact.
+ */
+export function recordsReply(subject: TestQuestionSubject, items: AiSuggestion[], answer: AiAnswer): string {
+  // One test reads as a sentence ("Hi! Vitamin D – report ready in 8 hours."); several as a list.
+  const bullets = (render: (item: AiSuggestion) => string) =>
+    items.length === 1 ? `${render(items[0])}.` : `\n\n${items.map((item) => `• ${render(item)}`).join("\n")}`;
+  const price = (item: AiSuggestion) => formatCurrency(item.price);
+  const ready = (item: AiSuggestion) => `report ready in ${formatTat(item.tatText)}`;
+  const status = (item: AiSuggestion) =>
+    item.availability === "available" ? "available" : AVAILABILITY_LABELS[item.availability].toLowerCase();
+
+  switch (subject) {
+    case "price":
+    case "details":
+      return `Hi! ${bullets((item) => `${customerName(item)} – ${price(item)}, ${ready(item)}`)}`;
+    case "tat":
+      return `Hi! ${bullets((item) => `${customerName(item)} – ${ready(item)}`)}`;
+    case "availability":
+      return `Hi! ${bullets((item) => `${customerName(item)} – ${status(item)}`)}`;
+    case "components":
+      return items
+        .map((item) =>
+          item.kind === "package" && item.tests.length > 0
+            ? `Hi! ${customerName(item)} includes:\n${item.tests.map((test) => `• ${friendlyName(test.officialName)}`).join("\n")}`
+            : `Hi! ${answer.text}`
+        )
+        .join("\n\n");
+    case "fasting":
+    case "general":
+      return `Hi! ${answer.text}`;
+  }
 }
 
 const FASTING_WORD = { yes: "Yes", no: "No", recommended: "Preferred" } as const;

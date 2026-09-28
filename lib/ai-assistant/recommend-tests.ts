@@ -9,6 +9,7 @@ import {
   componentsAnswer,
   detectSubject,
   namesPackageExactly,
+  recordsReply,
   resolveNamedItems,
   testNameIn,
   toDetailSuggestions,
@@ -38,7 +39,10 @@ async function answerTestQuestion(
   question: string,
   catalog: PricedCatalog,
   forcedName: string | null
-): Promise<Pick<AiAssistantResponse, "kind" | "lookupQuery" | "answer" | "results" | "engine" | "sources" | "topic" | "intent"> | null> {
+): Promise<Pick<
+  AiAssistantResponse,
+  "kind" | "lookupQuery" | "answer" | "reply" | "results" | "engine" | "sources" | "topic" | "intent"
+> | null> {
   let subject: TestQuestionSubject | null = forcedName ? "details" : detectSubject(question);
   const name = forcedName ? normalizeQuery(forcedName) : testNameIn(question);
   if (!name) return null;
@@ -68,6 +72,7 @@ async function answerTestQuestion(
   let answer = effectiveSubject === "components" ? await componentsAnswer(results) : builtinAnswer(effectiveSubject, results);
   let engine: AiAssistantResponse["engine"] = "builtin";
   let sources: AiSource[] = [];
+  let reply: string | null = null;
 
   // Fasting/what-is questions can use Gemini + Google Search; price, TAT and
   // availability always come straight from our own records.
@@ -75,6 +80,7 @@ async function answerTestQuestion(
     try {
       const gemini = await answerTestQuestionWithGemini(question, effectiveSubject, results);
       answer = gemini.answer;
+      reply = gemini.reply;
       sources = gemini.sources;
       engine = "gemini";
     } catch (error) {
@@ -86,6 +92,7 @@ async function answerTestQuestion(
     kind: "test_question",
     lookupQuery: name,
     answer,
+    reply: reply ?? recordsReply(effectiveSubject, results, answer),
     results,
     engine,
     sources,
@@ -118,7 +125,7 @@ export async function recommendTests(
   locationId: string,
   serviceTypes: readonly ServiceType[]
 ): Promise<AiAssistantResponse> {
-  const base = { query: rawQuestion, warning: MEDICAL_NOTICE, unavailableNote: null };
+  const base = { query: rawQuestion, warning: MEDICAL_NOTICE, unavailableNote: null, reply: null };
   const catalog = await loadPricedCatalog(locationId, serviceTypes);
   // The built-in rules read the spell-corrected question ("lipd profle" ->
   // "lipid profile"); Gemini gets the agent's own words and copes with typos.
@@ -140,6 +147,7 @@ export async function recommendTests(
           kind: "test_question",
           lookupQuery: null,
           answer: { subject: "general", verdict: null, text: gemini.answer },
+          reply: gemini.reply,
           topic: gemini.topic,
           intent: gemini.intent,
           results: gemini.results,
@@ -153,6 +161,7 @@ export async function recommendTests(
         kind: gemini.requestType === "recommendation" ? "recommendation" : "not_a_test_request",
         lookupQuery: null,
         answer: null,
+        reply: gemini.reply,
         topic: gemini.topic,
         intent: gemini.intent,
         results: gemini.results,

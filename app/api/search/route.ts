@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
 import { queryNamesSeveralTests, searchTests } from "@/lib/search/search-tests";
 import { suggestCorrection } from "@/lib/search/suggest-correction";
+import { browseTests } from "@/lib/search/browse-catalog";
 import { isServiceType } from "@/lib/constants/service-types";
 
 // Test search endpoint backing the Support Workspace's live search box.
@@ -18,6 +19,11 @@ export async function GET(request: NextRequest) {
   }
   if (!isServiceType(serviceType)) {
     return NextResponse.json({ error: "serviceType must be in_house or outsource" }, { status: 400 });
+  }
+
+  // browse=1 with no query: the full priced list for this service type.
+  if (searchParams.get("browse") === "1" && !query.trim()) {
+    return NextResponse.json({ results: await browseTests(locationId, serviceType), isList: false, didYouMean: null });
   }
 
   const [results, isList] = await Promise.all([

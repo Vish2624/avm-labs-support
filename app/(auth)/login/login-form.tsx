@@ -11,20 +11,21 @@ const initialState: LoginState = { error: null };
 const inputClassName =
   "h-12 w-full rounded-xl border border-input bg-card pl-10 text-[14.5px] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15";
 
-export function LoginForm() {
+export function LoginForm({ returnTo = "/workspace" }: { returnTo?: string }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  // Signed in: let the "✓ Welcome back" tick land, then open the workspace.
+  // Signed in: let the "✓ Welcome back" tick land, then go back to the
+  // page the agent was on (or the workspace).
   useEffect(() => {
     if (!state.success) return;
     const timeout = setTimeout(() => {
-      router.replace("/workspace");
+      router.replace(returnTo);
       router.refresh();
     }, 550);
     return () => clearTimeout(timeout);
-  }, [state.success, router]);
+  }, [state.success, router, returnTo]);
 
   return (
     <form

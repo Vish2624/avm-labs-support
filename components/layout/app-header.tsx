@@ -20,7 +20,7 @@ import { signOutAction } from "@/app/(dashboard)/actions";
 import type { AuthUser } from "@/types/auth";
 
 const navItems = [
-  { href: "/workspace", label: "Quote" },
+  { href: "/workspace", label: "Quote Builder" },
   { href: "/profiles", label: "Packages" },
   { href: "/updates", label: "Updates" },
 ];
@@ -70,7 +70,7 @@ export function AppHeader({ user }: { user: AuthUser }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-9 shrink-0 items-center rounded-[10px] px-3 text-sm font-medium transition-colors duration-200",
+                  "flex h-9 shrink-0 items-center rounded-[10px] px-3 text-sm whitespace-nowrap font-medium transition-colors duration-200",
                   active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >

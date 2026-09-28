@@ -26,12 +26,11 @@ Local setup: `npm install`, then `cp .env.example .env.local` and fill in the Su
 
 ## Architecture
 
-**Route protection is `proxy.ts`, not `middleware.ts`.** Next 16 renamed Middleware to Proxy — gating lives in `proxy.ts` at the repo root, exporting `proxy()`. It calls `lib/supabase/middleware.ts`'s `updateSession()` to refresh the auth cookie and resolve the caller's role, then redirects unauthenticated requests to `/login` and non-admins hitting `/admin/*` to `/workspace`. This is a UX convenience, not the sole guard: every protected Server Component/Action/Route Handler independently calls `requireUser()`/`requireAdmin()` (`lib/auth/permissions.ts`). (`/dashboard` has no page of its own — it just `redirect()`s to `/workspace`, the real landing page.)
+**Route protection is `proxy.ts`, not `middleware.ts`.** Next 16 renamed Middleware to Proxy — gating lives in `proxy.ts` at the repo root, exporting `proxy()`. It calls `lib/supabase/middleware.ts`'s `updateSession()` to refresh the auth cookie, verify the session JWT locally with `getClaims()` (no Auth-server round trip), and resolve the caller's role (cached per server instance for 5 minutes), then redirects unauthenticated requests to `/login` and non-admins hitting `/admin/*` to `/workspace`. This is a UX convenience, not the sole guard: every protected Server Component/Action/Route Handler independently calls `requireUser()`/`requireAdmin()` (`lib/auth/permissions.ts`). (`/dashboard` has no page of its own — it just `redirect()`s to `/workspace`, the real landing page.)
 
-**Three Supabase clients — pick the right one:**
+**Two Supabase clients — pick the right one** (plus `lib/supabase/middleware.ts`, the proxy's own cookie client):
 - `lib/supabase/admin.ts` (`createAdminClient`) — service-role, bypasses RLS. The *only* client used for real business data (tests, prices, aliases, profiles, imports). Server-only; never import from `"use client"` code.
-- `lib/supabase/server.ts` (`createAuthServerClient`) — cookie-aware, anon key, RLS-bound. Auth/session only.
-- `lib/supabase/client.ts` (`createBrowserSupabaseClient`) — browser, anon key. Also auth/session only.
+- `lib/supabase/server.ts` (`createAuthServerClient`) — cookie-aware, anon key, RLS-bound. Auth/session only (sign-in/out run as Server Actions, so there is no browser Supabase client).
 
 The browser never queries Postgres directly. All data fetching happens server-side (Server Components, or Route Handlers under `app/api/*`) through the admin client, then reaches Client Components as props or SWR JSON (`lib/utils/fetcher.ts`).
 

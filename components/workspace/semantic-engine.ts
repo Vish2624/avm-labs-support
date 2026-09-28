@@ -4,7 +4,7 @@ import type { CatalogItem, WorkerRequest, WorkerResponse } from "@/lib/search/se
 import type { SemanticMatch } from "@/lib/search/semantic-search-results";
 
 // One shared in-browser AI model (lib/search/semantic-worker.ts) for the
-// whole page — the search box and "Paste a message" both use it, so the
+// whole page — the search box and "Paste text or image" both use it, so the
 // model and catalog are only loaded once per page load (and cached by the
 // browser across visits).
 

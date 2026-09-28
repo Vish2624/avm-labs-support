@@ -41,6 +41,9 @@ const SYNONYMS: Record<string, string[]> = {
   man: ["male"],
   kidney: ["renal"],
   renal: ["kidney"],
+  // Doctors write RFT (renal function test) for what the catalog calls KFT.
+  rft: ["kft"],
+  kft: ["rft"],
   diabetes: ["diabetic"],
   diabetic: ["diabetes"],
   hormone: ["hormones"],

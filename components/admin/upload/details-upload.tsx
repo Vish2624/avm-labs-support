@@ -58,7 +58,7 @@ export function DetailsUpload({ kind, description }: { kind: "tests" | "profiles
       setPreview(result.preview ?? null);
       if (result.applied) {
         setApplied(true);
-        toast.success("Upload applied — search picks up the changes within a minute.");
+        toast.success("Upload applied");
       } else {
         toast.error(result.error ?? "Nothing was saved.");
       }

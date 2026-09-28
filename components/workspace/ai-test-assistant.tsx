@@ -12,85 +12,13 @@ import { resultsTitleClassName } from "./search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import type { AiAnswer, AiAssistantResponse, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
-const SHORT_NOTICE =
-  "Note: These are general suggestions, not a diagnosis. Please consult a qualified doctor for advice, especially before starting or changing any medication.";
-
-/** Plain customer-facing name + what it checks, for common tests; others fall back to the catalog name. */
-const CUSTOMER_LABELS: Record<string, [name: string, checks: string]> = {
-  HBA: ["HbA1c", "3-month average blood sugar"],
-  FBS: ["Fasting Blood Sugar", "blood sugar"],
-  PPBS: ["Post-meal Blood Sugar", "blood sugar after food"],
-  RBS: ["Random Blood Sugar", "blood sugar"],
-  INSFA: ["Fasting Insulin", "insulin resistance"],
-  LIPID: ["Lipid Profile", "cholesterol"],
-  LFT: ["Liver Function Test", "liver health"],
-  KFT: ["Kidney Function Test", "kidney health"],
-  TSH: ["Thyroid (TSH)", "thyroid function"],
-  TFT: ["Thyroid Profile (T3, T4, TSH)", "thyroid function"],
-  FTFT: ["Free Thyroid Profile", "thyroid function"],
-  FT3: ["Free T3", "thyroid hormone"],
-  FT4: ["Free T4", "thyroid hormone"],
-  H6: ["Complete Blood Count (CBC)", "blood count & anaemia"],
-  FERR: ["Ferritin", "iron stores"],
-  IRON: ["Serum Iron", "iron level"],
-  TIBC: ["TIBC", "iron binding"],
-  VITDC: ["Vitamin D", "vitamin D level"],
-  VITB: ["Vitamin B12", "vitamin B12 level"],
-  FOLI: ["Folate", "folate level"],
-  SEZN: ["Zinc", "zinc level"],
-  CALC: ["Calcium", "calcium level"],
-  MG: ["Magnesium", "magnesium level"],
-  TEST: ["Testosterone", "hormone balance"],
-  LH: ["LH", "hormone balance"],
-  FSH: ["FSH", "hormone balance"],
-  PRL: ["Prolactin", "hormone balance"],
-  DHEA: ["DHEA-S", "hormone balance"],
-  AMH: ["AMH", "ovarian reserve"],
-  E2: ["Estradiol", "hormone balance"],
-  BHCG: ["Beta hCG", "pregnancy hormone"],
-  CUA: ["Urine Routine", "urine health"],
-  CRP: ["CRP", "inflammation"],
-  HSCRP: ["hs-CRP", "heart-related inflammation"],
-  ESR: ["ESR", "inflammation"],
-  URIC: ["Uric Acid", "gout / uric acid"],
-  PSA: ["PSA", "prostate health"],
-  SEEL: ["Electrolytes", "sodium & potassium"],
-  UALB: ["Urine Microalbumin", "early kidney changes"],
-};
-
-const SMALL_WORDS = new Set(["and", "of", "for", "with", "in"]);
-
-/**
- * Catalog names are stored in capitals ("THYROID STIMULATING HORMONE
- * (TSH)"); a customer message reads better as "Thyroid Stimulating Hormone
- * (TSH)". Abbreviations — short words, anything with a digit, anything in
- * brackets — keep their capitals.
- */
-function friendlyName(name: string): string {
-  if (name !== name.toUpperCase()) return name;
-  let depth = 0;
-  return name
-    .split(" ")
-    .map((word) => {
-      const opens = word.startsWith("(");
-      if (opens) depth++;
-      const inBrackets = depth > 0;
-      if (word.endsWith(")")) depth = Math.max(0, depth - 1);
-      const letters = word.replace(/[^A-Z]/g, "");
-      if (inBrackets || /\d/.test(word) || letters.length <= 3) {
-        return SMALL_WORDS.has(word.toLowerCase()) ? word.toLowerCase() : word;
-      }
-      return word.charAt(0) + word.slice(1).toLowerCase();
-    })
-    .join(" ");
-}
 
 export function aiSuggestionKey(item: AiSuggestion): string {
   return item.kind === "test" ? `test:${item.testId}` : `package:${item.profileId}`;
 }
 
 /**
- * Asks /api/ai-assistant only when the agent submits (the "Ask AI" button),
+ * Asks /api/ai-assistant only when the agent submits (the "Ask Assistant" button),
  * never per keystroke — each question may call Gemini + Google Search.
  * Kept apart from the search box and pasted-message reader entirely.
  */
@@ -159,7 +87,7 @@ export function AiQuestionForm({
           }
         }}
         placeholder="Ask about the customer's need, e.g. “I want to lose weight, which tests should I check before taking any medicine?”"
-        aria-label="Question for the AI Test Assistant"
+        aria-label="Question for the Support Assistant"
         autoFocus
         className="h-24 w-full resize-y rounded-xl border border-input bg-card px-3.5 py-3 text-sm leading-relaxed outline-none transition-shadow placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/12"
       />
@@ -173,7 +101,7 @@ export function AiQuestionForm({
           className="flex h-9 shrink-0 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-[background,translate,scale,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_-10px_var(--primary)] active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
         >
           <SparklesIcon className="size-4" />
-          {loading ? "Thinking…" : "Ask AI"}
+          {loading ? "Thinking…" : "Ask Assistant"}
         </button>
       </div>
     </form>
@@ -192,41 +120,6 @@ function MedicalNotice({ text }: { text: string }) {
   );
 }
 
-/**
- * A short, friendly customer message listing the selected tests — names and
- * what each checks, no prices (the quotation's own reply carries those) —
- * plus fasting where it matters and a brief medical guideline.
- */
-function buildCustomerMessage(response: AiAssistantResponse, items: AiSuggestion[]): string {
-  const about =
-    response.kind === "recommendation" && response.topic ? ` for ${response.topic.split(" / ")[0].toLowerCase()}` : "";
-  const label = (item: AiSuggestion) => CUSTOMER_LABELS[item.code.toUpperCase()]?.[0] ?? friendlyName(item.name);
-  const lines = items.map((item) => {
-    const checks = CUSTOMER_LABELS[item.code.toUpperCase()]?.[1];
-    return `• ${label(item)}${checks ? ` – ${checks}` : ""}`;
-  });
-  const fasting = items.filter((item) => item.fasting?.required === "yes");
-  return [
-    response.kind === "recommendation"
-      ? `Hi! Tests commonly considered${about}:`
-      : "Hi! Here are the details of the test(s) you asked about:",
-    "",
-    ...lines,
-    ...(fasting.length > 0
-      ? [
-          "",
-          `Fasting needed: ${fasting
-            .map((item) => {
-              const hours = item.fasting!.note.match(/^[\d–-]+ hours/)?.[0];
-              return hours ? `${label(item)} (${hours})` : label(item);
-            })
-            .join(", ")} — water is fine.`,
-        ]
-      : []),
-    "",
-    SHORT_NOTICE,
-  ].join("\n");
-}
 
 const FASTING_PILL: Record<FastingInfo["required"], { label: string; className: string }> = {
   yes: { label: "Fasting required", className: "bg-warning/25 text-warning-foreground" },
@@ -384,13 +277,19 @@ export function AiAssistantResults({
     return (
       <div className="flex flex-col items-center gap-2 px-8 pt-14 text-center">
         <SparklesIcon className="size-7 text-primary" />
-        <p className="text-[15px] font-medium">AI Test Assistant</p>
-        <p className="max-w-[420px] text-[13px] leading-relaxed text-muted-foreground">
-          Type the customer&apos;s question — “which tests for hair fall?”, “customer wants a diabetes checkup”,
-          “tests related to PCOS” — or ask about a test: “does thyroid test need fasting?”, “price of HbA1c”. The
-          assistant suggests matching tests from our catalog; tick the ones you want and open them in
-          Test search to see prices and add them.
-        </p>
+        <p className="text-[15px] font-medium">Support Assistant</p>
+        <div className="flex max-w-[440px] flex-wrap justify-center gap-1.5">
+          {["Tests for hair fall", "Diabetes checkup", "PCOS tests", "Does thyroid test need fasting?", "Price of HbA1c"].map(
+            (example) => (
+              <span
+                key={example}
+                className="rounded-full border border-border bg-card px-2.5 py-1 text-[12.5px] text-muted-foreground"
+              >
+                {example}
+              </span>
+            )
+          )}
+        </div>
       </div>
     );
   }
@@ -440,16 +339,14 @@ export function AiAssistantResults({
     </div>
   );
 
-  // The customer message follows the ticked tests live — no extra step.
-  const shownMessage = selectedItems.length > 0 ? buildCustomerMessage(response, selectedItems) : null;
+  const reply = response.reply;
 
-  async function copyMessage() {
-    if (!shownMessage) return;
+  async function copyText(text: string) {
     try {
-      await navigator.clipboard.writeText(shownMessage);
-      toast.success("Copied to clipboard");
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied");
     } catch {
-      toast.error("Couldn't copy — select and copy the text manually.");
+      toast.error("Couldn't copy");
     }
   }
 
@@ -468,6 +365,43 @@ export function AiAssistantResults({
       </div>
     );
 
+  if (reply) {
+    // Chat-style: the question, the ready-to-send reply, then (when there
+    // are any) the tests it mentions, to tick and open in Test search.
+    return (
+      <div className="flex flex-col gap-4 px-1 pt-2">
+        <div className="flex flex-col gap-2">
+          <p className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[13.5px] text-primary-foreground">
+            {response.query}
+          </p>
+          <div className="group relative max-w-[92%] self-start rounded-2xl rounded-bl-md border border-border bg-card px-3.5 py-2.5 avm-fade-up">
+            <p className="text-[13.5px] leading-relaxed whitespace-pre-line">{reply}</p>
+            <div className="mt-1.5 flex items-center justify-between gap-3">
+              <span className="text-[11px] text-muted-foreground">
+                {response.engine === "gemini" ? "Support Assistant" : "From our records"}
+                {locationName ? ` · ${locationName}` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => copyText(reply)}
+                className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-primary transition-[background,scale] duration-200 hover:bg-primary/10 active:scale-95"
+              >
+                <CopyIcon className="size-3.5" /> Copy
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {results.length > 0 ? (
+          <>
+            {renderGroup("Tests in our list", results)}
+            {actions}
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 px-1 pt-2">
       <div className="rounded-xl border border-primary/20 bg-primary/[0.04] px-4 py-3.5 dark:bg-primary/[0.07]">
@@ -476,7 +410,7 @@ export function AiAssistantResults({
             <SparklesIcon className="size-4" /> AI Understanding
           </span>
           <span className="text-[11.5px] text-muted-foreground">
-            {response.engine === "gemini" ? "Gemini + Google Search" : "Built-in test guide"}
+            {response.engine === "gemini" ? "Gemini" : "Built-in test guide"}
             {locationName ? ` · ${locationName}` : ""}
           </span>
         </div>
@@ -511,22 +445,6 @@ export function AiAssistantResults({
 
       {response.unavailableNote ? (
         <p className="px-2.5 text-[12.5px] text-muted-foreground">{response.unavailableNote}</p>
-      ) : null}
-
-      {shownMessage ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-success/25 bg-success/[0.07] p-3.5">
-          <div className="flex items-center justify-between">
-            <span className={resultsTitleClassName}>Message for the customer · no prices</span>
-            <button
-              type="button"
-              onClick={copyMessage}
-              className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-primary transition-[background,scale] duration-200 hover:bg-primary/10 active:scale-95"
-            >
-              <CopyIcon className="size-3.5" /> Copy
-            </button>
-          </div>
-          <pre className="font-sans text-[13px] leading-relaxed whitespace-pre-wrap">{shownMessage}</pre>
-        </div>
       ) : null}
 
       <MedicalNotice text={response.warning} />

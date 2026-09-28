@@ -3,10 +3,15 @@ import { BrandPanel } from "./brand-panel";
 import { FormSide } from "./form-side";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { listActiveLocations } from "@/lib/database/locations";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 const ease = "cubic-bezier(.2,.8,.2,1)";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  // The page the agent was on before being asked to sign in (proxy.ts).
+  const { next } = await searchParams;
+  const returnTo = safeNextPath(typeof next === "string" ? next : null) ?? "/workspace";
+
   // The brand panel's location chips are the real pricing locations; the
   // page still renders (without chips) if they can't be loaded.
   const locations = await listActiveLocations().catch(() => []);
@@ -51,7 +56,7 @@ export default async function LoginPage() {
             </h1>
           </div>
 
-          <LoginForm />
+          <LoginForm returnTo={returnTo} />
 
           <p
             className="m-0 border-t border-border pt-5 text-[13px] leading-relaxed text-muted-foreground"

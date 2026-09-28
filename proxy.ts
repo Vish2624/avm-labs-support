@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 // Server-side route protection — never rely on hiding a nav link alone
 // (spec section 38/54). "/" itself just redirects to /workspace and is left
@@ -13,11 +14,14 @@ export async function proxy(request: NextRequest) {
   const isPublic = PUBLIC_PATHS.includes(pathname);
 
   if (pathname === "/login" && userId) {
-    return NextResponse.redirect(new URL("/workspace", request.url));
+    const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(next ?? "/workspace", request.url));
   }
 
   if (!isPublic && !userId) {
+    // Remember the page, so signing in again returns to it (API calls excepted).
     const loginUrl = new URL("/login", request.url);
+    if (!pathname.startsWith("/api/")) loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

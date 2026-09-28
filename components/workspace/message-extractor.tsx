@@ -35,31 +35,31 @@ function groupPackages(packages: Extraction["packages"]) {
 // One toast id, so re-reading an edited message replaces the last
 // notification instead of stacking a new one per keystroke pause.
 const EXTRACTION_TOAST_ID = "message-extraction";
-const MAX_TOAST_NAMES = 12;
+const MAX_TOAST_NAMES = 4;
 
 /** Pop-up summary of a finished read: how many tests were found, how many weren't. */
 function notifyExtraction(extraction: Extraction, failed: boolean) {
   if (failed) {
-    toast.error("Couldn't read the tests — please try again.", { id: EXTRACTION_TOAST_ID });
+    toast.error("Couldn't read the tests", { id: EXTRACTION_TOAST_ID });
     return;
   }
   const packageNames = groupPackages(extraction.packages);
   const requested =
     extraction.detected.length + packageNames.length + extraction.notOffered.length + extraction.unmatched.length;
   if (requested === 0) {
-    toast.error("No tests recognised in this message.", { id: EXTRACTION_TOAST_ID });
+    toast.error("No tests found", { id: EXTRACTION_TOAST_ID });
     return;
   }
   const available =
     extraction.detected.filter((result) => result.availability === "available").length +
     packageNames.filter(({ results }) => results.some((result) => result.availability === "available")).length;
   const notAvailable = requested - available;
-  const found = `${available} of ${requested} test${requested === 1 ? "" : "s"} found`;
+  const found = `${available} of ${requested} found`;
   if (notAvailable === 0) {
     toast.success(found, { id: EXTRACTION_TOAST_ID });
   } else {
     // Name them right in the pop-up — what's missing is what the agent has
-    // to tell the customer. Long lists are trimmed; the red box has them all.
+    // to tell the customer. Only the first few; the red box has them all.
     const names = [
       ...extraction.unmatched,
       ...extraction.notOffered.map((test) => test.code),
@@ -72,10 +72,8 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
     const more = names.length > MAX_TOAST_NAMES ? ` +${names.length - MAX_TOAST_NAMES} more` : "";
     toast.warning(`${found} · ${notAvailable} not available`, {
       id: EXTRACTION_TOAST_ID,
-      description: `Not available: ${shown}${more}${
-        extraction.unmatched.length > 0 ? " — checking unrecognised names with AI" : ""
-      }`,
-      duration: 10_000,
+      description: `${shown}${more}`,
+      duration: 6000,
     });
   }
 }
@@ -89,14 +87,14 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
  * tokens that matched nothing are returned too, so the agent can see what
  * still needs a manual search.
  */
-export function useMessageExtraction(text: string, locationId: string, serviceType: ServiceTypeFilter) {
+export function useMessageExtraction(text: string, locationId: string, serviceType: ServiceTypeFilter, useAi = false) {
   // Results are stored with the request they answer, so "loading" can be
   // derived (does the stored result match the current input?) instead of
   // being reset inside the effect.
   const [result, setResult] = useState<{ key: string; extraction: Extraction } | null>(null);
 
   const trimmed = text.trim();
-  const key = trimmed && locationId ? JSON.stringify([trimmed, locationId, serviceType]) : null;
+  const key = trimmed && locationId ? JSON.stringify([trimmed, locationId, serviceType, useAi]) : null;
 
   useEffect(() => {
     if (!key) return;
@@ -109,7 +107,7 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
         const response = await fetch("/api/search/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmed, locationId, serviceType }),
+          body: JSON.stringify({ text: trimmed, locationId, serviceType, ai: useAi }),
         });
         if (response.ok) extraction = (await response.json()) as Extraction;
         else failed = true;
@@ -126,7 +124,7 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [key, trimmed, locationId, serviceType]);
+  }, [key, trimmed, locationId, serviceType, useAi]);
 
   if (!key) return { ...EMPTY_EXTRACTION, loading: false };
   // While a new read is pending, keep showing the previous matches rather
@@ -260,7 +258,7 @@ export function MessageExtractionResults({
   if (requested === 0) {
     return (
       <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
-        <p className="text-[15px] font-medium">{text.trim() ? "No tests recognised" : "Paste a message, then press Find tests"}</p>
+        <p className="text-[15px] font-medium">{text.trim() ? "No tests recognised" : "Paste text or an image, then press Find tests"}</p>
         <p className="text-[13px] text-muted-foreground">
           We match test names, codes and common nicknames like &ldquo;sugar test&rdquo;.
         </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SearchIcon } from "lucide-react";
+import { ImageIcon, LoaderCircleIcon, SearchIcon, XIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
@@ -14,12 +14,14 @@ import { PackageSuggestions } from "./package-suggestions";
 import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./ai-test-assistant";
 import { useQuote } from "./quote-provider";
 import { useSearchTelemetry } from "./use-search-telemetry";
+import { imageFromDataTransfer, preloadImageReader, readImageText } from "./image-reader";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
 import { SERVICE_TYPES, type ServiceType, type ServiceTypeFilter } from "@/lib/constants/service-types";
 import { isTestList } from "@/lib/search/split-test-list";
 import { cn } from "@/lib/utils";
+import { writeParamToUrl, writeTabToUrl } from "@/lib/utils/url-tab";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSuggestion, ProfileSearchResult } from "@/types/profile";
@@ -37,6 +39,9 @@ const SEARCH_DEBOUNCE_MS = 300;
 const LEFT_COLUMN_MIN_PX = 380;
 const RIGHT_COLUMN_MIN_PX = 340;
 const SPLIT_STORAGE_KEY = "avm-workspace-split-v2";
+// The search box and pasted text, kept for this browser tab only
+// (sessionStorage), so a refresh brings them — and their results — back.
+const INPUTS_STORAGE_KEY = "avm-workspace-inputs-v1";
 // The redesign's 1.25 : 1 split between "Find tests" and "Quotation".
 const DEFAULT_LEFT_PERCENT = 55.5;
 // Stable references so a missing SWR response doesn't create a new empty
@@ -80,7 +85,15 @@ const segmentClassName = (active: boolean) =>
     active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
   );
 
-export function WorkspaceClient() {
+export type WorkspaceTab = "search" | "paste" | "ai";
+
+export function WorkspaceClient({
+  initialTab = "search",
+  initialServiceType = "all",
+}: {
+  initialTab?: WorkspaceTab;
+  initialServiceType?: ServiceTypeFilter;
+}) {
   const {
     locationId,
     selectedLocation,
@@ -97,8 +110,11 @@ export function WorkspaceClient() {
   // "All" searches both service types at once, grouped in the results —
   // it's a search-time filter only, not a property of the quote itself
   // (each line item already carries its own real ServiceType).
-  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("all");
-  const [tab, setTab] = useState<"search" | "paste" | "ai">("search");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>(initialServiceType);
+  useEffect(() => writeParamToUrl("type", serviceTypeFilter, "all"), [serviceTypeFilter]);
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab);
+  // In the URL, so a refresh stays on this tab.
+  useEffect(() => writeTabToUrl(tab, "search"), [tab]);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [pasteText, setPasteText] = useState("");
@@ -109,6 +125,80 @@ export function WorkspaceClient() {
     setSubmittedPasteText(pasteText.trim());
   }
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore the search box / pasted text after a refresh, then keep saving
+  // them. The first effect runs before the saver, so nothing empty
+  // overwrites the saved copy.
+  const inputsRestoredRef = useRef(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(INPUTS_STORAGE_KEY) ?? "null") as {
+        query?: unknown;
+        pasteText?: unknown;
+        submittedPasteText?: unknown;
+      } | null;
+      if (saved) {
+        if (typeof saved.query === "string") {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of this tab's saved inputs
+          setQuery(saved.query);
+          setDebouncedQuery(saved.query);
+        }
+        if (typeof saved.pasteText === "string") setPasteText(saved.pasteText);
+        if (typeof saved.submittedPasteText === "string") setSubmittedPasteText(saved.submittedPasteText);
+      }
+    } catch {
+      // Storage blocked or unreadable — start empty.
+    }
+    inputsRestoredRef.current = true;
+  }, []);
+  useEffect(() => {
+    if (!inputsRestoredRef.current) return;
+    try {
+      window.sessionStorage.setItem(INPUTS_STORAGE_KEY, JSON.stringify({ query, pasteText, submittedPasteText }));
+    } catch {
+      // Storage blocked — nothing is kept across a refresh.
+    }
+  }, [query, pasteText, submittedPasteText]);
+
+  // Prescription / lab-request image reader (image-reader.ts): an uploaded,
+  // pasted or dropped image is read in the browser and its text goes
+  // through the same reader as a pasted message.
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageReading, setImageReading] = useState(false);
+  const [imageDragOver, setImageDragOver] = useState(false);
+  async function handleImage(image: File) {
+    if (imageReading) return;
+    setTab("paste");
+    setImagePreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return URL.createObjectURL(image);
+    });
+    setImageReading(true);
+    try {
+      const text = await readImageText(image);
+      if (!text) {
+        toast.error("No text found in image");
+        return;
+      }
+      setPasteText(text);
+      setSubmittedPasteText(text);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't read that image");
+    } finally {
+      setImageReading(false);
+    }
+  }
+  // Warm the image reader up as soon as the paste tab opens.
+  useEffect(() => {
+    if (tab === "paste") preloadImageReader();
+  }, [tab]);
+  function clearImage() {
+    setImagePreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return null;
+    });
+  }
   // AI Test Assistant: its own question box and results, separate from the
   // search box and the pasted-message reader.
   const [aiQuestion, setAiQuestion] = useState("");
@@ -202,12 +292,17 @@ export function WorkspaceClient() {
   const activeServiceTypes: readonly ServiceType[] =
     serviceTypeFilter === "all" ? SERVICE_TYPES : [serviceTypeFilter];
   const isActiveServiceType = (type: ServiceType) => activeServiceTypes.includes(type);
+  // An empty search box with In-House or Outsourced picked lists that
+  // service type's full priced catalog (tests + packages, A–Z).
+  const browsing = !trimmedQuery && serviceTypeFilter !== "all";
 
   function useTestSearchResults(type: ServiceType) {
     const key =
-      trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
-        ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
-        : null;
+      browsing && locationId && isActiveServiceType(type)
+        ? `/api/search?${new URLSearchParams({ browse: "1", locationId, serviceType: type })}`
+        : trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
+          ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
+          : null;
     return useSWR<{ results: SearchTestResult[]; isList?: boolean; didYouMean?: string | null }>(key, fetcher);
   }
   function useProfileSearchResults(type: ServiceType) {
@@ -215,9 +310,11 @@ export function WorkspaceClient() {
     // packages are only fetched when that filter is picked on its own.
     const shown = serviceTypeFilter === "all" ? type === "in_house" : isActiveServiceType(type);
     const key =
-      trimmedQuery && !isTestList(trimmedQuery) && locationId && shown
-        ? `/api/profiles?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
-        : null;
+      browsing && locationId && shown
+        ? `/api/profiles?${new URLSearchParams({ browse: "1", locationId, serviceType: type })}`
+        : trimmedQuery && !isTestList(trimmedQuery) && locationId && shown
+          ? `/api/profiles?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
+          : null;
     return useSWR<{ results: ProfileSearchResult[] }>(key, fetcher);
   }
 
@@ -297,7 +394,10 @@ export function WorkspaceClient() {
   const extraction = useMessageExtraction(
     tab === "paste" ? submittedPasteText : searchIsList ? trimmedQuery : "",
     locationId,
-    serviceTypeFilter
+    serviceTypeFilter,
+    // Pasted messages/images are read with Gemini (when set up); a list of
+    // codes typed in the search box keeps the instant rule-based reader.
+    tab === "paste"
   );
 
   // Same free AI for pasted messages: names the reader couldn't recognise.
@@ -349,9 +449,7 @@ export function WorkspaceClient() {
     addLineItem(toTestLine(result));
     // Still added (the agent may be quoting ahead), but flagged right away.
     if (result.availability !== "available") {
-      toast.warning(`${result.code} is ${AVAILABILITY_LABELS[result.availability].toLowerCase()}`, {
-        description: "Added — the quotation flags it before you send.",
-      });
+      toast.warning(`${result.code} added · ${AVAILABILITY_LABELS[result.availability].toLowerCase()}`);
     }
   }
 
@@ -373,6 +471,7 @@ export function WorkspaceClient() {
   // types, in_house before outsource) that isn't already in the quote —
   // lets an agent clear a customer's list without touching the mouse.
   function handleSearchSubmit() {
+    if (browsing) return;
     if (searchIsList) {
       handleAddMany(
         extraction.detected.filter((result) => result.availability === "available" && !addedTestIds.has(result.testId))
@@ -438,7 +537,7 @@ export function WorkspaceClient() {
                   Search tests
                 </button>
                 <button type="button" onClick={() => setTab("paste")} className={segmentClassName(tab === "paste")}>
-                  Paste a message
+                  Paste text or image
                 </button>
               </div>
               {/* Kept apart from the search/paste switch: a separate module,
@@ -458,7 +557,7 @@ export function WorkspaceClient() {
                   aria-hidden
                   className={cn("size-2.5 rotate-45 rounded-[2px]", tab === "ai" ? "bg-primary-foreground" : "bg-primary")}
                 />
-                AI Test Assistant
+                Support Assistant
               </button>
             </div>
             <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
@@ -466,7 +565,13 @@ export function WorkspaceClient() {
 
           {tab === "search" ? (
             <div key="search" className="avm-fade-up [animation-duration:.35s]">
-              <TestSearch value={query} onChange={setQuery} onSubmit={handleSearchSubmit} inputRef={searchInputRef} />
+              <TestSearch
+                value={query}
+                onChange={setQuery}
+                onSubmit={handleSearchSubmit}
+                inputRef={searchInputRef}
+                onPasteImage={handleImage}
+              />
             </div>
           ) : tab === "ai" ? (
             <div key="ai" className="avm-fade-up [animation-duration:.35s]">
@@ -484,6 +589,19 @@ export function WorkspaceClient() {
                 submitPaste();
               }}
               key="paste"
+              onDragOver={(event) => {
+                if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+                event.preventDefault();
+                setImageDragOver(true);
+              }}
+              onDragLeave={() => setImageDragOver(false)}
+              onDrop={(event) => {
+                setImageDragOver(false);
+                const image = imageFromDataTransfer(event.dataTransfer);
+                if (!image) return;
+                event.preventDefault();
+                handleImage(image);
+              }}
               className="flex flex-col gap-2.5 avm-fade-up [animation-duration:.35s]"
             >
               <textarea
@@ -492,6 +610,12 @@ export function WorkspaceClient() {
                   setPasteText(event.target.value);
                   if (!event.target.value.trim()) setSubmittedPasteText("");
                 }}
+                onPaste={(event) => {
+                  const image = imageFromDataTransfer(event.clipboardData);
+                  if (!image) return;
+                  event.preventDefault();
+                  handleImage(image);
+                }}
                 onKeyDown={(event) => {
                   // Enter searches; Shift+Enter is a new line (not mid IME composition).
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -499,12 +623,56 @@ export function WorkspaceClient() {
                     if (pasteText.trim() && !extraction.loading) submitPaste();
                   }
                 }}
-                placeholder="Paste the customer's message, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
+                placeholder="Paste the customer's message or a prescription image, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
                 aria-label="Customer message"
                 autoFocus
-                className="min-h-28 w-full resize-y rounded-[14px] border border-input bg-card px-4 py-3.5 text-[14.5px] leading-relaxed outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15"
+                className={cn(
+                  "min-h-28 w-full resize-y rounded-[14px] border border-input bg-card px-4 py-3.5 text-[14.5px] leading-relaxed outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15",
+                  imageDragOver && "border-primary ring-4 ring-primary/15"
+                )}
               />
-              <div className="flex items-center justify-end gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const image = event.target.files?.[0];
+                    event.target.value = "";
+                    if (image) handleImage(image);
+                  }}
+                />
+                {imagePreview ? (
+                  <div className="relative size-[38px] shrink-0 overflow-hidden rounded-[9px] border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
+                    <img src={imagePreview} alt="Uploaded image" className="size-full object-cover" />
+                    {imageReading ? (
+                      <div className="absolute inset-0 grid place-items-center bg-background/70">
+                        <LoaderCircleIcon className="size-4 animate-spin text-primary" />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label="Remove image"
+                        onClick={clearImage}
+                        className="absolute top-0 right-0 grid size-4 place-items-center rounded-bl-md bg-background/85 text-muted-foreground hover:text-foreground"
+                      >
+                        <XIcon className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={imageReading}
+                  className="flex h-[38px] items-center gap-2 rounded-[11px] border border-border bg-card px-3.5 text-[13.5px] font-medium transition-[transform,translate,scale,rotate,border-color] duration-200 hover:-translate-y-px hover:border-primary active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {imageReading ? <LoaderCircleIcon className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
+                  {imageReading ? "Reading image…" : "Upload image"}
+                </button>
+                <span className="mr-auto" />
                 <span className="text-xs text-muted-foreground">
                   <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> to search ·{" "}
                   <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Shift</kbd> +{" "}
@@ -539,9 +707,10 @@ export function WorkspaceClient() {
           ) : tab === "search" && !searchIsList ? (
             <SearchResults
               query={debouncedQuery}
+              browsing={browsing}
               locationName={selectedLocation?.name ?? null}
               groups={searchGroups}
-              showGroupHeaders={serviceTypeFilter === "all"}
+              showGroupHeaders={serviceTypeFilter === "all" || browsing}
               addedTestIds={addedTestIds}
               addedProfileIds={addedProfileIds}
               onAdd={(result) => {

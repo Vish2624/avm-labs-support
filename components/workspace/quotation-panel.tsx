@@ -124,11 +124,11 @@ export function QuotationPanel({
     try {
       await navigator.clipboard.writeText(whatsappMessage);
     } catch {
-      toast.error("Couldn't copy — select and copy the text manually.");
+      toast.error("Couldn't copy");
       return;
     }
     setCopiedMessage(whatsappMessage);
-    toast.success("Copied to clipboard");
+    toast.success("Copied");
   }
 
   const header = (
