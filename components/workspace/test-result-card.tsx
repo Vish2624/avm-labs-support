@@ -42,6 +42,18 @@ export function AddToggleButton({
   );
 }
 
+/** Green border + tint for a result whose name/code/alias matches the search exactly. */
+export const EXACT_MATCH_ROW_CLASS =
+  "border-success/60 bg-success/[0.06] hover:border-success hover:bg-success/[0.09] dark:border-success/50 dark:bg-success/[0.08]";
+
+export function ExactMatchTag() {
+  return (
+    <span className="rounded-[5px] bg-success/15 px-1.5 py-px text-[10.5px] font-semibold text-success-foreground">
+      EXACT MATCH
+    </span>
+  );
+}
+
 // Single test search result row (name, code, TAT, availability, price, add).
 export function TestResultCard({
   result,
@@ -49,6 +61,7 @@ export function TestResultCard({
   onAdd,
   onRemove,
   index = 0,
+  exact = false,
 }: {
   result: SearchTestResult;
   added: boolean;
@@ -56,6 +69,8 @@ export function TestResultCard({
   onRemove: (testId: string) => void;
   /** Position in the list — staggers the rows' entrance. */
   index?: number;
+  /** The search matched this test exactly — shown with a green border. */
+  exact?: boolean;
 }) {
   const showAlias =
     result.matchType === "alias" &&
@@ -67,6 +82,7 @@ export function TestResultCard({
       className={cn(
         "relative flex items-center gap-3.5 rounded-[14px] border border-transparent px-3 py-[13px] avm-row-in",
         "transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-border hover:bg-card hover:shadow-elevated",
+        exact && EXACT_MATCH_ROW_CLASS,
         result.availability === "unavailable" && "opacity-60"
       )}
       style={{ animationDelay: `${Math.min(index, 10) * 35}ms` }}
@@ -78,6 +94,7 @@ export function TestResultCard({
           <span className="rounded-[5px] bg-muted px-1.5 py-px font-mono text-[11px] text-muted-foreground">
             {result.code}
           </span>
+          {exact ? <ExactMatchTag /> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] text-muted-foreground">
           <span className="whitespace-nowrap">Ready in {formatTat(result.tatText)}</span>

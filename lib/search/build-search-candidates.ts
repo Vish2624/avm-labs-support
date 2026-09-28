@@ -3,6 +3,11 @@ import { matchScore } from "./fuzzy-match";
 import type { SearchCandidate } from "./rank-results";
 import type { Test, TestAlias } from "@/types/test";
 
+/** The only test fields matching reads — full Test rows fit, and so does the browser's slimmed-down catalog. */
+export type SearchableTest = Pick<Test, "id" | "code" | "officialName" | "shortName">;
+/** The only alias fields matching reads. */
+export type SearchableAlias = Pick<TestAlias, "testId" | "alias" | "normalizedAlias" | "confidence">;
+
 /** Below this matchScore(), a fuzzy candidate is noise, not a real typo-tolerant match. */
 export const FUZZY_THRESHOLD = 0.45;
 
@@ -17,8 +22,8 @@ const compact = (value: string) => value.replace(/\s+/g, "");
  */
 export function buildSearchCandidates(
   normalizedQuery: string,
-  tests: Test[],
-  aliases: TestAlias[]
+  tests: SearchableTest[],
+  aliases: SearchableAlias[]
 ): SearchCandidate[] {
   const candidates: SearchCandidate[] = [];
   const queryCompact = compact(normalizedQuery);

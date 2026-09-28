@@ -1,9 +1,10 @@
 import "server-only";
 import { normalizeQuery } from "@/lib/search/normalize-query";
-import { loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
+import { listOrder, loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
 import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
 import { answerTestQuestionWithGemini, geminiConfigured, recommendWithGemini } from "./gemini-engine";
+import { answerAvailability } from "./availability-answer";
 import {
   builtinAnswer,
   componentsAnswer,
@@ -131,6 +132,11 @@ export async function recommendTests(
   // "lipid profile"); Gemini gets the agent's own words and copes with typos.
   const question = await correctSpelling(rawQuestion, catalog);
 
+  // "Is X available?" — a yes with price/report time, or "not available"
+  // plus the closest tests we do offer. Only from our records.
+  const availability = await answerAvailability(question, catalog, locationId, serviceTypes);
+  if (availability) return { ...base, ...availability };
+
   const testQuestion = await answerTestQuestion(question, catalog, null);
   if (testQuestion) return { ...base, ...testQuestion };
 
@@ -207,7 +213,8 @@ export async function recommendTests(
     answer: null,
     topic: guide.topicLabel,
     intent: guide.intent,
-    results: guide.results,
+    // Tests, then profiles, then packages.
+    results: [...guide.results].sort((a, b) => listOrder(a) - listOrder(b)),
     unavailableNote: unavailableNote(guide.unavailable),
     engine: "builtin",
     sources: [],

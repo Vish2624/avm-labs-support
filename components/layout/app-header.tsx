@@ -116,6 +116,7 @@ export function AppHeader({ user }: { user: AuthUser }) {
                   <DropdownMenuRadioItem
                     key={location.id}
                     value={location.id}
+                    closeOnClick
                     style={locationColor(location.code)}
                     className="h-9 cursor-pointer gap-2.5 pr-9 font-medium data-checked:bg-(--loc)/10 data-checked:text-(--loc)"
                   >

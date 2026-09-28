@@ -1,16 +1,17 @@
 import "server-only";
 import { READER_MODELS, geminiGenerate } from "@/lib/ai/gemini";
 import { browseProfiles, browseTests } from "./browse-catalog";
+import { isPackageName } from "./is-package-name";
 import type { ServiceType } from "@/lib/constants/service-types";
 
 /** Marks a requested item that isn't in the catalog list, as the customer wrote it. */
 const NOT_LISTED = "?";
 
-const INSTRUCTIONS = `You help a diagnostic lab's support agent. Below is a customer's message (or a prescription's text) and the lab's list of tests and packages at this branch, one per line as "CODE | name".
+const INSTRUCTIONS = `You help a diagnostic lab's support agent. Below is a customer's message (or a prescription's text) and the lab's list of tests and profiles at this branch, one per line as "CODE | name".
 
-Find every lab test, profile or package the customer is asking for, and reply with one line per item:
+Find every lab test or profile the customer is asking for, and reply with one line per item:
 - If it is in the list, write its CODE exactly as listed. Match by meaning, not only spelling: abbreviations, common names, typos and other languages all count ("sugar test" = fasting blood sugar, "RFT" = kidney function tests, "vit d" = vitamin D, "thyroid" = the thyroid profile if listed).
-- Prefer a package when the customer names a package or profile ("lipid profile", "full body checkup"); otherwise the single test.
+- Prefer a profile when the customer names a profile or panel ("lipid profile", "kidney function"); otherwise the single test.
 - If it is NOT in the list, write "${NOT_LISTED}" followed by the name as the customer wrote it (e.g. "${NOT_LISTED}Vitamin K").
 - Split combined items ("vit D and B12" = two lines). Never repeat an item.
 Ignore everything that is not a test request: greetings, names, dates, prices, questions about timing or home collection, symptoms, medicines.
@@ -33,7 +34,7 @@ export async function aiListRequestedTests(
   locationId: string,
   serviceTypes: readonly ServiceType[]
 ): Promise<{ codes: string; notListed: string[] } | null> {
-  const catalogLines = await catalogListing(locationId, serviceTypes);
+  const catalogLines = await catalogListing(locationId, serviceTypes, false);
   if (catalogLines.length === 0) return null;
 
   const reply = await geminiGenerate([
@@ -68,9 +69,11 @@ Only use codes from the list, copied exactly. If nothing fits, reply with nothin
 export async function aiSearchCatalog(
   query: string,
   locationId: string,
-  serviceTypes: readonly ServiceType[]
+  serviceTypes: readonly ServiceType[],
+  /** The Support Assistant may suggest packages; the search box never does. */
+  includePackages: boolean
 ): Promise<string | null> {
-  const catalogLines = await catalogListing(locationId, serviceTypes);
+  const catalogLines = await catalogListing(locationId, serviceTypes, includePackages);
   if (catalogLines.length === 0) return null;
 
   const reply = await geminiGenerate(
@@ -93,17 +96,27 @@ function replyLines(reply: string): string[] {
     .filter(Boolean);
 }
 
-/** "CODE | name" for every test and package priced here (the catalog cache makes this cheap). */
-async function catalogListing(locationId: string, serviceTypes: readonly ServiceType[]): Promise<string[]> {
+/**
+ * "CODE | name" for every test and profile priced here (the catalog cache
+ * makes this cheap) — and packages too only with `includePackages` (the
+ * Support Assistant); the paste reader never offers packages.
+ */
+async function catalogListing(
+  locationId: string,
+  serviceTypes: readonly ServiceType[],
+  includePackages: boolean
+): Promise<string[]> {
   const catalogs = await Promise.all(
     serviceTypes.map(async (serviceType) => {
-      const [tests, packages] = await Promise.all([
+      const [tests, profiles] = await Promise.all([
         browseTests(locationId, serviceType),
         browseProfiles(locationId, serviceType),
       ]);
       return [
         ...tests.map((test) => `${test.code} | ${test.officialName}${test.shortName ? ` (${test.shortName})` : ""}`),
-        ...packages.map((pkg) => `${pkg.code} | ${pkg.name} (package)`),
+        ...profiles
+          .filter((profile) => includePackages || !isPackageName(profile.name))
+          .map((profile) => `${profile.code} | ${profile.name} (${isPackageName(profile.name) ? "package" : "profile"})`),
       ];
     })
   );

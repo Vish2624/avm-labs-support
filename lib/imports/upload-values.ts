@@ -69,5 +69,5 @@ export function splitList(text: string | undefined): string[] {
 /** Formats a minor-unit amount back to the sheet's major unit, for previews. */
 export function formatMajor(amount: number, currencyCode: string): string {
   const digits = getCurrencyFractionDigits(currencyCode);
-  return `${currencyCode} ${(amount / 10 ** digits).toFixed(digits)}`;
+  return `${(amount / 10 ** digits).toFixed(digits)} ${currencyCode}`;
 }

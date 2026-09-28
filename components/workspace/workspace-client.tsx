@@ -5,9 +5,11 @@ import { ImageIcon, LoaderCircleIcon, SearchIcon, XIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
-import { TestSearch } from "./test-search";
+import { TestSearch, looksLikeMessage } from "./test-search";
 import { SearchResults, type SearchResultGroup } from "./search-results";
-import { useSemanticMessageMatches, useSemanticSearch } from "./use-semantic-search";
+import { useSemanticMessageMatches } from "./use-semantic-search";
+import { isPackageName } from "@/lib/search/is-package-name";
+import { searchCatalogProfiles, searchCatalogTests, type SearchCatalog } from "@/lib/search/search-catalog";
 import { MessageExtractionResults, useMessageExtraction } from "./message-extractor";
 import { QuotationPanel } from "./quotation-panel";
 import { PackageSuggestions } from "./package-suggestions";
@@ -19,7 +21,6 @@ import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
 import { SERVICE_TYPES, type ServiceType, type ServiceTypeFilter } from "@/lib/constants/service-types";
-import { isTestList } from "@/lib/search/split-test-list";
 import { cn } from "@/lib/utils";
 import { writeParamToUrl, writeTabToUrl } from "@/lib/utils/url-tab";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
@@ -32,7 +33,14 @@ import type {
   QuotationTestLine,
 } from "@/types/quotation";
 
-const SEARCH_DEBOUNCE_MS = 300;
+// Search runs locally in the browser now, so only a short pause is needed.
+const SEARCH_DEBOUNCE_MS = 120;
+/** How often the loaded search catalog is refreshed in the background (so price changes come through). */
+const CATALOG_REFRESH_MS = 2 * 60_000;
+/** A profile whose own name matches the search at least this well (0-100) counts as an exact match. */
+const EXACT_PROFILE_SCORE = 90;
+/** Gemini is only asked for searches at least this long (not "t", "ts"). */
+const AI_SEARCH_MIN_LENGTH = 3;
 // Floors for the draggable column split — matches the columns' own min-w
 // classes so the divider never drags a column below where its content
 // (buttons, filters) would start wrapping badly.
@@ -47,6 +55,58 @@ const DEFAULT_LEFT_PERCENT = 55.5;
 // Stable references so a missing SWR response doesn't create a new empty
 // array every render — that would retrigger effects keyed on these values.
 const EMPTY_PROFILE_SUGGESTIONS: ProfileSuggestion[] = [];
+
+/**
+ * One service type's search results, computed in the browser from its
+ * loaded catalog (see useSearchCatalog in WorkspaceClient): the full A–Z
+ * list when browsing, otherwise the fuzzy matches for `query`.
+ */
+function useCatalogGroup(
+  type: ServiceType,
+  catalogSwr: { data?: SearchCatalog; error?: unknown },
+  { wanted, browsing, query, showProfiles }: { wanted: boolean; browsing: boolean; query: string; showProfiles: boolean }
+): SearchResultGroup {
+  const catalog = catalogSwr.data;
+  const tests = useMemo(
+    () => (!catalog || !wanted ? EMPTY_TEST_RESULTS : browsing ? catalog.priced : searchCatalogTests(query, catalog)),
+    [catalog, wanted, browsing, query]
+  );
+  const profiles = useMemo(
+    () =>
+      !catalog || !wanted || !showProfiles
+        ? EMPTY_PROFILE_RESULTS
+        : browsing
+          ? catalog.profiles
+          : searchCatalogProfiles(query, catalog),
+    [catalog, wanted, browsing, showProfiles, query]
+  );
+  const loading = wanted && !catalog && !catalogSwr.error;
+  return {
+    serviceType: type,
+    tests,
+    testsLoading: loading,
+    testsError: catalogSwr.error instanceof Error ? catalogSwr.error.message : null,
+    didYouMean: null,
+    profiles,
+    profilesLoading: loading && showProfiles,
+  };
+}
+
+/**
+ * From profiles already ranked by match (best first): the top match, plus
+ * the cheapest profile among those covering the most selected tests when
+ * that's a different one. Same-currency prices only (they all come from one
+ * location + service type).
+ */
+function pickTopAndCheapest(ranked: ProfileSuggestion[]): ProfileSuggestion[] {
+  const [top] = ranked;
+  if (!top) return EMPTY_PROFILE_SUGGESTIONS;
+  const bestCoverage = Math.max(...ranked.map((suggestion) => suggestion.matchedCount));
+  const cheapest = ranked
+    .filter((suggestion) => suggestion.matchedCount === bestCoverage)
+    .reduce((low, suggestion) => (suggestion.price.amount < low.price.amount ? suggestion : low));
+  return cheapest.profileId === top.profileId ? [top] : [top, cheapest];
+}
 const EMPTY_TEST_RESULTS: SearchTestResult[] = [];
 const EMPTY_PROFILE_RESULTS: ProfileSearchResult[] = [];
 const EMPTY_TOKENS: string[] = [];
@@ -123,6 +183,13 @@ export function WorkspaceClient({
   const [submittedPasteText, setSubmittedPasteText] = useState("");
   function submitPaste() {
     setSubmittedPasteText(pasteText.trim());
+  }
+  // A message or list pasted into the search box opens the paste tab and
+  // is read right away.
+  function handlePastedMessage(text: string) {
+    setTab("paste");
+    setPasteText(text);
+    setSubmittedPasteText(text);
   }
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -285,126 +352,170 @@ export function WorkspaceClient({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Live search — conditional SWR key delays the request until there's a
-  // query. "All" fetches both service types (tests + packages, so 4
-  // requests) and groups them; a single filter only fetches that type's 2.
+  // Pasting anywhere on the page while not typing in a box: an image or a
+  // message goes to the paste tab and is read; a short name is searched.
+  const pasteHandlersRef = useRef({ handleImage, handlePastedMessage });
+  useEffect(() => {
+    pasteHandlersRef.current = { handleImage, handlePastedMessage };
+  });
+  useEffect(() => {
+    function handlePaste(event: ClipboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target && (/INPUT|TEXTAREA|SELECT/.test(target.tagName) || target.isContentEditable)) return;
+      const image = imageFromDataTransfer(event.clipboardData);
+      const text = event.clipboardData?.getData("text").trim() ?? "";
+      if (!image && !text) return;
+      event.preventDefault();
+      if (image) pasteHandlersRef.current.handleImage(image);
+      else if (looksLikeMessage(text)) pasteHandlersRef.current.handlePastedMessage(text);
+      else {
+        setTab("search");
+        setQuery(text);
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+
   const trimmedQuery = debouncedQuery.trim();
   const activeServiceTypes: readonly ServiceType[] =
     serviceTypeFilter === "all" ? SERVICE_TYPES : [serviceTypeFilter];
   const isActiveServiceType = (type: ServiceType) => activeServiceTypes.includes(type);
   // An empty search box with In-House or Outsourced picked lists that
-  // service type's full priced catalog (tests + packages, A–Z).
+  // service type's full priced catalog (tests + profiles, A–Z).
   const browsing = !trimmedQuery && serviceTypeFilter !== "all";
 
-  function useTestSearchResults(type: ServiceType) {
+  // Instant search: each location + service type's catalog (tests, aliases,
+  // priced tests and profiles) is loaded into the browser once — right when
+  // the page opens, not on the first keystroke — and every keystroke is
+  // searched locally (lib/search/search-catalog.ts), with the same fuzzy
+  // matching as the server and no request per keystroke. Refreshed in the
+  // background so price changes still come through.
+  function useSearchCatalog(type: ServiceType) {
     const key =
-      browsing && locationId && isActiveServiceType(type)
-        ? `/api/search?${new URLSearchParams({ browse: "1", locationId, serviceType: type })}`
-        : trimmedQuery && !isTestList(trimmedQuery) && locationId && isActiveServiceType(type)
-          ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
-          : null;
-    return useSWR<{ results: SearchTestResult[]; isList?: boolean; didYouMean?: string | null }>(key, fetcher);
+      locationId && isActiveServiceType(type)
+        ? `/api/search/catalog?${new URLSearchParams({ locationId, serviceType: type })}`
+        : null;
+    return useSWR<SearchCatalog>(key, fetcher, { refreshInterval: CATALOG_REFRESH_MS, keepPreviousData: false });
   }
-  function useProfileSearchResults(type: ServiceType) {
-    // "All" lists in-house packages only (see SearchResults), so outsourced
-    // packages are only fetched when that filter is picked on its own.
-    const shown = serviceTypeFilter === "all" ? type === "in_house" : isActiveServiceType(type);
-    const key =
-      browsing && locationId && shown
-        ? `/api/profiles?${new URLSearchParams({ browse: "1", locationId, serviceType: type })}`
-        : trimmedQuery && !isTestList(trimmedQuery) && locationId && shown
-          ? `/api/profiles?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: type })}`
-          : null;
-    return useSWR<{ results: ProfileSearchResult[] }>(key, fetcher);
-  }
+  const inHouseCatalog = useSearchCatalog("in_house");
+  const outsourceCatalog = useSearchCatalog("outsource");
+  // "All" lists in-house profiles only (see SearchResults).
+  const profilesShown = (type: ServiceType) =>
+    serviceTypeFilter === "all" ? type === "in_house" : isActiveServiceType(type);
 
-  const inHouseTests = useTestSearchResults("in_house");
-  const outsourceTests = useTestSearchResults("outsource");
-  const inHouseProfiles = useProfileSearchResults("in_house");
-  const outsourceProfiles = useProfileSearchResults("outsource");
+  const inHouseGroup = useCatalogGroup("in_house", inHouseCatalog, {
+    wanted: isActiveServiceType("in_house") && (browsing || Boolean(trimmedQuery)),
+    browsing,
+    query: trimmedQuery,
+    showProfiles: profilesShown("in_house"),
+  });
+  const outsourceGroup = useCatalogGroup("outsource", outsourceCatalog, {
+    wanted: isActiveServiceType("outsource") && (browsing || Boolean(trimmedQuery)),
+    browsing,
+    query: trimmedQuery,
+    showProfiles: profilesShown("outsource"),
+  });
+
+  // "Did you mean …?" comes from the server's spelling helper — asked only
+  // when the local search found nothing at all.
+  const nothingFound =
+    !browsing &&
+    Boolean(trimmedQuery) &&
+    [inHouseGroup, outsourceGroup].every(
+      (group) => !group.testsLoading && group.tests.length === 0 && group.profiles.length === 0
+    );
+  const { data: correction } = useSWR<{ didYouMean?: string | null }>(
+    nothingFound && locationId
+      ? `/api/search?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: activeServiceTypes[0] })}`
+      : null,
+    fetcher,
+    { shouldRetryOnError: false }
+  );
+  const didYouMean = nothingFound ? (correction?.didYouMean ?? null) : null;
 
   const groupDataByType: Record<ServiceType, SearchResultGroup> = {
-    in_house: {
-      serviceType: "in_house",
-      tests: inHouseTests.data?.results ?? EMPTY_TEST_RESULTS,
-      testsLoading: inHouseTests.isLoading,
-      testsError: inHouseTests.error instanceof Error ? inHouseTests.error.message : null,
-      didYouMean: inHouseTests.data?.didYouMean ?? null,
-      profiles: inHouseProfiles.data?.results ?? EMPTY_PROFILE_RESULTS,
-      profilesLoading: inHouseProfiles.isLoading,
-    },
-    outsource: {
-      serviceType: "outsource",
-      tests: outsourceTests.data?.results ?? EMPTY_TEST_RESULTS,
-      testsLoading: outsourceTests.isLoading,
-      testsError: outsourceTests.error instanceof Error ? outsourceTests.error.message : null,
-      didYouMean: outsourceTests.data?.didYouMean ?? null,
-      profiles: outsourceProfiles.data?.results ?? EMPTY_PROFILE_RESULTS,
-      profilesLoading: outsourceProfiles.isLoading,
-    },
+    in_house: { ...inHouseGroup, didYouMean },
+    outsource: { ...outsourceGroup, didYouMean },
   };
-  const searchGroups = activeServiceTypes.map((type) => groupDataByType[type]);
-
-  // Free in-browser AI fallback (use-semantic-search.ts): only once the fast
-  // rule-based results are in and none of them is a strong hit (an exact test, an alias typed in full, or a
-  // package whose own name matches) — so common searches never wait on it.
-  const ruleResultsLoaded = searchGroups.every((group) => !group.testsLoading && !group.profilesLoading);
+  // What the search shows: tests and profiles only — never packages (the
+  // Support Assistant and the Packages page still show those). When
+  // something matches exactly — a test's code/name, an alias typed in full,
+  // or a profile's own name — only the exact match(es), not the lookalikes;
+  // with no exact match, the closest names.
   const queryCompact = trimmedQuery.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const strongRuleHit = searchGroups.some(
-    (group) =>
-      group.tests.some(
-        (result) =>
-          result.matchType === "exact" ||
-          (result.matchedAlias !== null && result.matchedAlias.toLowerCase().replace(/[^a-z0-9]/g, "") === queryCompact)
-      ) || group.profiles.some((result) => (result.nameScore ?? 0) >= 90)
-  );
-  const semanticEnabled =
-    tab === "search" &&
-    trimmedQuery.length >= 3 &&
-    !isTestList(trimmedQuery) &&
-    !inHouseTests.data?.isList &&
-    !outsourceTests.data?.isList &&
-    Boolean(locationId) &&
-    ruleResultsLoaded &&
-    !strongRuleHit;
-  const aiState = useSemanticSearch(trimmedQuery, semanticEnabled, locationId, serviceTypeFilter);
+  const isExactTest = (result: SearchTestResult) =>
+    result.matchType === "exact" ||
+    (result.matchedAlias !== null && result.matchedAlias.toLowerCase().replace(/[^a-z0-9]/g, "") === queryCompact);
+  const isExactProfile = (result: ProfileSearchResult) => (result.nameScore ?? 0) >= EXACT_PROFILE_SCORE;
+  const rawGroups = activeServiceTypes.map((type) => {
+    const group = groupDataByType[type];
+    return { ...group, profiles: group.profiles.filter((result) => !isPackageName(result.name)) };
+  });
+  const anyExact =
+    !browsing &&
+    rawGroups.some((group) => group.tests.some(isExactTest) || group.profiles.some(isExactProfile));
+  const fuzzyGroups = anyExact
+    ? rawGroups.map((group) => ({
+        ...group,
+        tests: group.tests.filter(isExactTest),
+        profiles: group.profiles.filter(isExactProfile),
+      }))
+    : rawGroups;
 
-  // A search-box query holding several tests ("ACCP, ALKP, AMYL, ...") is
-  // read like a pasted message — every test in it, not one fuzzy match for
-  // the whole string. "All" prefers each test's in-house price and falls
-  // back to outsourced.
-  // Tests separated only by spaces ("TSH T3 T4") have no separator to spot
-  // here, so the search API says when the query names several tests.
-  const serverSaysList = Boolean(inHouseTests.data?.isList || outsourceTests.data?.isList);
-  const searchIsList = tab === "search" && (isTestList(trimmedQuery) || serverSaysList);
+  // Fuzzy search first; only when it finds nothing at all is Gemini asked
+  // (/api/search/ai — tests and profiles only, priced from the DB).
+  const fuzzyLoaded = fuzzyGroups.every((group) => !group.testsLoading && !group.profilesLoading);
+  const fuzzyEmpty =
+    fuzzyLoaded && fuzzyGroups.every((group) => group.tests.length === 0 && group.profiles.length === 0 && !group.testsError);
+  const aiSearchKey =
+    tab === "search" && !browsing && trimmedQuery.length >= AI_SEARCH_MIN_LENGTH && locationId && fuzzyEmpty
+      ? `/api/search/ai?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: serviceTypeFilter })}`
+      : null;
+  const { data: aiSearch, isLoading: aiSearchLoading } = useSWR<{
+    tests: SearchTestResult[];
+    profiles: ProfileSearchResult[];
+  }>(aiSearchKey, fetcher, { shouldRetryOnError: false, revalidateOnFocus: false });
+  const aiFound = Boolean(aiSearchKey && aiSearch && aiSearch.tests.length + aiSearch.profiles.length > 0);
+  const searchGroups: SearchResultGroup[] =
+    aiSearchKey && aiSearchLoading
+      ? fuzzyGroups.map((group) => ({ ...group, testsLoading: true }))
+      : aiFound && aiSearch
+        ? activeServiceTypes.map((type) => ({
+            ...groupDataByType[type],
+            tests: aiSearch.tests.filter((result) => result.serviceType === type),
+            profiles: aiSearch.profiles.filter((result) => result.serviceType === type),
+            didYouMean: null,
+          }))
+        : fuzzyGroups;
 
   // Missed-search log for the admin (use-search-telemetry.ts): what agents
-  // pick, and what they search for and fail to find. "All" can list a test
-  // under both service types, so a pick's rank counts each test once.
-  const rankedTestIds = [...new Set(searchGroups.flatMap((group) => group.tests.map((result) => result.testId)))];
-  const ruleProfileCount = new Set(searchGroups.flatMap((group) => group.profiles.map((result) => result.profileId))).size;
+  // pick, and what they search for and fail to find — judged on the fuzzy
+  // search, so a search only the AI could answer still shows up as a miss
+  // (worth an alias). "All" can list a test under both service types, so a
+  // pick's rank counts each test once.
+  const rankedTestIds = [...new Set(fuzzyGroups.flatMap((group) => group.tests.map((result) => result.testId)))];
+  const ruleProfileCount = new Set(fuzzyGroups.flatMap((group) => group.profiles.map((result) => result.profileId))).size;
   const searchTelemetry = useSearchTelemetry({
     query: trimmedQuery,
-    enabled: tab === "search" && !searchIsList,
-    loaded: ruleResultsLoaded,
+    enabled: tab === "search",
+    loaded: fuzzyLoaded,
     resultCount: rankedTestIds.length + ruleProfileCount,
     rankedTestIds,
     locationId: locationId || null,
   });
-  const extraction = useMessageExtraction(
-    tab === "paste" ? submittedPasteText : searchIsList ? trimmedQuery : "",
-    locationId,
-    serviceTypeFilter,
-    // Pasted messages/images are read with Gemini (when set up); a list of
-    // codes typed in the search box keeps the instant rule-based reader.
-    tab === "paste"
-  );
+  // The search box is for typed searches only; lists, messages and images
+  // go through the "Paste text or image" tab.
+  const extraction = useMessageExtraction(tab === "paste" ? submittedPasteText : "", locationId, serviceTypeFilter, true);
 
   // Same free AI for pasted messages: names the reader couldn't recognise.
   const messageAi = useSemanticMessageMatches(
     extraction.loading ? EMPTY_TOKENS : extraction.unmatched,
     locationId,
-    serviceTypeFilter
+    serviceTypeFilter,
+    // Only as a backup when Gemini didn't read the message.
+    extraction.readBy === "rules"
   );
 
   const testLines = useMemo(
@@ -431,11 +542,15 @@ export function WorkspaceClient({
     () => new Set(lineItems.flatMap((item) => (item.kind === "package" ? [item.profileId] : []))),
     [lineItems]
   );
-  // A package that's already on the quote isn't worth suggesting again.
+  // Profiles (never packages) covering the tests on the quote — just two:
+  // the top match, and the cheapest profile among those covering the most
+  // of the selected tests. One already on the quote isn't suggested again.
   const profileSuggestions = useMemo(
     () =>
-      (profileData?.results ?? EMPTY_PROFILE_SUGGESTIONS).filter(
-        (suggestion) => !addedProfileIds.has(suggestion.profileId)
+      pickTopAndCheapest(
+        (profileData?.results ?? EMPTY_PROFILE_SUGGESTIONS).filter(
+          (suggestion) => !addedProfileIds.has(suggestion.profileId) && !isPackageName(suggestion.name)
+        )
       ),
     [profileData, addedProfileIds]
   );
@@ -472,12 +587,6 @@ export function WorkspaceClient({
   // lets an agent clear a customer's list without touching the mouse.
   function handleSearchSubmit() {
     if (browsing) return;
-    if (searchIsList) {
-      handleAddMany(
-        extraction.detected.filter((result) => result.availability === "available" && !addedTestIds.has(result.testId))
-      );
-      return;
-    }
     for (const group of searchGroups) {
       const next = group.tests.find((result) => !addedTestIds.has(result.testId));
       if (next) {
@@ -570,6 +679,7 @@ export function WorkspaceClient({
                 onChange={setQuery}
                 onSubmit={handleSearchSubmit}
                 inputRef={searchInputRef}
+                onPasteMessage={handlePastedMessage}
                 onPasteImage={handleImage}
               />
             </div>
@@ -699,15 +809,20 @@ export function WorkspaceClient({
               error={aiAssistant.error}
               response={aiAssistant.response}
               locationName={selectedLocation?.name ?? null}
-              onOpenInSearch={(lookup) => {
-                setQuery(lookup);
-                setTab("search");
+              onOpenInSearch={(codes) => {
+                // The selected tests' codes, read (with prices) by the paste reader.
+                setPasteText(codes);
+                setSubmittedPasteText(codes);
+                setTab("paste");
               }}
             />
-          ) : tab === "search" && !searchIsList ? (
+          ) : tab === "search" ? (
             <SearchResults
               query={debouncedQuery}
               browsing={browsing}
+              aiFound={aiFound}
+              aiSearching={Boolean(aiSearchKey && aiSearchLoading)}
+              exactMatch={anyExact}
               locationName={selectedLocation?.name ?? null}
               groups={searchGroups}
               showGroupHeaders={serviceTypeFilter === "all" || browsing}
@@ -721,11 +836,10 @@ export function WorkspaceClient({
               onAddPackage={(result) => applyPackage(toPackageLine(result))}
               onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
               onSuggestion={setQuery}
-              ai={aiState}
             />
           ) : (
             <MessageExtractionResults
-              text={tab === "paste" ? submittedPasteText : trimmedQuery}
+              text={submittedPasteText}
               detected={extraction.detected}
               packages={extraction.packages}
               notOffered={extraction.notOffered}

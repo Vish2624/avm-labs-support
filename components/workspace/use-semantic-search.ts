@@ -5,24 +5,16 @@ import { getEngineStatus, scoreQuery, startSemanticEngine, subscribeEngine, toMa
 import type { SemanticConfidence, SemanticMatch, SemanticSearchItem } from "@/lib/search/semantic-search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 
-const MAX_MATCHES = 6;
 /** Candidates tried per unrecognised name in a pasted message. */
 const CANDIDATES_PER_NAME = 3;
-/** Start loading the model this long after the Quote screen opens, so the page itself loads first. */
-const PRELOAD_DELAY_MS = 4000;
-
-export interface SemanticSearchState {
-  /** First run only: the model and catalog are still being prepared in the browser. */
-  preparing: boolean;
-  loading: boolean;
-  items: SemanticSearchItem[];
-}
+/** Start loading the model this long after it's first wanted, so the page itself settles first. */
+const PRELOAD_DELAY_MS = 1000;
 
 /**
  * The shared in-browser model's status, starting it shortly after `wanted`
- * turns true. It's only wanted once the server has said Gemini isn't set
- * up — otherwise Gemini does this job and the ~23 MB model and catalog
- * indexing would just cost every agent's computer bandwidth and CPU.
+ * turns true. It's only wanted when Gemini didn't read a pasted message —
+ * otherwise the ~23 MB model and catalog indexing would just cost every
+ * agent's computer bandwidth and CPU.
  */
 function useEngine(wanted: boolean) {
   useEffect(() => {
@@ -48,82 +40,6 @@ async function priceMatches(matches: SemanticMatch[], locationId: string, servic
   return [];
 }
 
-/** Extra pause after typing stops before asking Gemini, so it isn't called for every half-typed word. */
-const GEMINI_SEARCH_DELAY_MS = 350;
-/** Set once the server says Gemini isn't set up — the in-browser model is used from then on. */
-let geminiSearchMissing = false;
-
-/** Gemini's picks for a search (/api/search/ai), priced; null when it isn't set up or failed. */
-async function geminiSearch(query: string, locationId: string, serviceType: ServiceTypeFilter) {
-  try {
-    const response = await fetch("/api/search/ai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ q: query, locationId, serviceType }),
-    });
-    if (response.status === 501) geminiSearchMissing = true;
-    if (!response.ok) return null;
-    return ((await response.json()) as { items: SemanticSearchItem[] }).items.slice(0, MAX_MATCHES);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * AI fallback for the Quote search box, used when the rule-based search
- * has no strong hit (`enabled`). Gemini (free-tier key) picks catalog items
- * by meaning — "hair fall", "sugr tst" — and the server prices them from
- * the DB. Without a key, or if Gemini fails, the free in-browser model
- * (semantic-engine.ts) does the same job, less well. Returns null when not
- * asked, or when no AI is available (search just stays rule-based).
- */
-export function useSemanticSearch(
-  query: string,
-  enabled: boolean,
-  locationId: string,
-  serviceType: ServiceTypeFilter
-): SemanticSearchState | null {
-  const useGemini = !geminiSearchMissing;
-  const status = useEngine(!useGemini);
-  const [result, setResult] = useState<{ key: string; items: SemanticSearchItem[] } | null>(null);
-
-  const trimmed = query.trim();
-  const key = enabled && trimmed && locationId ? JSON.stringify([trimmed.toLowerCase(), locationId, serviceType]) : null;
-  // With Gemini, the in-browser model's loading status is irrelevant — don't
-  // re-run (and re-ask Gemini) when it changes.
-  const modelStatus = useGemini ? "unused" : status;
-
-  useEffect(() => {
-    if (!key) return;
-    if (!useGemini && modelStatus !== "ready") return;
-    let cancelled = false;
-    const timer = window.setTimeout(
-      async () => {
-        let items = useGemini ? await geminiSearch(trimmed, locationId, serviceType) : null;
-        if (items === null) {
-          // Gemini unavailable: the in-browser model, if it's loaded.
-          const scored = getEngineStatus() === "ready" ? await scoreQuery(trimmed, MAX_MATCHES * 2) : null;
-          items = scored ? await priceMatches(toMatches(scored, MAX_MATCHES), locationId, serviceType) : [];
-        }
-        if (!cancelled) setResult({ key, items });
-      },
-      useGemini ? GEMINI_SEARCH_DELAY_MS : 0
-    );
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [key, useGemini, modelStatus, trimmed, locationId, serviceType]);
-
-  if (!key) return null;
-  if (!useGemini) {
-    if (status === "idle" || status === "failed") return null;
-    if (status === "preparing") return { preparing: true, loading: true, items: [] };
-  }
-  const done = result?.key === key;
-  return { preparing: false, loading: !done, items: done ? result.items : [] };
-}
-
 export interface MessageAiMatch {
   /** The name as written in the message. */
   token: string;
@@ -138,23 +54,24 @@ export interface MessageAiState {
 }
 
 /**
- * Free AI fallback for "Paste text or image" when Gemini isn't set up: each
- * name the rule-based reader couldn't recognise (`unmatched`) is matched by
- * meaning to its single best catalog item — a test or a package — then
- * priced from the DB. Names the model can't place with any confidence stay
- * in "Not in our test list". With Gemini, the paste reader already matched
- * by meaning, so this stays off.
+ * Free in-browser AI backup for "Paste text or image", used only when
+ * Gemini didn't read the message (`enabled` — no key, or Gemini failed):
+ * each name the rule-based reader couldn't recognise (`unmatched`) is
+ * matched by meaning to its single best catalog item — a test or a
+ * package — then priced from the DB. Names the model can't place with any
+ * confidence stay in "Not in our test list".
  */
 export function useSemanticMessageMatches(
   unmatched: string[],
   locationId: string,
-  serviceType: ServiceTypeFilter
+  serviceType: ServiceTypeFilter,
+  enabled: boolean
 ): MessageAiState | null {
-  const wanted = geminiSearchMissing;
+  const wanted = enabled && unmatched.length > 0;
   const status = useEngine(wanted);
   const [result, setResult] = useState<{ key: string; matches: MessageAiMatch[] } | null>(null);
 
-  const key = wanted && unmatched.length > 0 && locationId ? JSON.stringify([unmatched, locationId, serviceType]) : null;
+  const key = wanted && locationId ? JSON.stringify([unmatched, locationId, serviceType]) : null;
 
   useEffect(() => {
     if (!key || status !== "ready") return;

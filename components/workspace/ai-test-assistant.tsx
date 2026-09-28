@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CopyIcon, ExternalLinkIcon, SearchIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +10,7 @@ import { formatTat } from "@/lib/utils/format-tat";
 import { AvailabilityPill } from "./availability-pill";
 import { resultsTitleClassName } from "./search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
+import { isPackageName } from "@/lib/search/is-package-name";
 import type { AiAnswer, AiAssistantResponse, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
 
@@ -29,31 +30,50 @@ export function useAiAssistant(locationId: string, serviceType: ServiceTypeFilte
     response: AiAssistantResponse | null;
     /** The location + filter the response was priced for. */
     key: string | null;
-  }>({ loading: false, error: null, response: null, key: null });
+    /** The last question asked, re-asked when the location/filter changes. */
+    question: string | null;
+  }>({ loading: false, error: null, response: null, key: null, question: null });
   const key = JSON.stringify([locationId, serviceType]);
+  // Only the latest request may update the answer — a slow reply for the
+  // previous location must never overwrite the new one.
+  const requestIdRef = useRef(0);
 
-  async function ask(question: string) {
-    const trimmed = question.trim();
-    if (!trimmed || !locationId) return;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const response = await fetch("/api/ai-assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, locationId, serviceType }),
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `Request failed (${response.status})`);
+  const ask = useCallback(
+    async (question: string) => {
+      const trimmed = question.trim();
+      if (!trimmed || !locationId) return;
+      const requestId = ++requestIdRef.current;
+      setState((prev) => ({ ...prev, loading: true, error: null, question: trimmed }));
+      try {
+        const response = await fetch("/api/ai-assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: trimmed, locationId, serviceType }),
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `Request failed (${response.status})`);
+        }
+        const answer = (await response.json()) as AiAssistantResponse;
+        if (requestId !== requestIdRef.current) return;
+        setState({ loading: false, error: null, response: answer, key, question: trimmed });
+      } catch (error) {
+        if (requestId !== requestIdRef.current) return;
+        const message = error instanceof Error ? error.message : "Something went wrong";
+        setState({ loading: false, error: message, response: null, key: null, question: trimmed });
       }
-      setState({ loading: false, error: null, response: (await response.json()) as AiAssistantResponse, key });
-    } catch (error) {
-      setState({ loading: false, error: error instanceof Error ? error.message : "Something went wrong", response: null, key: null });
-    }
-  }
+    },
+    [locationId, serviceType, key]
+  );
 
-  // Prices are per location/service type: after switching either, the old
-  // answer is hidden until the agent asks again.
+  // Prices are per location/service type: after switching either, the last
+  // question is asked again for the new one.
+  const staleQuestion = state.response && state.key !== key && !state.loading ? state.question : null;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one request per location switch, not a render loop
+    if (staleQuestion) ask(staleQuestion);
+  }, [staleQuestion, ask]);
+
   return { loading: state.loading, error: state.error, response: state.key === key ? state.response : null, ask };
 }
 
@@ -294,7 +314,9 @@ export function AiAssistantResults({
     );
   }
 
-  const results = response.results;
+  // Tests first, then profiles, then packages (the sort keeps relevance order within each).
+  const order = (item: AiSuggestion) => (item.kind === "test" ? 0 : isPackageName(item.name) ? 2 : 1);
+  const results = [...response.results].sort((a, b) => order(a) - order(b));
   const high = results.filter((item) => item.relevanceLevel === "high");
   const maybe = results.filter((item) => item.relevanceLevel === "medium");
   const selectedItems = results.filter((item) => selectedKeys.has(aiSuggestionKey(item)));
@@ -368,15 +390,30 @@ export function AiAssistantResults({
   if (reply) {
     // Chat-style: the question, the ready-to-send reply, then (when there
     // are any) the tests it mentions, to tick and open in Test search.
+    const answer = response.answer;
+    const headline = answer?.verdict ? VERDICT_HEADLINE[answer.subject][answer.verdict] : null;
     return (
       <div className="flex flex-col gap-4 px-1 pt-2">
-        <div className="flex flex-col gap-2">
-          <p className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[13.5px] text-primary-foreground">
+        <div className="flex flex-col gap-2.5">
+          <p className="max-w-[85%] self-end rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-[14.5px] text-primary-foreground">
             {response.query}
           </p>
-          <div className="group relative max-w-[92%] self-start rounded-2xl rounded-bl-md border border-border bg-card px-3.5 py-2.5 avm-fade-up">
-            <p className="text-[13.5px] leading-relaxed whitespace-pre-line">{reply}</p>
-            <div className="mt-1.5 flex items-center justify-between gap-3">
+          <div className="group relative w-full max-w-[640px] self-start rounded-2xl rounded-bl-md border border-border bg-card px-5 py-4 shadow-sm avm-fade-up">
+            {headline && answer ? (
+              <p
+                className={cn(
+                  "mb-3 inline-flex rounded-lg px-3 py-1.5 text-[15px] font-semibold",
+                  answer.subject === "fasting" && answer.verdict === "no" && "bg-success/15 text-success-foreground",
+                  answer.subject === "fasting" && answer.verdict !== "no" && "bg-warning/15 text-warning-foreground",
+                  answer.subject === "availability" && answer.verdict === "yes" && "bg-success/15 text-success-foreground",
+                  answer.subject === "availability" && answer.verdict !== "yes" && "bg-muted text-foreground"
+                )}
+              >
+                {headline}
+              </p>
+            ) : null}
+            <p className="text-[15px] leading-7 whitespace-pre-line text-foreground">{reply}</p>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2.5">
               <span className="text-[11px] text-muted-foreground">
                 {response.engine === "gemini" ? "Support Assistant" : "From our records"}
                 {locationName ? ` · ${locationName}` : ""}

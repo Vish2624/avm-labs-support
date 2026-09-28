@@ -2,10 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { LOCATION_COOKIE, LOCATION_COOKIE_MAX_AGE } from "@/lib/constants/location-cookie";
 import type { Location } from "@/types/location";
 import type { QuotationLineItem, QuotationPackageLine } from "@/types/quotation";
 
-const LOCATION_STORAGE_KEY = "avm-location";
+/** Where the location was kept before the cookie — read once to migrate, then removed. */
+const LEGACY_LOCATION_STORAGE_KEY = "avm-location";
 
 interface QuoteContextValue {
   locations: Location[];
@@ -31,45 +33,53 @@ const QuoteContext = createContext<QuoteContextValue | null>(null);
  * Supabase). Lives in the dashboard layout rather than the Workspace page so
  * the cart and location survive switching to Packages/Updates and back.
  */
-export function QuoteProvider({ locations, children }: { locations: Location[]; children: React.ReactNode }) {
-  const [locationId, setLocationIdState] = useState(locations[0]?.id ?? "");
+export function QuoteProvider({
+  locations,
+  initialLocationId,
+  children,
+}: {
+  locations: Location[];
+  /** The location saved in the agent's cookie, read server-side by the dashboard layout. */
+  initialLocationId?: string;
+  children: React.ReactNode;
+}) {
+  const [locationId, setLocationIdState] = useState(initialLocationId ?? locations[0]?.id ?? "");
   const [lineItems, setLineItems] = useState<QuotationLineItem[]>([]);
   const [customerName, setCustomerName] = useState("");
 
-  // Restore the agent's last location. localStorage isn't available during
-  // SSR, so this has to be a mount-time effect rather than initial state.
+  const persistLocation = useCallback((id: string) => {
+    setLocationIdState(id);
+    document.cookie = `${LOCATION_COOKIE}=${encodeURIComponent(id)}; path=/; max-age=${LOCATION_COOKIE_MAX_AGE}; samesite=lax`;
+  }, []);
+
+  // Agents who picked a location before it moved to a cookie had it in
+  // localStorage: carry that over once, then the cookie is the only copy.
   useEffect(() => {
+    if (initialLocationId) return;
     try {
-      const saved = window.localStorage.getItem(LOCATION_STORAGE_KEY);
+      const saved = window.localStorage.getItem(LEGACY_LOCATION_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_LOCATION_STORAGE_KEY);
       if (saved && locations.some((location) => location.id === saved)) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of a persisted preference
-        setLocationIdState(saved);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time migration of a persisted preference
+        persistLocation(saved);
       }
     } catch {
       // Storage blocked — keep the default location.
     }
-  }, [locations]);
-
-  const persistLocation = useCallback((id: string) => {
-    setLocationIdState(id);
-    try {
-      window.localStorage.setItem(LOCATION_STORAGE_KEY, id);
-    } catch {
-      // Storage blocked — the choice just won't be remembered.
-    }
-  }, []);
+  }, [initialLocationId, locations, persistLocation]);
 
   const setLocationId = useCallback(
     (id: string) => {
       if (id === locationId) return;
       persistLocation(id);
-      setLineItems((prev) => {
-        if (prev.length === 0) return prev;
-        toast("Location changed — quotation cleared.");
-        return [];
-      });
+      const location = locations.find((entry) => entry.id === id);
+      const switched = location ? `Switched to ${location.name} · prices in ${location.currencyCode}` : "Location changed";
+      // A quote is priced in one location's currency, so it can't carry over.
+      const hadItems = lineItems.length > 0;
+      if (hadItems) setLineItems([]);
+      toast.success(switched, hadItems ? { description: "Quotation cleared" } : undefined);
     },
-    [locationId, persistLocation]
+    [locationId, locations, lineItems.length, persistLocation]
   );
 
   const addLineItems = useCallback((items: QuotationLineItem[]) => {

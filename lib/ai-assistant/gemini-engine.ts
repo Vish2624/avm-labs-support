@@ -1,5 +1,5 @@
 import "server-only";
-import { findPriced, suggestionKey, toSuggestion, type PricedCatalog } from "./priced-catalog";
+import { findPriced, listOrder, suggestionKey, toSuggestion, type PricedCatalog } from "./priced-catalog";
 import { geminiGenerate, geminiReaderConfigured, READER_MODELS } from "@/lib/ai/gemini";
 import { CUSTOMER_LABELS, SHORT_NOTICE, customerName } from "./customer-labels";
 import type { AiAnswer, AiSource, AiSuggestion, TestQuestionSubject } from "@/types/ai-assistant";
@@ -48,7 +48,7 @@ Rules:
 - Only return codes that appear in the catalog below, copied exactly. Never invent a test, code or price.
 - Understand meaning, intent, typos, abbreviations and synonyms. Never treat the whole sentence as a test name.
 - Only include tests with a direct, commonly accepted clinical link to the question. Do not include a test just because it sounds similar (e.g. never AMH for a weight-loss question unless fertility/ovarian reserve is mentioned).
-- Prefer a catalog package (e.g. Lipid Profile, Liver Function Tests, Kidney Function Tests) over listing its individual component tests.
+- Recommend individual tests and profiles first; add a package only when it clearly fits. Prefer a profile (e.g. Lipid Profile, Liver Function Tests, Kidney Function Tests) over listing its individual component tests.
 - relevance_score: 0.75-1 = highly relevant, 0.5-0.74 = may be relevant. Omit anything weaker. Return at most 12, best first.
 - reason: what the test checks, in 2-5 plain lowercase words a customer understands, e.g. "iron stores", "thyroid function", "3-month average blood sugar". No diagnosis, no medicine advice, no "you need".
 - If the question simply names one specific test or asks its price/TAT/availability (e.g. "price of HbA1c"), set request_type "direct_lookup" and lookup_query to that test name, with no results.
@@ -68,6 +68,7 @@ Reply with ONLY this JSON object, no markdown:
 {"request_type":"recommendation"|"direct_lookup"|"general_question"|"not_a_test_request","lookup_query":string|null,"answer":string|null,"reply":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
 "topic" is a short label (e.g. "Weight management"); "intent" is the purpose (e.g. "Checks before starting medication").`;
 
+/** Every test, profile and package Gemini may recommend from. */
 function catalogListing(catalog: PricedCatalog): string {
   return catalog.items
     .map((item) =>
@@ -134,13 +135,16 @@ Base the answer on reputable sources (e.g. major lab test directories, NHS, Medl
 
 Rules:
 - Answer only about the tests listed. Never give a diagnosis, prescription or medicine advice.
-- For yes/no questions set "verdict" to "yes", "no", or "depends" (different tests differ, or it depends on the doctor's instructions); otherwise null.
+- For yes/no questions set "verdict" to "yes", "no", "preferred" (fasting is recommended but not strictly required), or "depends" (different tests differ, or it depends on the doctor's instructions); otherwise null.
 - "answer": 1-3 short, plain sentences for a support agent, naming each test (e.g. "TSH: No fasting needed; a morning sample is common.").
 - Do not mention prices, report times or availability — those come from the lab's own records.
-- "reply": the same answer as a friendly WhatsApp message the agent can send the customer: "Hi! " then 1-3 short sentences in plain words.
+- "reply": a complete, friendly WhatsApp message the agent can send the customer as is, in plain words:
+  - First line: "Hi! " then the direct answer in one sentence (e.g. "Hi! No, you don't need to fast for the HbA1c test.").
+  - Then a blank line and 2-4 short "• " lines with genuinely useful points, chosen from: what the test checks, in simple words (e.g. "It shows your average blood sugar over the last 2-3 months"); how to prepare (fasting hours and that plain water is fine, or that normal meals are fine); a good time of day for the sample, if it matters; common exceptions (e.g. if it is booked together with a fasting test such as fasting blood sugar or a lipid profile, fast 8-12 hours for those); continue regular medicines unless the doctor advised otherwise.
+  - Keep it under about 70 words. Never invent details that are not standard guidance.
 
 Reply with ONLY this JSON object, no markdown:
-{"verdict":"yes"|"no"|"depends"|null,"answer":string,"reply":string}`;
+{"verdict":"yes"|"no"|"preferred"|"depends"|null,"answer":string,"reply":string}`;
 
 /** Gemini's grounded reply to a question about named catalog tests (fasting, what it's for). */
 export async function answerTestQuestionWithGemini(
@@ -161,7 +165,10 @@ export async function answerTestQuestionWithGemini(
   // thrown away — the built-in answer from our records is used instead.
   const answerText = recordsSafe(str(json.answer));
   if (!answerText) throw new Error("Gemini gave no usable answer");
-  const verdict = json.verdict === "yes" || json.verdict === "no" || json.verdict === "depends" ? json.verdict : null;
+  const verdict =
+    json.verdict === "yes" || json.verdict === "no" || json.verdict === "preferred" || json.verdict === "depends"
+      ? json.verdict
+      : null;
   return { answer: { subject, verdict, text: answerText }, reply: recordsSafe(str(json.reply)), sources };
 }
 
@@ -176,7 +183,10 @@ const MAX_REPLY_TESTS = 6;
  */
 function recommendationReply(topic: string | null, results: AiSuggestion[]): string | null {
   const picks = results.filter((item) => item.relevanceLevel === "high");
-  const listed = (picks.length > 0 ? picks : results).slice(0, MAX_REPLY_TESTS);
+  // Tests first, then profiles, then packages (keeping relevance order within each).
+  const listed = (picks.length > 0 ? picks : results)
+    .slice(0, MAX_REPLY_TESTS)
+    .sort((a, b) => listOrder(a) - listOrder(b));
   if (listed.length === 0) return null;
   const about = topic ? ` for ${topic.charAt(0).toLowerCase()}${topic.slice(1)}` : "";
   const lines = listed.map((item) => {

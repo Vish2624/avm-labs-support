@@ -57,9 +57,3 @@ export function splitTestList(text: string): string[] {
   }
   return tokens;
 }
-
-/** True when a search-box query is a list of tests rather than one test. */
-export function isTestList(text: string): boolean {
-  const hasSeparator = /[,\n;|]/.test(text) || new RegExp(JOINED_NAMES_PATTERN.source).test(text);
-  return hasSeparator && splitTestList(text).length >= 2;
-}

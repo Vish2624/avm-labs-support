@@ -3,43 +3,38 @@ import { requireUser } from "@/lib/auth/permissions";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
 import { aiSearchCatalog } from "@/lib/search/ai-read-message";
 import { extractTests } from "@/lib/search/extract-tests";
+import { isPackageName } from "@/lib/search/is-package-name";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
-import type { SemanticSearchItem } from "@/lib/search/semantic-search-results";
 
-// The Quote search box's AI fallback (used when the rule-based search has
-// no strong hit): Gemini picks catalog codes by meaning — "hair fall",
-// "sugr tst", "test for tiredness" — then extractTests() prices them from
-// the DB exactly like pasted text. Answers 501 without GEMINI_API_KEY, and
-// the client then uses the free in-browser model instead.
-export async function POST(request: NextRequest) {
+// The Quote search box's second step: only asked when the fuzzy search
+// found nothing. Gemini picks catalog codes by meaning ("hair fall",
+// "test for tiredness") from tests and profiles — never packages — and
+// extractTests() prices them from the DB, so every price is a real record.
+// Answers 501 without a Gemini key (the search then just shows "no match").
+export async function GET(request: NextRequest) {
   await requireUser();
   if (!geminiReaderConfigured("search")) {
     return NextResponse.json({ error: "Search AI is not configured" }, { status: 501 });
   }
 
-  const body = (await request.json().catch(() => null)) as {
-    q?: unknown;
-    locationId?: unknown;
-    serviceType?: unknown;
-  } | null;
-  const query = typeof body?.q === "string" ? body.q.trim().slice(0, 200) : "";
-  const locationId = typeof body?.locationId === "string" ? body.locationId : "";
-  const serviceType = typeof body?.serviceType === "string" ? body.serviceType : "";
+  const { searchParams } = new URL(request.url);
+  const query = (searchParams.get("q") ?? "").trim().slice(0, 200);
+  const locationId = searchParams.get("locationId") ?? "";
+  const serviceType = searchParams.get("serviceType") ?? "";
   const serviceTypes = serviceType === "all" ? SERVICE_TYPES : isServiceType(serviceType) ? [serviceType] : null;
   if (!query || !locationId || !serviceTypes) {
     return NextResponse.json({ error: "q, locationId and serviceType are required" }, { status: 400 });
   }
 
-  const codes = await aiSearchCatalog(query, locationId, serviceTypes).catch(() => null);
+  const codes = await aiSearchCatalog(query, locationId, serviceTypes, false).catch(() => null);
   if (codes === null) {
     return NextResponse.json({ error: "Search AI request failed" }, { status: 502 });
   }
-  if (!codes) return NextResponse.json({ items: [] });
+  if (!codes) return NextResponse.json({ tests: [], profiles: [] });
 
   const result = await extractTests(codes, locationId, serviceTypes);
-  const items: SemanticSearchItem[] = [
-    ...result.packages.map(({ result: pkg }) => ({ kind: "package" as const, confidence: "high" as const, result: pkg })),
-    ...result.detected.map((test) => ({ kind: "test" as const, confidence: "high" as const, result: test })),
-  ];
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    tests: result.detected,
+    profiles: result.packages.map(({ result: profile }) => profile).filter((profile) => !isPackageName(profile.name)),
+  });
 }

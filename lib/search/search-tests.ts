@@ -1,12 +1,10 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
-import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { queryVariants, VARIANT_SCORE_FACTOR } from "./query-variants";
 import { buildSearchCandidates } from "./build-search-candidates";
 import { rankResults } from "./rank-results";
-import { segmentTestNames } from "./segment-tests";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { SearchCandidate } from "./rank-results";
 import type { Test } from "@/types/test";
@@ -71,17 +69,6 @@ export async function searchTests(
   return results;
 }
 
-/**
- * True when a search-box query with no commas/line breaks still names
- * several tests ("TSH T3 T4", "hba1c vitamin d cbc") — the workspace then
- * reads it like a pasted list instead of one fuzzy search.
- */
-export async function queryNamesSeveralTests(query: string): Promise<boolean> {
-  if (!query.trim().includes(" ")) return false;
-  const [tests, aliases, profiles] = await Promise.all([listActiveTests(), listActiveAliases(), listActiveProfilesWithTests()]);
-  const packageNames = profiles.map(({ profile }) => profile);
-  return segmentTestNames(query.trim(), tests, aliases, packageNames) !== null;
-}
 
 /** A ranked candidate joined to its test + current price row — the shape the workspace renders. */
 export function toSearchResult(test: Test, candidate: SearchCandidate, price: TestPrice): SearchTestResult {

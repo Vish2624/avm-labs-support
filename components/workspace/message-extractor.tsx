@@ -10,6 +10,7 @@ import type { MessageAiState } from "./use-semantic-search";
 import type { ProfileSearchResult } from "@/types/profile";
 import { resultsTitleClassName } from "./search-results";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { isPackageName } from "@/lib/search/is-package-name";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 import type { NotOfferedTest } from "@/lib/search/extract-tests";
@@ -21,6 +22,8 @@ interface Extraction {
   packages: { token: string; result: ProfileSearchResult }[];
   notOffered: NotOfferedTest[];
   unmatched: string[];
+  /** Who read the message: Gemini, or the rule-based reader (no key, Gemini failed, or a clean list). */
+  readBy?: "ai" | "rules";
 }
 
 const EMPTY_EXTRACTION: Extraction = { detected: [], packages: [], notOffered: [], unmatched: [] };
@@ -91,10 +94,12 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
   // Results are stored with the request they answer, so "loading" can be
   // derived (does the stored result match the current input?) instead of
   // being reset inside the effect.
-  const [result, setResult] = useState<{ key: string; extraction: Extraction } | null>(null);
+  const [result, setResult] = useState<{ key: string; scope: string; extraction: Extraction } | null>(null);
 
   const trimmed = text.trim();
   const key = trimmed && locationId ? JSON.stringify([trimmed, locationId, serviceType, useAi]) : null;
+  // Prices belong to one location + service type.
+  const scope = JSON.stringify([locationId, serviceType]);
 
   useEffect(() => {
     if (!key) return;
@@ -116,7 +121,7 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
         failed = true;
       }
       if (cancelled) return;
-      setResult({ key, extraction });
+      setResult({ key, scope, extraction });
       notifyExtraction(extraction, failed);
     }, EXTRACT_DEBOUNCE_MS);
 
@@ -124,12 +129,14 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [key, trimmed, locationId, serviceType, useAi]);
+  }, [key, scope, trimmed, locationId, serviceType, useAi]);
 
   if (!key) return { ...EMPTY_EXTRACTION, loading: false };
-  // While a new read is pending, keep showing the previous matches rather
-  // than flashing back to a skeleton on every keystroke.
-  return { ...(result?.extraction ?? EMPTY_EXTRACTION), loading: result?.key !== key };
+  // While a new read of edited text is pending, keep showing the previous
+  // matches rather than flashing back to a skeleton on every keystroke —
+  // but never another location's (or service type's) prices.
+  const previous = result?.scope === scope ? result.extraction : EMPTY_EXTRACTION;
+  return { ...previous, loading: result?.key !== key };
 }
 
 /**
@@ -283,12 +290,12 @@ export function MessageExtractionResults({
           </button>
         ) : null}
       </div>
-      <NotAvailableSummary
-        notFound={stillUnmatched}
-        notOffered={notOffered}
-        unavailable={unavailable}
-        locationName={locationName}
-      />
+      {/* Tests first, then profiles & packages, then what can't be quoted. */}
+      {detected.length > 0 ? (
+        <div className="px-2 pt-1 pb-1 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+          Tests · {detected.length}
+        </div>
+      ) : null}
       {[...available, ...unavailable].map((result) => (
         <TestResultCard
           key={result.testId}
@@ -298,30 +305,36 @@ export function MessageExtractionResults({
           onRemove={onRemove}
         />
       ))}
-      {packages.length > 0 ? (
-        <div className="mt-3 flex flex-col gap-2">
-          <div className="px-2 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
-            Packages · {packageNames.length}
-          </div>
-          {packageNames.map(({ token, results }) => (
-            <div key={token} className="flex flex-col gap-1.5">
-              <p className="px-1.5 text-[12px] text-muted-foreground">
-                For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;
-                {results.length > 1 ? ` · ${results.length} packages match equally — choose one` : ""}
-              </p>
-              {results.map((result) => (
-                <PackageResultRow
-                  key={result.profileId}
-                  result={result}
-                  added={addedProfileIds.has(result.profileId)}
-                  onAdd={onAddPackage}
-                  onRemove={onRemovePackage}
-                />
-              ))}
+      {/* Then profiles, and packages last. */}
+      {[
+        { label: "Profiles", named: packageNames.filter(({ results }) => !isPackageName(results[0].name)) },
+        { label: "Packages", named: packageNames.filter(({ results }) => isPackageName(results[0].name)) },
+      ].map(({ label, named }) =>
+        named.length > 0 ? (
+          <div key={label} className="mt-3 flex flex-col gap-2">
+            <div className="px-2 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+              {label} · {named.length}
             </div>
-          ))}
-        </div>
-      ) : null}
+            {named.map(({ token, results }) => (
+              <div key={token} className="flex flex-col gap-1.5">
+                <p className="px-1.5 text-[12px] text-muted-foreground">
+                  For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;
+                  {results.length > 1 ? ` · ${results.length} match equally — choose one` : ""}
+                </p>
+                {results.map((result) => (
+                  <PackageResultRow
+                    key={result.profileId}
+                    result={result}
+                    added={addedProfileIds.has(result.profileId)}
+                    onAdd={onAddPackage}
+                    onRemove={onRemovePackage}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : null
+      )}
       {ai && (ai.loading || ai.matches.length > 0) ? (
         <AiMessageMatches
           ai={ai}
@@ -333,6 +346,14 @@ export function MessageExtractionResults({
           onRemovePackage={onRemovePackage}
         />
       ) : null}
+      <div className="mt-3">
+        <NotAvailableSummary
+          notFound={stillUnmatched}
+          notOffered={notOffered}
+          unavailable={unavailable}
+          locationName={locationName}
+        />
+      </div>
     </div>
   );
 }
@@ -367,7 +388,7 @@ function AiMessageMatches({
             : "Checking unrecognised names with AI…"
           : "AI matched"}
       </div>
-      {ai.matches.map(({ token, confidence, item }) => (
+      {[...ai.matches].sort((a, b) => Number(a.item.kind === "package") - Number(b.item.kind === "package")).map(({ token, confidence, item }) => (
         <div key={token} className="flex flex-col gap-1">
           <p className="px-1.5 text-[12px] text-muted-foreground">
             For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;

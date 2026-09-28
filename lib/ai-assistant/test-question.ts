@@ -25,7 +25,8 @@ const SUBJECT_PATTERNS: [TestQuestionSubject, RegExp][] = [
   ],
   ["tat", /\b(tat|how long|how many days|how many hours|report time|turnaround|result time|results? ready|report ready|when will|when can)\b/],
   ["price", /\b(price|prices|cost|costs|rate|rates|charge|charges|how much|fee|fees)\b/],
-  ["availability", /\b(available|availability|do you have|do you do|do you offer)\b/],
+  // "available" and common misspellings ("availabe", "avaliable", "availble").
+  ["availability", /\b(av(ai|ia|a|i)l\w*|do you have|do you do|do you offer|have you got)\b/],
 ];
 
 // Words around a test name in a question about it: "does the thyroid test

@@ -3,23 +3,38 @@
 import { SearchIcon, XIcon } from "lucide-react";
 import { imageFromDataTransfer } from "./image-reader";
 
+/** Pasted text longer than this is a message, not a test name. */
+const MESSAGE_MIN_LENGTH = 40;
+
+/**
+ * A customer message or a list of tests rather than one search: several
+ * lines, several comma/semicolon-separated items, or a long sentence.
+ * "TSH" or "vitamin D" is a search; "TSH, T3, T4" or "Hi, how much is…" is not.
+ */
+export function looksLikeMessage(text: string): boolean {
+  const trimmed = text.trim();
+  return /[\r\n]/.test(trimmed) || /[,;|]/.test(trimmed) || trimmed.length > MESSAGE_MIN_LENGTH;
+}
+
 // Search box driving alias/fuzzy test lookup (see lib/search/search-tests.ts
-// via /api/search). Purely controlled — debouncing/fetching happens in the
-// workspace client that owns the query state. Enter fires onSubmit (the
-// client adds the top result, or every result for a list of tests); the ×
-// clears the box.
+// via /api/search). Typed searches only: a pasted image, customer message
+// or list of tests is handed to the "Paste text or image" tab instead
+// (onPasteMessage / onPasteImage). Purely controlled — debouncing/fetching
+// happens in the workspace client that owns the query state. Enter fires
+// onSubmit (the client adds the top result); the × clears the box.
 export function TestSearch({
   value,
   onChange,
   onSubmit,
   inputRef,
+  onPasteMessage,
   onPasteImage,
 }: {
   value: string;
   onChange: (query: string) => void;
   onSubmit?: () => void;
   inputRef?: React.Ref<HTMLInputElement>;
-  /** A pasted screenshot/photo goes to the image reader instead. */
+  onPasteMessage?: (text: string) => void;
   onPasteImage?: (image: File) => void;
 }) {
   return (
@@ -31,23 +46,17 @@ export function TestSearch({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onPaste={(event) => {
-          const image = onPasteImage ? imageFromDataTransfer(event.clipboardData) : null;
-          if (image) {
+          const image = imageFromDataTransfer(event.clipboardData);
+          if (image && onPasteImage) {
             event.preventDefault();
-            onPasteImage?.(image);
+            onPasteImage(image);
             return;
           }
-          // A single-line input silently drops newlines, gluing a pasted
-          // one-test-per-line list into one word ("TSH⏎T3" -> "TSHT3").
-          // Keep each line as its own list item instead.
           const pasted = event.clipboardData.getData("text");
-          if (!/[\r\n]/.test(pasted)) return;
-          event.preventDefault();
-          const input = event.currentTarget;
-          const start = input.selectionStart ?? value.length;
-          const end = input.selectionEnd ?? value.length;
-          const flattened = pasted.trim().split(/\s*[\r\n]+\s*/).join(", ");
-          onChange(value.slice(0, start) + flattened + value.slice(end));
+          if (onPasteMessage && looksLikeMessage(pasted)) {
+            event.preventDefault();
+            onPasteMessage(pasted.trim());
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -55,7 +64,7 @@ export function TestSearch({
             onSubmit?.();
           }
         }}
-        placeholder="Search a test, or paste a list of codes (TSH, T3, T4…)"
+        placeholder="Search a test or package, e.g. TSH, vitamin D, lipid profile"
         aria-label="Search tests"
         autoFocus
         className="h-[52px] w-full rounded-[14px] border border-input bg-card pr-12 pl-[46px] text-[15px] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15"

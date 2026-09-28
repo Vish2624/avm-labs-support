@@ -3,10 +3,8 @@
  * total, get that tier's % off. One global rule (not per-test, not
  * per-location) — confirmed with the business owner 2026-09-14.
  *
- * Base rule is BHD 19 -> 10%, BHD 38 -> 20%. The other currencies are that
- * same rule converted at each currency's official fixed USD peg (not
- * independently invented numbers): BHD 0.376/USD, AED 3.6725/USD,
- * SAR 3.75/USD. Amounts are minor units (fils/halalas), matching `Money`.
+ * Each currency's thresholds are set by the business (last updated
+ * 2026-09-28). Amounts are minor units (fils/halalas), matching `Money`.
  */
 export interface DiscountTier {
   /** Minimum quotation total, in the currency's minor unit, to qualify. */
@@ -16,18 +14,20 @@ export interface DiscountTier {
 }
 
 export const DISCOUNT_TIERS: Record<string, DiscountTier[]> = {
+  // Bahrain: set by the business 2026-09-28 — 18.750+ BHD = 10%, 37.500+ BHD = 20%.
   BHD: [
-    { thresholdMinor: 19_000, percent: 10 },
-    { thresholdMinor: 38_000, percent: 20 },
+    { thresholdMinor: 18_750, percent: 10 },
+    { thresholdMinor: 37_500, percent: 20 },
   ],
-  // 19/38 BHD converted at 1 BHD = 9.767287 AED (3.6725 / 0.376).
+  // Dubai: set by the business 2026-09-28 — 183+ AED = 10%, 365+ AED = 20%.
   AED: [
-    { thresholdMinor: 18_558, percent: 10 },
-    { thresholdMinor: 37_116, percent: 20 },
+    { thresholdMinor: 18_300, percent: 10 },
+    { thresholdMinor: 36_500, percent: 20 },
   ],
-  // 19/38 BHD converted at 1 BHD = 9.973404 SAR (3.75 / 0.376).
+  // K.S.A. (Riyadh, Khobar): set by the business 2026-09-28 —
+  // 186.60+ SAR = 10%, 373.10+ SAR = 20%.
   SAR: [
-    { thresholdMinor: 18_949, percent: 10 },
-    { thresholdMinor: 37_899, percent: 20 },
+    { thresholdMinor: 18_660, percent: 10 },
+    { thresholdMinor: 37_310, percent: 20 },
   ],
 };

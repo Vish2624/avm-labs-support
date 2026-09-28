@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { AvailabilityPill } from "./availability-pill";
-import { AddToggleButton } from "./test-result-card";
+import { AddToggleButton, EXACT_MATCH_ROW_CLASS, ExactMatchTag } from "./test-result-card";
 import { ProfileTestList } from "@/components/profiles/profile-test-list";
 import type { ProfileSearchResult } from "@/types/profile";
 
@@ -17,11 +17,14 @@ export function PackageResultRow({
   added,
   onAdd,
   onRemove,
+  exact = false,
 }: {
   result: ProfileSearchResult;
   added: boolean;
   onAdd: (result: ProfileSearchResult) => void;
   onRemove: (profileId: string) => void;
+  /** The search matched this profile's name exactly — shown with a green border. */
+  exact?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -31,6 +34,7 @@ export function PackageResultRow({
         // Bordered and lightly tinted so packages read as distinct from the
         // plain test rows listed above them.
         "relative rounded-[14px] border border-primary/20 bg-primary/[0.03] px-3 py-3 avm-row-in transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-primary/35 hover:bg-primary/[0.06] hover:shadow-elevated dark:border-primary/25 dark:bg-primary/[0.06]",
+        exact && EXACT_MATCH_ROW_CLASS,
         result.availability === "unavailable" && "opacity-60"
       )}
     >
@@ -42,6 +46,7 @@ export function PackageResultRow({
             <span className="rounded-[5px] bg-primary/10 px-1.5 py-px text-[10.5px] font-semibold text-primary">
               PACKAGE
             </span>
+            {exact ? <ExactMatchTag /> : null}
           </div>
           {result.includedTest ? (
             <span className="text-[12.5px] text-muted-foreground">
