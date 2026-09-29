@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { useQuote } from "@/components/workspace/quote/quote-provider";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { AVAILABILITY_LABELS, AVAILABILITY_BADGE_VARIANT } from "@/lib/constants/availability";
 import { ProfileDetail } from "./profile-detail";
 import type { ProfileSearchResult, ProfileSuggestion } from "@/types/profile";
+
+/** Shared with the quote's own "Switched to …" toast, so adding shows one pop-up, not two. */
+const PACKAGE_TOAST_ID = "quote-package";
 
 // Single profile result — works for both "search by name" (ProfileSearchResult,
 // no match info) and "search by test names" (ProfileSuggestion, ranked by
@@ -21,6 +27,28 @@ export function ProfileResultCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const match = "matchedCount" in result ? result : null;
+  // The quote is shared with the Quote Builder, so a package found here
+  // goes straight onto it — no searching for it again over there.
+  const router = useRouter();
+  const { lineItems, applyPackage } = useQuote();
+  const added = lineItems.some((line) => line.kind === "package" && line.profileId === result.profileId);
+  function addToQuote() {
+    applyPackage({
+      kind: "package",
+      profileId: result.profileId,
+      code: result.code,
+      name: result.name,
+      tests: result.tests,
+      price: result.price,
+      tatText: result.tatText,
+      serviceType: result.serviceType,
+      availability: result.availability,
+    });
+    toast.success(`${result.name} added to the quote`, {
+      id: PACKAGE_TOAST_ID,
+      action: { label: "Open quote", onClick: () => router.push("/workspace") },
+    });
+  }
 
   return (
     <div
@@ -47,13 +75,28 @@ export function ProfileResultCard({
           </div>
         </div>
         <span className="text-[15.5px] font-semibold text-primary tabular-nums">{formatCurrency(result.price)}</span>
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          className="rounded-[10px] bg-primary/10 px-4 py-2.5 text-[13.5px] font-medium text-primary transition-[background,color,transform,translate,scale,rotate] duration-200 hover:scale-[1.03] hover:bg-primary hover:text-primary-foreground active:scale-95"
-        >
-          {expanded ? "Hide tests" : "See tests"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="rounded-[10px] px-3 py-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground"
+          >
+            {expanded ? "Hide tests" : "See tests"}
+          </button>
+          {added ? (
+            <span className="rounded-[10px] bg-success/15 px-4 py-2.5 text-[13.5px] font-medium text-success-foreground avm-check">
+              Added ✓
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={addToQuote}
+              className="rounded-[10px] bg-primary/10 px-4 py-2.5 text-[13.5px] font-medium text-primary transition-[background,color,transform,translate,scale,rotate] duration-200 hover:scale-[1.03] hover:bg-primary hover:text-primary-foreground active:scale-95"
+            >
+              + Add to quote
+            </button>
+          )}
+        </div>
       </div>
       {match ? (
         <p className="mt-1.5 text-xs text-muted-foreground">

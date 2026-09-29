@@ -48,7 +48,7 @@ function displayName(email: string): string {
 // right. Replaces the old icon rail so the workspace gets the full width.
 export function AppHeader({ user }: { user: AuthUser }) {
   const pathname = usePathname();
-  const { locations, locationId, setLocationId } = useQuote();
+  const { locations, locationId, setLocationId, lineItems } = useQuote();
   const items = user.role === "admin" ? [...navItems, adminItem] : navItems;
   const showLocation = LOCATION_SCOPED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   const name = displayName(user.email);
@@ -62,11 +62,21 @@ export function AppHeader({ user }: { user: AuthUser }) {
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex h-9 shrink-0 items-center rounded-[10px] px-3 text-sm whitespace-nowrap font-medium transition-colors duration-200",
+          "flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] px-3 text-sm whitespace-nowrap font-medium transition-colors duration-200",
           active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
       >
         {label}
+        {/* What's on the quote, visible from every page. */}
+        {href === "/workspace" && lineItems.length > 0 ? (
+          <span
+            key={lineItems.length}
+            aria-label={`${lineItems.length} on the quote`}
+            className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground avm-check"
+          >
+            {lineItems.length}
+          </span>
+        ) : null}
       </Link>
     );
   });

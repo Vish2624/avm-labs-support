@@ -122,7 +122,8 @@ export function QuoteProvider({
       ...prev.filter((line) => !(line.kind === "test" && covered.has(line.testId))),
       ...(prev.some((line) => line.kind === "package" && line.profileId === pkg.profileId) ? [] : [pkg]),
     ]);
-    toast.success(`Switched to ${pkg.name}`);
+    // Same id as the Packages page's "added to the quote" toast, which replaces it there.
+    toast.success(`Switched to ${pkg.name}`, { id: "quote-package" });
   }, []);
 
   const clear = useCallback(() => {
