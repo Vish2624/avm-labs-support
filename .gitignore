@@ -48,3 +48,5 @@ next-env.d.ts
 
 .vercel
 .env*
+# The empty template is safe to share; real values stay in .env.local.
+!.env.example
