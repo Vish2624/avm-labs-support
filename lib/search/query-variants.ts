@@ -26,7 +26,8 @@ const BUNDLE_WORDS = new Set([
   "profle", "profil", "prfile", "proflie", "pofile", "pakage", "packge", "pacakge", "pakcage", "packag", "panal",
 ]);
 
-// Everyday vocabulary that means the same thing in a catalog name.
+// Everyday vocabulary that means the same thing in a catalog name. Keys
+// can be phrases ("thyroid peroxidase"); they're swapped as whole words.
 const SYNONYMS: Record<string, string[]> = {
   sugar: ["glucose"],
   glucose: ["sugar"],
@@ -48,10 +49,34 @@ const SYNONYMS: Record<string, string[]> = {
   diabetic: ["diabetes"],
   hormone: ["hormones"],
   hormones: ["hormone"],
+  // Shorthand agents and doctors use for what the catalog names in full.
+  // Anti-TPO is the same antibody the catalog lists as Anti Microsomal.
+  tpo: ["anti microsomal"],
+  "anti tpo": ["anti microsomal"],
+  "thyroid peroxidase": ["anti microsomal"],
+  "thyroid peroxidase tpo": ["anti microsomal"],
+  "thyroid peroxidase antibody": ["anti microsomal"],
+  "thyroid peroxidase tpo antibody": ["anti microsomal"],
+  // VDRL / RPR are the everyday names for the syphilis screen.
+  vdrl: ["syphilis"],
+  rpr: ["syphilis"],
+  // Hb / CBP / FBC all mean the complete blood count (Hemogram).
+  hb: ["hemogram"],
+  hemoglobin: ["hemogram"],
+  cbp: ["hemogram"],
+  fbc: ["hemogram"],
+  "complete blood picture": ["hemogram"],
+  pregnancy: ["beta hcg"],
+  d3: ["vitamin d"],
+  potassium: ["electrolytes"],
 };
 
 /** Most variants tried per query, the original first. */
-const MAX_VARIANTS = 6;
+const MAX_VARIANTS = 8;
+
+// Longest phrases first, so "thyroid peroxidase tpo" is swapped whole
+// before "tpo" gets a chance on its own.
+const SYNONYM_KEYS = Object.keys(SYNONYMS).sort((a, b) => b.split(" ").length - a.split(" ").length);
 
 function stripWords(normalized: string, drop: Set<string>): string {
   const words = normalized.split(" ");
@@ -77,13 +102,14 @@ export function queryVariants(raw: string, options: { forPackages?: boolean } = 
   if (options.forPackages) cleaned = stripWords(cleaned, BUNDLE_WORDS);
   add(cleaned);
 
-  // One synonym swap at a time, on the cleaned phrasing.
-  const words = cleaned.split(" ");
-  words.forEach((word, i) => {
-    for (const synonym of SYNONYMS[word] ?? []) {
-      add([...words.slice(0, i), synonym, ...words.slice(i + 1)].join(" "));
+  // One synonym swap at a time (a word or a whole phrase), on the cleaned phrasing.
+  const padded = ` ${cleaned} `;
+  for (const key of SYNONYM_KEYS) {
+    if (!padded.includes(` ${key} `)) continue;
+    for (const synonym of SYNONYMS[key]) {
+      add(padded.replace(` ${key} `, ` ${synonym} `).trim());
     }
-  });
+  }
 
   return variants;
 }
