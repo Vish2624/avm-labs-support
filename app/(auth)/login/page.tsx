@@ -5,7 +5,25 @@ import { safeNextPath } from "@/lib/auth/next-path";
 
 const ease = "cubic-bezier(.2,.8,.2,1)";
 
+// While true, /login shows a maintenance screen instead of the sign-in form,
+// so nobody new can sign in. Flip back to false to restore the login page.
+const MAINTENANCE_MODE = true;
+
+function MaintenanceNotice() {
+  return (
+    <main className="flex min-h-svh flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+      <p className="font-mono text-sm text-muted-foreground">503</p>
+      <h1 className="text-xl font-semibold">Server under maintenance</h1>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        AVM Support is temporarily unavailable while we carry out scheduled maintenance. Please check back later.
+      </p>
+    </main>
+  );
+}
+
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  if (MAINTENANCE_MODE) return <MaintenanceNotice />;
+
   // The page the agent was on before being asked to sign in (proxy.ts).
   const { next } = await searchParams;
   const returnTo = safeNextPath(typeof next === "string" ? next : null) ?? "/workspace";
