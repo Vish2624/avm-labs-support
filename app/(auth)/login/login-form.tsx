@@ -9,18 +9,22 @@ import { signInAction, type LoginState } from "./actions";
 const initialState: LoginState = { error: null };
 
 const inputClassName =
-  "h-12 w-full rounded-xl border border-input bg-background pl-10 text-[14.5px] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15";
+  "h-12 w-full rounded-xl border border-input bg-card pl-10 text-[14.5px] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15";
 
 export function LoginForm({ returnTo = "/workspace" }: { returnTo?: string }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  // Signed in: go straight back to the page the agent was on (or the workspace).
+  // Signed in: let the "✓ Welcome back" tick land, then go back to the
+  // page the agent was on (or the workspace).
   useEffect(() => {
     if (!state.success) return;
-    router.replace(returnTo);
-    router.refresh();
+    const timeout = setTimeout(() => {
+      router.replace(returnTo);
+      router.refresh();
+    }, 550);
+    return () => clearTimeout(timeout);
   }, [state.success, router, returnTo]);
 
   return (
@@ -29,7 +33,9 @@ export function LoginForm({ returnTo = "/workspace" }: { returnTo?: string }) {
       // Re-keyed on each new error so the shake replays for a repeat mistake.
       key={state.error ? `error-${state.attempt ?? 0}` : "form"}
       className="flex flex-col gap-4"
-      style={state.error ? { animation: "avm-shake .4s ease" } : undefined}
+      style={{
+        animation: state.error ? "avm-shake .4s ease" : "avm-fade-up .6s .28s cubic-bezier(.2,.8,.2,1) both",
+      }}
     >
       <label className="flex flex-col gap-[7px] text-[13px] font-medium">
         Work email
