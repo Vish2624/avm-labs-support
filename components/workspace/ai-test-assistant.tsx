@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CopyIcon, ExternalLinkIcon, SearchIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
+import { CopyIcon, ExternalLinkIcon, InfoIcon, SearchIcon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,124 @@ import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import { isPackageName } from "@/lib/search/is-package-name";
 import type { AiAnswer, AiAssistantResponse, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
+
+const BULLET = /^\s*[•\-*]\s+/;
+const NOTE = /^note:/i;
+/** A price as the app writes it, e.g. "5.620 BHD", "183.00 AED". */
+const PRICE = /(\d[\d,]*\.\d+ (?:BHD|AED|SAR))/;
+
+/**
+ * Splits "Name – detail" on the en dash the replies use; null when there's
+ * none. A plain hyphen isn't a separator — names like "HDL Cholesterol - Direct" contain one.
+ */
+function splitItem(text: string): [string, string] | null {
+  const match = text.match(/^(.+?)\s+–\s+(.+)$/);
+  return match ? [match[1], match[2]] : null;
+}
+
+/**
+ * The reply as a WhatsApp message: test names in *bold* and the medical
+ * note in _italics_ (WhatsApp's own markup), otherwise exactly the text shown.
+ */
+function toWhatsAppText(reply: string): string {
+  return reply
+    .split("\n")
+    .map((line) => {
+      if (NOTE.test(line.trim())) return `_${line.trim()}_`;
+      if (!BULLET.test(line)) return line;
+      const body = line.replace(BULLET, "");
+      const parts = splitItem(body);
+      return parts ? `• *${parts[0]}* – ${parts[1]}` : `• ${body}`;
+    })
+    .join("\n");
+}
+
+/** A detail with any price in it highlighted. */
+function Detail({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(PRICE).map((part, index) =>
+        PRICE.test(part) ? (
+          <span key={index} className="font-semibold whitespace-nowrap text-primary tabular-nums">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * The assistant's reply laid out for reading: the greeting/heading lines in
+ * bold, "• Name – detail" lines as a list (name bold, detail muted, prices
+ * highlighted), and the medical note as a small callout at the end.
+ */
+function FormattedReply({ text }: { text: string }) {
+  // Group consecutive bullet lines into one list; keep paragraphs apart.
+  const blocks: ({ kind: "text"; line: string } | { kind: "list"; items: string[] } | { kind: "note"; line: string })[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (NOTE.test(line)) blocks.push({ kind: "note", line });
+    else if (BULLET.test(raw)) {
+      const item = raw.replace(BULLET, "").trim();
+      const last = blocks[blocks.length - 1];
+      if (last?.kind === "list") last.items.push(item);
+      else blocks.push({ kind: "list", items: [item] });
+    } else blocks.push({ kind: "text", line });
+  }
+
+  return (
+    <div className="flex flex-col gap-3 text-[15px] leading-relaxed text-foreground">
+      {blocks.map((block, index) => {
+        if (block.kind === "note") {
+          return (
+            <p key={index} className="flex gap-2 rounded-lg bg-muted/60 px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground">
+              <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
+              {block.line}
+            </p>
+          );
+        }
+        if (block.kind === "list") {
+          return (
+            <ul key={index} className="flex flex-col gap-1.5">
+              {block.items.map((item, itemIndex) => {
+                const parts = splitItem(item);
+                return (
+                  <li key={itemIndex} className="flex gap-2.5">
+                    <span aria-hidden className="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-primary/70" />
+                    <span>
+                      {parts ? (
+                        <>
+                          <span className="font-medium">{parts[0]}</span>
+                          <span className="text-muted-foreground"> — </span>
+                          <span className="text-muted-foreground">
+                            <Detail text={parts[1]} />
+                          </span>
+                        </>
+                      ) : (
+                        <Detail text={item} />
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        }
+        // The first line ("Hi! …") and any heading ending in ":" read bold.
+        const heading = index === 0 || block.line.endsWith(":");
+        return (
+          <p key={index} className={heading ? "font-semibold" : undefined}>
+            <Detail text={block.line} />
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 export function aiSuggestionKey(item: AiSuggestion): string {
   return item.kind === "test" ? `test:${item.testId}` : `package:${item.profileId}`;
@@ -412,7 +530,7 @@ export function AiAssistantResults({
                 {headline}
               </p>
             ) : null}
-            <p className="text-[15px] leading-7 whitespace-pre-line text-foreground">{reply}</p>
+            <FormattedReply text={reply} />
             <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2.5">
               <span className="text-[11px] text-muted-foreground">
                 {response.engine === "gemini" ? "Support Assistant" : "From our records"}
@@ -420,7 +538,7 @@ export function AiAssistantResults({
               </span>
               <button
                 type="button"
-                onClick={() => copyText(reply)}
+                onClick={() => copyText(toWhatsAppText(reply))}
                 className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-primary transition-[background,scale] duration-200 hover:bg-primary/10 active:scale-95"
               >
                 <CopyIcon className="size-3.5" /> Copy

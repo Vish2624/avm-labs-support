@@ -2,6 +2,7 @@ import "server-only";
 import { findPriced, listOrder, suggestionKey, toSuggestion, type PricedCatalog } from "./priced-catalog";
 import { geminiGenerate, geminiReaderConfigured, READER_MODELS } from "@/lib/ai/gemini";
 import { CUSTOMER_LABELS, SHORT_NOTICE, customerName } from "./customer-labels";
+import { recordAppEvent } from "@/lib/database/app-events";
 import type { AiAnswer, AiSource, AiSuggestion, TestQuestionSubject } from "@/types/ai-assistant";
 
 /** Same fast models as the readers, with more time: the reply is a longer JSON object. */
@@ -110,7 +111,14 @@ const RECORDS_ONLY_FACTS = new RegExp(
 
 /** Gemini's text, or null when it states something only our records may state. */
 function recordsSafe(text: string | null): string | null {
-  return text && !RECORDS_ONLY_FACTS.test(text) ? text : null;
+  if (!text) return null;
+  if (!RECORDS_ONLY_FACTS.test(text)) return text;
+  recordAppEvent({
+    kind: "fallback",
+    feature: "assistant",
+    message: "Blocked a Gemini reply that stated a price, discount or availability of its own",
+  });
+  return null;
 }
 
 /** Sent instead of a Gemini reply that tried to state a price/availability of its own. */

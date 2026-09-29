@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
 import { loadSearchCatalog } from "@/lib/search/load-search-catalog";
 import { isServiceType } from "@/lib/constants/service-types";
+import { recordAppEvent } from "@/lib/database/app-events";
 
 // The Quote search box's catalog for one location + service type (see
 // lib/search/load-search-catalog.ts), searched in the browser on every
@@ -18,7 +19,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "locationId and serviceType (in_house or outsource) are required" }, { status: 400 });
   }
 
-  const catalog = await loadSearchCatalog(locationId, serviceType);
-  // Browsers may reuse it briefly; SWR refreshes it in the background.
-  return NextResponse.json(catalog, { headers: { "Cache-Control": "private, max-age=30" } });
+  try {
+    const catalog = await loadSearchCatalog(locationId, serviceType);
+    // Browsers may reuse it briefly; SWR refreshes it in the background.
+    return NextResponse.json(catalog, { headers: { "Cache-Control": "private, max-age=30" } });
+  } catch (error) {
+    // Search can't work without it — worth an admin's attention.
+    recordAppEvent({
+      kind: "error",
+      feature: "search",
+      message: "Couldn't load the search catalog (tests and prices) for a location",
+      detail: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ error: "Couldn't load the test list — please try again." }, { status: 500 });
+  }
 }

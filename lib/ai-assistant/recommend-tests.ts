@@ -5,6 +5,7 @@ import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
 import { answerTestQuestionWithGemini, geminiConfigured, recommendWithGemini } from "./gemini-engine";
 import { answerAvailability } from "./availability-answer";
+import { recordAppEvent } from "@/lib/database/app-events";
 import {
   builtinAnswer,
   componentsAnswer,
@@ -85,7 +86,12 @@ async function answerTestQuestion(
       sources = gemini.sources;
       engine = "gemini";
     } catch (error) {
-      console.error("[ai-assistant] Gemini test answer failed, using the built-in guide:", error);
+      recordAppEvent({
+        kind: "fallback",
+        feature: "assistant",
+        message: "Test question answered from the built-in guide (Gemini's answer was unusable)",
+        detail: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -177,7 +183,12 @@ export async function recommendTests(
       };
     } catch (error) {
       // Fall through to the built-in guide — the agent still gets an answer.
-      console.error("[ai-assistant] Gemini failed, using the built-in guide:", error);
+      recordAppEvent({
+        kind: "fallback",
+        feature: "assistant",
+        message: "Question answered from the built-in guide (Gemini's answer was unusable)",
+        detail: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
