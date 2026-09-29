@@ -1,7 +1,7 @@
 "use client";
 
 import { SearchIcon, XIcon } from "lucide-react";
-import { imageFromDataTransfer } from "./image-reader";
+import { imageFromDataTransfer } from "../paste/image-reader";
 
 /** Pasted text longer than this is a message, not a test name. */
 const MESSAGE_MIN_LENGTH = 40;
@@ -16,7 +16,7 @@ export function looksLikeMessage(text: string): boolean {
   return /[\r\n]/.test(trimmed) || /[,;|]/.test(trimmed) || trimmed.length > MESSAGE_MIN_LENGTH;
 }
 
-// Search box driving alias/fuzzy test lookup (see lib/search/search-tests.ts
+// Search box driving alias/fuzzy test lookup (see lib/search/catalog/search-tests.ts
 // via /api/search). Typed searches only: a pasted image, customer message
 // or list of tests is handed to the "Paste text or image" tab instead
 // (onPasteMessage / onPasteImage). Purely controlled — debouncing/fetching

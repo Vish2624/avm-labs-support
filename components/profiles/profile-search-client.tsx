@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { ServiceTypeSelector } from "@/components/layout/service-type-selector";
-import { useQuote } from "@/components/workspace/quote-provider";
+import { useQuote } from "@/components/workspace/quote/quote-provider";
 import { ProfileSearch, type ProfileSearchMode } from "./profile-search";
 import { ProfileResults } from "./profile-results";
 import { fetcher } from "@/lib/utils/fetcher";
 import { SERVICE_TYPES, type ServiceType } from "@/lib/constants/service-types";
 import type { ProfileSearchResult, ProfileSuggestion } from "@/types/profile";
-import type { ResolvedTestQuery } from "@/lib/search/resolve-test-ids";
+import type { ResolvedTestQuery } from "@/lib/search/catalog/resolve-test-ids";
 
 const SEARCH_DEBOUNCE_MS = 300;
 

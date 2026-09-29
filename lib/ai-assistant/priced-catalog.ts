@@ -5,7 +5,7 @@ import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
 import { dedupeProfilesByName } from "@/lib/profiles/dedupe-profiles";
 import { fastingForPackage, fastingForTest } from "./fasting-guide";
-import { isPackageName } from "@/lib/search/is-package-name";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { AiRelevanceLevel, AiSuggestion } from "@/types/ai-assistant";
 

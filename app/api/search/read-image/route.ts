@@ -17,7 +17,7 @@ Reply with the list only — no numbering, bullets, headings or explanations.`;
 // and returns only the requested test/package names; the client then runs
 // them through /api/search/extract like pasted text, so prices and matches
 // still come only from the DB. Without the key this answers 501 and the
-// client uses the free in-browser reader (components/workspace/image-reader.ts).
+// client uses the free in-browser reader (components/workspace/paste/image-reader.ts).
 // Note: the image is sent to Google.
 export async function POST(request: NextRequest) {
   await requireUser();

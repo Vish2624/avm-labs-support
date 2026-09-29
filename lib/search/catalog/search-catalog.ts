@@ -1,8 +1,8 @@
-import { normalizeQuery } from "./normalize-query";
-import { matchScore } from "./fuzzy-match";
-import { FUZZY_THRESHOLD, buildSearchCandidates, type SearchableAlias, type SearchableTest } from "./build-search-candidates";
-import { rankResults } from "./rank-results";
-import { queryVariants, VARIANT_SCORE_FACTOR } from "./query-variants";
+import { normalizeQuery } from "../matching/normalize-query";
+import { matchScore } from "../matching/fuzzy-match";
+import { FUZZY_THRESHOLD, buildSearchCandidates, type SearchableAlias, type SearchableTest } from "../matching/build-search-candidates";
+import { rankResults } from "../matching/rank-results";
+import { queryVariants, VARIANT_SCORE_FACTOR } from "../matching/query-variants";
 import { dedupeProfilesByName } from "@/lib/profiles/dedupe-profiles";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult, ProfileTestSummary } from "@/types/profile";

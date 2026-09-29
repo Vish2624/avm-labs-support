@@ -20,7 +20,9 @@ more current than `README.md`, which describes an earlier phase.
 - `npm run start` — run the production build
 - `npm run lint` — ESLint (flat config, `eslint.config.mjs`)
 - `npx tsc --noEmit` — type-check without emitting
-- No test runner is configured (`package.json` has no `test` script, and `tests/{unit,integration,fixtures}/` are empty placeholders). Verification so far has been build + lint + live manual smoke-testing against Supabase seed data.
+- No test runner is configured (`package.json` has no `test` script). Verification so far has been build + lint + live manual smoke-testing against Supabase data.
+
+`README.md` → **Structure** maps every folder and says where new files go; follow it.
 
 Local setup: `npm install`, then `cp .env.example .env.local` and fill in the Supabase project's URL/anon key/service-role key (service-role key is server-only — never expose it to the browser).
 
@@ -34,7 +36,7 @@ Local setup: `npm install`, then `cp .env.example .env.local` and fill in the Su
 
 The browser never queries Postgres directly. All data fetching happens server-side (Server Components, or Route Handlers under `app/api/*`) through the admin client, then reaches Client Components as props or SWR JSON (`lib/utils/fetcher.ts`).
 
-**Search is alias lookup + fuzzy ranking in pure JS, not a SQL round-trip.** `lib/search/search-tests.ts` reimplements pg_trgm-style trigram similarity as a Jaccard score in `lib/search/fuzzy-match.ts` (unit-testable without a DB) rather than querying Postgres for fuzzy matches. Pipeline: normalize the query (`normalize-query.ts`) → exact code/name/short-name match → fuzzy catalog match → exact/fuzzy match against `test_aliases` (admin-curated) → `rank-results.ts` dedupes/orders exact > alias > fuzzy → join to `test_prices` for the requested `(locationId, serviceType)`. A candidate with no current price row there is silently dropped, never shown with placeholder data — the same rule the WhatsApp generator follows (only verified DB fields, nothing invented). `lib/profiles/find-matching-profiles.ts` reuses the same resolved-test-id set to rank profiles by test overlap (`calculate-profile-match.ts`).
+**Search is alias lookup + fuzzy ranking in pure JS, not a SQL round-trip.** `lib/search/catalog/search-tests.ts` reimplements pg_trgm-style trigram similarity as a Jaccard score in `lib/search/matching/fuzzy-match.ts` (unit-testable without a DB) rather than querying Postgres for fuzzy matches. Pipeline: normalize the query (`normalize-query.ts`) → exact code/name/short-name match → fuzzy catalog match → exact/fuzzy match against `test_aliases` (admin-curated) → `rank-results.ts` dedupes/orders exact > alias > fuzzy → join to `test_prices` for the requested `(locationId, serviceType)`. A candidate with no current price row there is silently dropped, never shown with placeholder data — the same rule the WhatsApp generator follows (only verified DB fields, nothing invented). `lib/profiles/find-matching-profiles.ts` reuses the same resolved-test-id set to rank profiles by test overlap (`calculate-profile-match.ts`).
 
 **DB row → domain type mapping convention.** Every `lib/database/*.ts` file follows the same shape: a private `*Row` interface mirroring the snake_case Postgres columns, a `map*()` function converting to the camelCase domain type in `types/*.ts`, and query functions built on `createAdminClient()`. Follow this pattern for new tables rather than passing raw Supabase rows around.
 

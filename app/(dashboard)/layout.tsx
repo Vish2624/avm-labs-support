@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { AppHeader } from "@/components/layout/app-header";
-import { QuoteProvider } from "@/components/workspace/quote-provider";
+import { QuoteProvider } from "@/components/workspace/quote/quote-provider";
 import { LOCATION_COOKIE } from "@/lib/constants/location-cookie";
 import { requireUser } from "@/lib/auth/permissions";
 import { listActiveLocations } from "@/lib/database/locations";

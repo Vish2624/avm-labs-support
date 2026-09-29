@@ -1,5 +1,5 @@
 import "server-only";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 import { listOrder, loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
 import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";

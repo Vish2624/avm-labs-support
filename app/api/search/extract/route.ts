@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
-import { extractTests } from "@/lib/search/extract-tests";
-import { aiListRequestedTests } from "@/lib/search/ai-read-message";
+import { extractTests } from "@/lib/search/reading/extract-tests";
+import { aiListRequestedTests } from "@/lib/search/reading/ai-read-message";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
-import { isPackageName } from "@/lib/search/is-package-name";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 
 // Bulk test extraction backing the Support Workspace's "Paste text or image"
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     packages.filter(({ result }) => !isPackageName(result.name));
 
   // ai=true (the paste tab): otherwise Gemini picks the catalog codes the
-  // message asks for (lib/search/ai-read-message.ts), then the usual reader
+  // message asks for (lib/search/reading/ai-read-message.ts), then the usual reader
   // prices them. Without a key, or if Gemini fails or finds nothing, the
   // rule-based reading stands.
   if (body?.ai === true && geminiReaderConfigured()) {

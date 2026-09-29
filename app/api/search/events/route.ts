@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
 import { insertSearchEvent } from "@/lib/database/search-events";
 import { looksLikePhoneNumber, searchEventInputSchema } from "@/lib/validation/search-event-schema";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 
 // Finished-search log (use-search-telemetry.ts) — what agents search for,
 // pick, and fail to find, for the admin's missed-searches review.

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
-import { resolveTestIds } from "@/lib/search/resolve-test-ids";
+import { resolveTestIds } from "@/lib/search/catalog/resolve-test-ids";
 
 // Resolves free-text test names/codes/aliases to catalog test ids, for
 // /profiles' "search by test names" chip mode. Unlike /api/search this

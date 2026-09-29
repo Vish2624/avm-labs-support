@@ -1,7 +1,7 @@
 import "server-only";
 import { READER_MODELS, geminiGenerate } from "@/lib/ai/gemini";
-import { browseProfiles, browseTests } from "./browse-catalog";
-import { isPackageName } from "./is-package-name";
+import { browseProfiles, browseTests } from "../catalog/browse-catalog";
+import { isPackageName } from "../matching/is-package-name";
 import type { ServiceType } from "@/lib/constants/service-types";
 
 /** Marks a requested item that isn't in the catalog list, as the customer wrote it. */

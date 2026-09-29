@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local one-off maintenance scripts (git-ignored), not app code.
+    "scripts.local/**",
   ]),
 ]);
 

@@ -5,7 +5,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ProfileTestList } from "@/components/profiles/profile-test-list";
-import { AvailabilityPill } from "./availability-pill";
+import { AvailabilityPill } from "../availability-pill";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { sumMoney, subtractMoney, type Money } from "@/lib/pricing/money";

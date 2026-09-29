@@ -4,16 +4,16 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SparklesIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TestResultCard } from "./test-result-card";
-import { PackageResultRow } from "./package-result-row";
-import type { MessageAiState } from "./use-semantic-search";
+import { TestResultCard } from "../search/test-result-card";
+import { PackageResultRow } from "../search/package-result-row";
+import type { MessageAiState } from "../search/use-semantic-search";
 import type { ProfileSearchResult } from "@/types/profile";
-import { resultsTitleClassName } from "./search-results";
+import { resultsTitleClassName } from "../search/search-results";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
-import { isPackageName } from "@/lib/search/is-package-name";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
-import type { NotOfferedTest } from "@/lib/search/extract-tests";
+import type { NotOfferedTest } from "@/lib/search/reading/extract-tests";
 
 const EXTRACT_DEBOUNCE_MS = 400;
 
@@ -85,7 +85,7 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
  * Reads every test mentioned in a customer's raw message or a pasted list
  * of codes ("ACCP, ALKP, AMYL, ...") via /api/search/extract — the same
  * alias/fuzzy matcher as the search box, run server-side over the whole
- * message in one request (lib/search/extract-tests.ts). Only real
+ * message in one request (lib/search/reading/extract-tests.ts). Only real
  * catalog/alias matches with a current price at this location come back;
  * tokens that matched nothing are returned too, so the agent can see what
  * still needs a manual search.

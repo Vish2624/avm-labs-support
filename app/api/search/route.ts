@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
-import { searchTests } from "@/lib/search/search-tests";
-import { suggestCorrection } from "@/lib/search/suggest-correction";
+import { searchTests } from "@/lib/search/catalog/search-tests";
+import { suggestCorrection } from "@/lib/search/matching/suggest-correction";
 import { isServiceType } from "@/lib/constants/service-types";
 
 // Server-side test search. The Quote search box itself searches in the
-// browser (/api/search/catalog + lib/search/search-catalog.ts); it only
+// browser (/api/search/catalog + lib/search/catalog/search-catalog.ts); it only
 // calls this when nothing matched, for the "Did you mean …?" suggestion.
 export async function GET(request: NextRequest) {
   await requireUser();

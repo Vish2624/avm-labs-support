@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listAllTests } from "@/lib/database/tests";
 import { listAllAliasesWithTest } from "@/lib/database/aliases";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 import { parseAliasWorkbook } from "@/lib/excel/parse-alias-workbook";
 import type { AliasType } from "@/lib/constants/alias-types";
 import { invalidatesCatalog } from "@/lib/database/catalog-cache";

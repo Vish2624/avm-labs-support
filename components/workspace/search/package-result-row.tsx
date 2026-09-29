@@ -4,7 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { AvailabilityPill } from "./availability-pill";
+import { AvailabilityPill } from "../availability-pill";
 import { AddToggleButton, EXACT_MATCH_ROW_CLASS, ExactMatchTag } from "./test-result-card";
 import { ProfileTestList } from "@/components/profiles/profile-test-list";
 import type { ProfileSearchResult } from "@/types/profile";

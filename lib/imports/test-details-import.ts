@@ -10,7 +10,7 @@ import {
   insertStagingRows,
   updatePriceListVersion,
 } from "@/lib/database/imports";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 import { formatMajor, parsePrice, parseServiceType, parseYesNo, resolveLocation, splitList, type UploadIssue } from "./upload-values";
 import { changeGroup, type UploadPreview } from "./upload-preview";
 import type { Test } from "@/types/test";

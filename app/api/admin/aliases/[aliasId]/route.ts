@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth/permissions";
 import { updateAlias, setAliasActive, deleteAlias } from "@/lib/database/aliases";
 import { recordAuditLog } from "@/lib/database/audit-log";
 import { aliasInputSchema } from "@/lib/validation/alias-schema";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 
 // Body is either { action: "update", ...AliasInput } or { action: "setActive", active }.
 export async function PATCH(request: Request, { params }: { params: Promise<{ aliasId: string }> }) {

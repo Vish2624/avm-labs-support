@@ -1,9 +1,9 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
-import { normalizeQuery } from "./normalize-query";
-import { buildSearchCandidates } from "./build-search-candidates";
-import { rankResults, type SearchMatchType } from "./rank-results";
+import { normalizeQuery } from "../matching/normalize-query";
+import { buildSearchCandidates } from "../matching/build-search-candidates";
+import { rankResults, type SearchMatchType } from "../matching/rank-results";
 
 export interface ResolvedTestQuery {
   /** The raw chip text as typed. */

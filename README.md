@@ -20,38 +20,67 @@ npm run dev
 
 ## Structure
 
+Code is grouped by feature. `app/` holds routes only; the UI lives in `components/`,
+and all logic and data access live in `lib/`.
+
 ```
-app/
-  (auth)/login/            # sign-in (support@ shared / admin@)
-  (dashboard)/             # authenticated shell: sidebar + topbar
-    dashboard/             # redirect() to /workspace (the real landing page)
-    workspace/              # Support Workspace — single-page search + quotation (Phase 4)
-    profiles/               # Profile/package search (Phase 5)
-    updates/                 # read-only feed of recent price/availability changes (Phase 8)
-    admin/                  # Excel import pipeline + catalog/alias/profile management (Phases 6-7)
-  api/                     # route handlers backing search/quotation/profiles/imports/exports
+app/                         # routes only: pages, layouts, API route handlers
+  (auth)/login/              # sign-in page (brand panel + form)
+  (dashboard)/               # signed-in shell: header, location picker, quote state
+    workspace/               # Quote Builder, the agents' main screen
+    profiles/                # Packages search
+    updates/                 # recent price/availability changes
+    admin/                   # upload, tests, aliases, packages, missed searches,
+                             # export, imports, system health
+    dashboard/               # redirects to /workspace
+  api/                       # route handlers (search, profiles, imports, exports, admin, AI)
 
-components/
-  layout/                  # Sidebar (real nav), Topbar, location/service-type selectors
-  workspace/ profiles/ admin/  # UI pieces per section (placeholders until their phase)
-  ui/                      # shadcn/ui primitives
+components/                  # React UI, one folder per section
+  layout/                    # app header, theme, shared page chrome
+  workspace/                 # Quote Builder
+    workspace-client.tsx     #   the screen itself: wires everything below together
+    search/                  #   search box, results rows, filters, telemetry, in-browser AI
+    paste/                   #   "Paste text or image" reader
+    assistant/               #   Support Assistant
+    quote/                   #   quotation panel, quote state, package suggestions
+  profiles/                  # Packages page
+  admin/                     # one subfolder per admin page
+  ui/                        # shadcn/ui primitives (don't edit by hand)
 
-lib/
-  supabase/                # client.ts (browser), server.ts (auth session), admin.ts
-                            # (service-role — all data access), middleware.ts (session refresh + role)
-  auth/                    # auth.ts (getCurrentUser/signOut), permissions.ts (requireUser/requireAdmin)
-  constants/                # LocationCode, ServiceType, AvailabilityStatus — single source
-                            # of truth for these unions; actual records still come from the DB
-  pricing/money.ts          # safe integer minor-unit arithmetic — no floating point
-  profiles/calculate-profile-match.ts  # profile-ranking algorithm (implemented, pure)
-  search/ excel/ imports/ whatsapp/ database/ validation/  # placeholders pending their phase
+lib/                         # logic and data access, no React
+  search/
+    matching/                # the fuzzy matcher: normalize, typo scoring, synonyms, ranking
+    catalog/                 # searching tests: server search, in-browser catalog, browse lists
+    reading/                 # reading pasted messages/lists into tests (rules + Gemini)
+    semantic/                # in-browser AI similarity (MiniLM web worker)
+    learning/                # turning the search log into Admin > Missed searches
+  ai/                        # shared Gemini client (4 free keys, fallbacks, error logging)
+  ai-assistant/              # Support Assistant answers
+  database/                  # every Supabase query: *Row type -> map*() -> domain type
+  supabase/                  # Supabase clients (admin = data, server = auth, middleware = proxy)
+  auth/                      # requireUser / requireAdmin
+  profiles/                  # package matching and pricing
+  pricing/                   # integer money maths and discount tiers
+  excel/  imports/           # Excel upload pipeline: parse, validate, diff, commit, rollback
+  whatsapp/                  # WhatsApp reply text
+  validation/                # zod schemas for API input
+  constants/  utils/         # shared constants and small helpers
 
-proxy.ts                   # route protection: unauthenticated -> /login, non-admin -> /workspace
-types/                     # domain types mirroring the DB schema (Test, TestPrice, Profile, ...)
-supabase/migrations/       # SQL schema (Phase 2)
-supabase/seed/seed.sql     # dev seed data (Phase 2) — never production pricing data
-tests/{unit,integration,fixtures}/
+types/                       # domain types shared by lib/ and components/
+proxy.ts                     # route protection (Next 16's name for middleware)
+supabase/migrations/         # SQL schema, applied in filename order
+supabase/seed/seed.sql       # dummy seed data, never real pricing
+scripts.local/               # git-ignored one-off maintenance scripts
 ```
+
+### Where new files go
+
+- **A new page:** the route in `app/`, its UI in `components/<section>/`.
+- **A new query:** `lib/database/<table>.ts`, following the `*Row` → `map*()` pattern.
+- **Search logic:** `lib/search/<stage>/`. Keep it pure (no DB, no React), so it runs both in the browser and on the server.
+- **A Quote Builder piece:** the matching `components/workspace/<area>/` folder. A component used by several areas (like `availability-pill.tsx`) stays in `components/workspace/`.
+- **One-off data scripts:** `scripts.local/`. It's git-ignored and skipped by lint and type-check.
+- **Imports:** use the `@/` alias across folders, and `./` only inside the same folder.
 
 ## Status
 

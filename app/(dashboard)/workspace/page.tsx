@@ -5,8 +5,8 @@ import { WorkspaceClient, type WorkspaceTab } from "@/components/workspace/works
 import { pickTab } from "@/lib/utils/url-tab";
 import { SERVICE_TYPES, SERVICE_TYPE_FILTERS } from "@/lib/constants/service-types";
 import { LOCATION_COOKIE } from "@/lib/constants/location-cookie";
-import { loadSearchCatalog, searchCatalogUrl } from "@/lib/search/load-search-catalog";
-import type { SearchCatalog } from "@/lib/search/search-catalog";
+import { loadSearchCatalog, searchCatalogUrl } from "@/lib/search/catalog/load-search-catalog";
+import type { SearchCatalog } from "@/lib/search/catalog/search-catalog";
 
 const WORKSPACE_TABS: readonly WorkspaceTab[] = ["search", "paste", "ai"];
 

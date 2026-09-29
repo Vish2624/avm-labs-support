@@ -1,9 +1,9 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
-import { buildSearchCandidates } from "@/lib/search/build-search-candidates";
-import { rankResults } from "@/lib/search/rank-results";
-import { aiSearchCatalog } from "@/lib/search/ai-read-message";
+import { buildSearchCandidates } from "@/lib/search/matching/build-search-candidates";
+import { rankResults } from "@/lib/search/matching/rank-results";
+import { aiSearchCatalog } from "@/lib/search/reading/ai-read-message";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";

@@ -4,19 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ImageIcon, LoaderCircleIcon, ReceiptTextIcon, SearchIcon, XIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { ServiceTypeFilterSelector } from "./service-type-filter";
-import { TestSearch, looksLikeMessage } from "./test-search";
-import { SearchResults, type SearchResultGroup } from "./search-results";
-import { useSemanticMessageMatches } from "./use-semantic-search";
-import { isPackageName } from "@/lib/search/is-package-name";
-import { searchCatalogProfiles, searchCatalogTests, type SearchCatalog } from "@/lib/search/search-catalog";
-import { MessageExtractionResults, useMessageExtraction } from "./message-extractor";
-import { QuotationPanel } from "./quotation-panel";
-import { PackageSuggestions } from "./package-suggestions";
-import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./ai-test-assistant";
-import { useQuote } from "./quote-provider";
-import { useSearchTelemetry } from "./use-search-telemetry";
-import { imageFromDataTransfer, preloadImageReader, readImageText } from "./image-reader";
+import { ServiceTypeFilterSelector } from "./search/service-type-filter";
+import { TestSearch, looksLikeMessage } from "./search/test-search";
+import { SearchResults, type SearchResultGroup } from "./search/search-results";
+import { useSemanticMessageMatches } from "./search/use-semantic-search";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
+import { searchCatalogProfiles, searchCatalogTests, type SearchCatalog } from "@/lib/search/catalog/search-catalog";
+import { MessageExtractionResults, useMessageExtraction } from "./paste/message-extractor";
+import { QuotationPanel } from "./quote/quotation-panel";
+import { PackageSuggestions } from "./quote/package-suggestions";
+import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./assistant/ai-test-assistant";
+import { useQuote } from "./quote/quote-provider";
+import { useSearchTelemetry } from "./search/use-search-telemetry";
+import { imageFromDataTransfer, preloadImageReader, readImageText } from "./paste/image-reader";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
@@ -394,7 +394,7 @@ export function WorkspaceClient({
   // Instant search: each location + service type's catalog (tests, aliases,
   // priced tests and profiles) is loaded into the browser once — right when
   // the page opens, not on the first keystroke — and every keystroke is
-  // searched locally (lib/search/search-catalog.ts), with the same fuzzy
+  // searched locally (lib/search/catalog/search-catalog.ts), with the same fuzzy
   // matching as the server and no request per keystroke. Refreshed in the
   // background so price changes still come through.
   function useSearchCatalog(type: ServiceType) {

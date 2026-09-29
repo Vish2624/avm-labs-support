@@ -7,10 +7,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatTat } from "@/lib/utils/format-tat";
-import { AvailabilityPill } from "./availability-pill";
-import { resultsTitleClassName } from "./search-results";
+import { AvailabilityPill } from "../availability-pill";
+import { resultsTitleClassName } from "../search/search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
-import { isPackageName } from "@/lib/search/is-package-name";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
 import type { AiAnswer, AiAssistantResponse, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
 

@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
-import { aiSearchCatalog } from "@/lib/search/ai-read-message";
-import { extractTests } from "@/lib/search/extract-tests";
-import { isPackageName } from "@/lib/search/is-package-name";
+import { aiSearchCatalog } from "@/lib/search/reading/ai-read-message";
+import { extractTests } from "@/lib/search/reading/extract-tests";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 
 // The Quote search box's second step: only asked when the fuzzy search

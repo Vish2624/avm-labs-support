@@ -1,9 +1,9 @@
 "use client";
 
-import type { CatalogItem, WorkerRequest, WorkerResponse } from "@/lib/search/semantic-worker";
-import type { SemanticMatch } from "@/lib/search/semantic-search-results";
+import type { CatalogItem, WorkerRequest, WorkerResponse } from "@/lib/search/semantic/semantic-worker";
+import type { SemanticMatch } from "@/lib/search/semantic/semantic-search-results";
 
-// One shared in-browser AI model (lib/search/semantic-worker.ts) for the
+// One shared in-browser AI model (lib/search/semantic/semantic-worker.ts) for the
 // whole page — the search box and "Paste text or image" both use it, so the
 // model and catalog are only loaded once per page load (and cached by the
 // browser across visits).
@@ -46,7 +46,7 @@ export function subscribeEngine(listener: () => void): () => void {
 export function startSemanticEngine(): void {
   if (worker || status === "failed") return;
   try {
-    worker = new Worker(new URL("../../lib/search/semantic-worker.ts", import.meta.url), { type: "module" });
+    worker = new Worker(new URL("../../../lib/search/semantic/semantic-worker.ts", import.meta.url), { type: "module" });
   } catch {
     setStatus("failed");
     return;

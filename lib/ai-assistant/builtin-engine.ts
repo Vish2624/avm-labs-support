@@ -1,5 +1,5 @@
-import { normalizeQuery } from "@/lib/search/normalize-query";
-import { matchScore } from "@/lib/search/fuzzy-match";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
+import { matchScore } from "@/lib/search/matching/fuzzy-match";
 import { PRE_TREATMENT_ITEMS, PRE_TREATMENT_PATTERN, TOPICS, type Topic, type TopicItem } from "./topic-guide";
 import { findPriced, suggestionKey, toSuggestion, type PricedCatalog } from "./priced-catalog";
 import type { AiSuggestion } from "@/types/ai-assistant";

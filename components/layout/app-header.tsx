@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "./theme-toggle";
-import { useQuote } from "@/components/workspace/quote-provider";
+import { useQuote } from "@/components/workspace/quote/quote-provider";
 import { signOutAction } from "@/app/(dashboard)/actions";
 import type { AuthUser } from "@/types/auth";
 

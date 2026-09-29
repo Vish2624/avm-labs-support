@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
-import { AvailabilityPill } from "./availability-pill";
+import { AvailabilityPill } from "../availability-pill";
 import type { SearchTestResult } from "@/types/search";
 
 // Fixed-width Add / Added toggle shared by test and package result rows, so

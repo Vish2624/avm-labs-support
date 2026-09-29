@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { getEngineStatus, scoreQuery, startSemanticEngine, subscribeEngine, toMatches } from "./semantic-engine";
-import type { SemanticConfidence, SemanticMatch, SemanticSearchItem } from "@/lib/search/semantic-search-results";
+import type { SemanticConfidence, SemanticMatch, SemanticSearchItem } from "@/lib/search/semantic/semantic-search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 
 /** Candidates tried per unrecognised name in a pasted message. */

@@ -4,14 +4,14 @@ import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { getProfilePricing } from "@/lib/profiles/profile-pricing";
 import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
-import { toSearchResult } from "./search-tests";
+import { toSearchResult } from "../catalog/search-tests";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult } from "@/types/profile";
 
 export type SemanticConfidence = "high" | "low";
 
-/** One catalog item the in-browser model picked for a query (see lib/search/semantic-worker.ts). */
+/** One catalog item the in-browser model picked for a query (see lib/search/semantic/semantic-worker.ts). */
 export interface SemanticMatch {
   kind: "test" | "package";
   id: string;

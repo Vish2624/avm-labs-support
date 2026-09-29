@@ -1,8 +1,8 @@
-import { normalizeQuery } from "./normalize-query";
-import { buildSearchCandidates } from "./build-search-candidates";
-import { rankResults } from "./rank-results";
-import { matchScore } from "./fuzzy-match";
-import { queryVariants, VARIANT_SCORE_FACTOR } from "./query-variants";
+import { normalizeQuery } from "../matching/normalize-query";
+import { buildSearchCandidates } from "../matching/build-search-candidates";
+import { rankResults } from "../matching/rank-results";
+import { matchScore } from "../matching/fuzzy-match";
+import { queryVariants, VARIANT_SCORE_FACTOR } from "../matching/query-variants";
 import type { Test, TestAlias } from "@/types/test";
 
 /** A package's code + name, for scoring words against package names. */
