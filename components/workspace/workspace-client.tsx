@@ -10,13 +10,13 @@ import { SearchResults, type SearchResultGroup } from "./search/search-results";
 import { useSemanticMessageMatches } from "./search/use-semantic-search";
 import { isPackageName } from "@/lib/search/matching/is-package-name";
 import { searchCatalogProfiles, searchCatalogTests, type SearchCatalog } from "@/lib/search/catalog/search-catalog";
-import { MessageExtractionResults, useMessageExtraction } from "./paste/message-extractor";
+import { MessageExtractionResults, primeExtraction, useMessageExtraction } from "./paste/message-extractor";
 import { QuotationPanel } from "./quote/quotation-panel";
 import { PackageSuggestions } from "./quote/package-suggestions";
 import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./assistant/ai-test-assistant";
 import { useQuote } from "./quote/quote-provider";
 import { useSearchTelemetry } from "./search/use-search-telemetry";
-import { imageFromDataTransfer, preloadImageReader, readImageText } from "./paste/image-reader";
+import { imageFromDataTransfer, preloadImageReader, readImage } from "./paste/image-reader";
 import { fetcher } from "@/lib/utils/fetcher";
 import { sumMoney } from "@/lib/pricing/money";
 import { generateWhatsAppResponse } from "@/lib/whatsapp/generate-response";
@@ -201,18 +201,21 @@ export function WorkspaceClient({
   // overwrites the saved copy.
   const inputsRestoredRef = useRef(false);
   useEffect(() => {
+    // Typed into the search box while the page was still loading: that
+    // wins over the saved copy, so the agent's first keystrokes aren't lost.
+    const typedEarly = searchInputRef.current?.value ?? "";
     try {
       const saved = JSON.parse(window.sessionStorage.getItem(INPUTS_STORAGE_KEY) ?? "null") as {
         query?: unknown;
         pasteText?: unknown;
         submittedPasteText?: unknown;
       } | null;
+      const restoredQuery = typedEarly || (typeof saved?.query === "string" ? saved.query : "");
+      if (restoredQuery) {
+        setQuery(restoredQuery);
+        setDebouncedQuery(restoredQuery);
+      }
       if (saved) {
-        if (typeof saved.query === "string") {
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of this tab's saved inputs
-          setQuery(saved.query);
-          setDebouncedQuery(saved.query);
-        }
         if (typeof saved.pasteText === "string") setPasteText(saved.pasteText);
         if (typeof saved.submittedPasteText === "string") setSubmittedPasteText(saved.submittedPasteText);
       }
@@ -246,11 +249,13 @@ export function WorkspaceClient({
     });
     setImageReading(true);
     try {
-      const text = await readImageText(image);
+      const { text, extraction } = await readImage(image, { locationId, serviceType: serviceTypeFilter });
       if (!text) {
-        toast.error("No text found in image");
+        toast.error("No tests found in image");
         return;
       }
+      // The AI reader priced the tests already — show them without asking again.
+      if (extraction) primeExtraction(text, locationId, serviceTypeFilter, true, extraction);
       setPasteText(text);
       setSubmittedPasteText(text);
     } catch (error) {
@@ -595,19 +600,33 @@ export function WorkspaceClient({
   }
 
   // Enter in the search box adds the first result (across active service
-  // types, in_house before outsource) that isn't already in the quote —
-  // lets an agent clear a customer's list without touching the mouse.
+  // types, in_house before outsource) that isn't already in the quote, then
+  // clears the box for the next test — so an agent can type a customer's
+  // list without touching the mouse.
   function handleSearchSubmit() {
-    if (browsing) return;
-    for (const group of searchGroups) {
-      const next = group.tests.find((result) => !addedTestIds.has(result.testId));
-      if (next) {
-        handleAdd(next);
-        searchTelemetry.recordPick(next.testId);
-        toast.success(`Added ${next.code}`);
-        return;
-      }
+    const typed = query.trim();
+    if (!typed) return;
+    // Enter pressed straight after typing arrives before the shown results
+    // catch up (they wait for a short pause) — search what's in the box now.
+    const results =
+      typed === trimmedQuery
+        ? searchGroups.flatMap((group) => group.tests)
+        : activeServiceTypes.flatMap((type) => {
+            const catalog = (type === "in_house" ? inHouseCatalog : outsourceCatalog).data;
+            return catalog ? searchCatalogTests(typed, catalog) : [];
+          });
+    const next = results.find((result) => !addedTestIds.has(result.testId));
+    if (next) {
+      handleAdd(next);
+      searchTelemetry.recordPick(next.testId);
+      toast.success(`Added ${next.code}`);
+      setQuery("");
+      return;
     }
+    const stillSearching = typed === trimmedQuery && searchGroups.some((group) => group.testsLoading);
+    toast.info(
+      results.length > 0 ? "Already in the quote" : stillSearching ? "Still searching…" : `No test matches “${typed}”`
+    );
   }
 
   const quotation: Quotation = useMemo(
@@ -871,6 +890,7 @@ export function WorkspaceClient({
                 onAddPackage={(result) => applyPackage(toPackageLine(result))}
                 onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
                 ai={messageAi}
+                readingImage={imageReading}
               />
             )}
           </div>

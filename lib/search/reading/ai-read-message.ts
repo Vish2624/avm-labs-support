@@ -37,11 +37,56 @@ export async function aiListRequestedTests(
   const catalogLines = await catalogListing(locationId, serviceTypes, false);
   if (catalogLines.length === 0) return null;
 
-  const reply = await geminiGenerate([
-    { text: `${INSTRUCTIONS}\n\nLAB LIST:\n${catalogLines.join("\n")}\n\nCUSTOMER MESSAGE:\n${message}` },
-  ]);
-  if (reply === null) return null;
+  const reply = await geminiGenerate(
+    [{ text: `${INSTRUCTIONS}\n\nLAB LIST:\n${catalogLines.join("\n")}\n\nCUSTOMER MESSAGE:\n${message}` }],
+    READER_MODELS,
+    "reader",
+    { hedgeAfterMs: HEDGE_AFTER_MS }
+  );
+  return reply === null ? null : codesAndNotListed(reply);
+}
 
+/** An agent is waiting on the paste tab: race another key if Gemini hasn't answered by then. */
+const HEDGE_AFTER_MS = 3500;
+
+const IMAGE_INSTRUCTIONS = `You help a diagnostic lab's support agent. The image is a doctor's prescription, a lab request form, or a screenshot of a customer's message — often handwritten. Below is the lab's list of tests and profiles at this branch, one per line as "CODE | name".
+
+Read the image and find every lab test or profile it asks for, and reply with one line per item:
+- If it is in the list, write its CODE exactly as listed. Match by meaning, not only spelling: fix handwriting, and count abbreviations and common names ("CBC"/"CBP"/"Hb" = the complete blood count or hemogram, "RFT" = kidney function tests, "vit d" = vitamin D, "S. creatinine" = serum creatinine).
+- Prefer a profile when the image names a profile or panel ("lipid profile", "kidney function"); otherwise the single test.
+- If it is NOT in the list, write "${NOT_LISTED}" followed by the test's usual name (e.g. "${NOT_LISTED}Vitamin K").
+- Split combined items ("Vit D + B12" = two lines). Never repeat an item.
+Ignore everything that is not a test request: patient and doctor names, dates, ages, addresses, phone numbers, clinic details, stamps, signatures, symptoms, diagnoses and medicines. If a word can't be read, leave it out rather than guessing.
+Reply with the lines only — no numbering, bullets or explanations. If nothing is asked for, reply with nothing.`;
+
+/**
+ * aiListRequestedTests() for a prescription/message image, in one Gemini
+ * request: the image is read and matched to catalog codes together, rather
+ * than read into names first and matched in a second request. Null when
+ * Gemini isn't configured or didn't answer.
+ */
+export async function aiReadImageTests(
+  image: { mimeType: string; base64: string },
+  locationId: string,
+  serviceTypes: readonly ServiceType[]
+): Promise<{ codes: string; notListed: string[] } | null> {
+  const catalogLines = await catalogListing(locationId, serviceTypes, false);
+  if (catalogLines.length === 0) return null;
+
+  const reply = await geminiGenerate(
+    [
+      { inline_data: { mime_type: image.mimeType, data: image.base64 } },
+      { text: `${IMAGE_INSTRUCTIONS}\n\nLAB LIST:\n${catalogLines.join("\n")}` },
+    ],
+    READER_MODELS,
+    "image",
+    { hedgeAfterMs: HEDGE_AFTER_MS }
+  );
+  return reply === null ? null : codesAndNotListed(reply);
+}
+
+/** Splits a reader reply into catalog codes and the "?"-marked items that aren't listed. */
+function codesAndNotListed(reply: string): { codes: string; notListed: string[] } {
   const lines = replyLines(reply);
   const notListed = lines
     .filter((line) => line.startsWith(NOT_LISTED))
@@ -79,7 +124,8 @@ export async function aiSearchCatalog(
   const reply = await geminiGenerate(
     [{ text: `${SEARCH_INSTRUCTIONS}\n\nLAB LIST:\n${catalogLines.join("\n")}\n\nSEARCH:\n${query}` }],
     READER_MODELS,
-    "search"
+    "search",
+    { hedgeAfterMs: HEDGE_AFTER_MS }
   );
   if (reply === null) return null;
   return replyLines(reply)

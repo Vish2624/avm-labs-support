@@ -2,13 +2,17 @@
 
 // Reads prescription / lab-request photos and screenshots for "Paste text
 // or image". First choice: /api/search/read-image, where Gemini (free-tier
-// key) reads the image — handwriting too — and returns only the test names
-// (the image is sent to Google). If the server has no key or the call
+// key) reads the image — handwriting too — and the tests it asks for come
+// back already priced, in one request (the image is sent to Google). If
+// the server has no key or the call
 // fails, free in-browser OCR runs instead: Tesseract.js (open source),
 // loaded once from jsDelivr; its English data (~10 MB) is fetched on first
 // use and then cached. Tesseract reads printed text well, handwriting
 // poorly. Either way the text goes through the same reader as pasted text,
 // so only real catalog tests and packages with a price here are shown.
+
+import type { Extraction } from "./message-extractor";
+import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 
 const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 /**
@@ -149,17 +153,31 @@ async function shrinkForUpload(image: Blob): Promise<Blob> {
 /** Set once the server says it has no image AI, so later images skip the round trip. */
 let serverReaderMissing = false;
 
-/** The server's AI reader: the test names it found, or null when it isn't set up or failed. */
-async function readWithServer(image: Blob): Promise<string | null> {
+/** Where the image's tests are priced. */
+export interface ImageReadScope {
+  locationId: string;
+  serviceType: ServiceTypeFilter;
+}
+
+/** What an image read gives back: the text for the paste box, and — from the AI reader — the tests already priced. */
+export interface ImageRead {
+  text: string;
+  extraction: Extraction | null;
+}
+
+/** The server's AI reader (reads and prices in one request), or null when it isn't set up or failed. */
+async function readWithServer(image: Blob, scope: ImageReadScope): Promise<ImageRead | null> {
   if (serverReaderMissing) return null;
   const form = new FormData();
   form.append("image", await shrinkForUpload(image), "image.jpg");
+  form.append("locationId", scope.locationId);
+  form.append("serviceType", scope.serviceType);
   try {
     const response = await fetch("/api/search/read-image", { method: "POST", body: form });
     if (response.status === 501) serverReaderMissing = true;
     if (!response.ok) return null;
-    const { text } = (await response.json()) as { text?: unknown };
-    return typeof text === "string" ? text.trim() : null;
+    const { text, extraction } = (await response.json()) as { text?: unknown; extraction?: Extraction };
+    return typeof text === "string" ? { text: text.trim(), extraction: extraction ?? null } : null;
   } catch {
     return null;
   }
@@ -175,11 +193,11 @@ export function imageFromDataTransfer(data: DataTransfer | null): File | null {
 }
 
 /** Reads the tests named in an image. Throws when no reader can load or run. */
-export async function readImageText(image: Blob): Promise<string> {
-  const fromServer = await readWithServer(image);
+export async function readImage(image: Blob, scope: ImageReadScope): Promise<ImageRead> {
+  const fromServer = await readWithServer(image, scope);
   if (fromServer !== null) return fromServer;
 
   const [worker, prepared] = await Promise.all([getWorker(), prepareImage(image)]);
   const { data } = await worker.recognize(prepared ?? image);
-  return data.text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { text: data.text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim(), extraction: null };
 }

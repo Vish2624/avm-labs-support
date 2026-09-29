@@ -15,9 +15,7 @@ import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import type { SearchTestResult } from "@/types/search";
 import type { NotOfferedTest } from "@/lib/search/reading/extract-tests";
 
-const EXTRACT_DEBOUNCE_MS = 400;
-
-interface Extraction {
+export interface Extraction {
   detected: SearchTestResult[];
   packages: { token: string; result: ProfileSearchResult }[];
   notOffered: NotOfferedTest[];
@@ -90,6 +88,30 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
  * tokens that matched nothing are returned too, so the agent can see what
  * still needs a manual search.
  */
+const extractionKey = (text: string, locationId: string, serviceType: ServiceTypeFilter, useAi: boolean) =>
+  JSON.stringify([text.trim(), locationId, serviceType, useAi]);
+
+/** Reads that arrived already priced (an image read), so they aren't requested again. */
+const primedExtractions = new Map<string, Extraction>();
+const MAX_PRIMED = 20;
+
+/**
+ * Hands the hook a read that is already done — the image reader returns
+ * the priced results with the text — so showing that text costs no second
+ * request. Call before setting the text.
+ */
+export function primeExtraction(
+  text: string,
+  locationId: string,
+  serviceType: ServiceTypeFilter,
+  useAi: boolean,
+  extraction: Extraction
+): void {
+  if (primedExtractions.size >= MAX_PRIMED) primedExtractions.clear();
+  primedExtractions.set(extractionKey(text, locationId, serviceType, useAi), extraction);
+  notifyExtraction(extraction, false);
+}
+
 export function useMessageExtraction(text: string, locationId: string, serviceType: ServiceTypeFilter, useAi = false) {
   // Results are stored with the request they answer, so "loading" can be
   // derived (does the stored result match the current input?) instead of
@@ -97,15 +119,18 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
   const [result, setResult] = useState<{ key: string; scope: string; extraction: Extraction } | null>(null);
 
   const trimmed = text.trim();
-  const key = trimmed && locationId ? JSON.stringify([trimmed, locationId, serviceType, useAi]) : null;
+  const key = trimmed && locationId ? extractionKey(trimmed, locationId, serviceType, useAi) : null;
   // Prices belong to one location + service type.
   const scope = JSON.stringify([locationId, serviceType]);
+  const primed = key ? primedExtractions.get(key) : undefined;
 
   useEffect(() => {
-    if (!key) return;
+    if (!key || primed) return;
 
+    // Only runs for an explicit read (Find tests, a paste, an image), never
+    // per keystroke — so no debounce.
     let cancelled = false;
-    const timeout = setTimeout(async () => {
+    (async () => {
       let extraction = EMPTY_EXTRACTION;
       let failed = false;
       try {
@@ -123,15 +148,15 @@ export function useMessageExtraction(text: string, locationId: string, serviceTy
       if (cancelled) return;
       setResult({ key, scope, extraction });
       notifyExtraction(extraction, failed);
-    }, EXTRACT_DEBOUNCE_MS);
+    })();
 
     return () => {
       cancelled = true;
-      clearTimeout(timeout);
     };
-  }, [key, scope, trimmed, locationId, serviceType, useAi]);
+  }, [key, primed, scope, trimmed, locationId, serviceType, useAi]);
 
   if (!key) return { ...EMPTY_EXTRACTION, loading: false };
+  if (primed) return { ...primed, loading: false };
   // While a new read of edited text is pending, keep showing the previous
   // matches rather than flashing back to a skeleton on every keystroke —
   // but never another location's (or service type's) prices.
@@ -219,7 +244,10 @@ export function MessageExtractionResults({
   onAddPackage,
   onRemovePackage,
   ai = null,
+  readingImage = false,
 }: {
+  /** An image is being read — its tests replace whatever is shown now. */
+  readingImage?: boolean;
   text: string;
   detected: SearchTestResult[];
   packages?: { token: string; result: ProfileSearchResult }[];
@@ -253,9 +281,14 @@ export function MessageExtractionResults({
   const requested = detected.length + packageNames.length + notOffered.length + unmatched.length;
   const notAvailableCount = requested - available.length - availablePackages - aiFound;
 
-  if (loading && requested === 0) {
+  if (readingImage || (loading && requested === 0)) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2" aria-busy>
+        <p className="flex items-center gap-2 px-2 pt-1 pb-1 text-[13px] text-muted-foreground">
+          <SparklesIcon className="size-3.5 animate-pulse text-primary" />
+          {readingImage ? "Reading the image and finding its tests…" : "Finding the tests…"}
+        </p>
+        <Skeleton className="h-[62px] w-full rounded-xl" />
         <Skeleton className="h-[62px] w-full rounded-xl" />
         <Skeleton className="h-[62px] w-full rounded-xl" />
       </div>

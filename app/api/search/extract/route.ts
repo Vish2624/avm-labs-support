@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
 import { extractTests } from "@/lib/search/reading/extract-tests";
 import { aiListRequestedTests } from "@/lib/search/reading/ai-read-message";
+import { extractFromAiList } from "@/lib/search/reading/extract-from-ai-list";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
 import { isPackageName } from "@/lib/search/matching/is-package-name";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
@@ -56,9 +57,8 @@ export async function POST(request: NextRequest) {
   if (body?.ai === true && geminiReaderConfigured()) {
     const aiList = await aiListRequestedTests(text, locationId, serviceTypes).catch(() => null);
     if (aiList && (aiList.codes || aiList.notListed.length > 0)) {
-      const result = await extractTests(aiList.codes, locationId, serviceTypes);
-      const unmatched = [...new Set([...result.unmatched, ...aiList.notListed])];
-      return NextResponse.json({ ...result, packages: withoutPackages(result.packages), unmatched, readBy: "ai" });
+      const result = await extractFromAiList(aiList, locationId, serviceTypes);
+      return NextResponse.json({ ...result, readBy: "ai" });
     }
   }
 
