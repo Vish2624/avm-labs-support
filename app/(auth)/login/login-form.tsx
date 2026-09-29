@@ -86,14 +86,6 @@ export function LoginForm({ returnTo = "/workspace" }: { returnTo?: string }) {
         disabled={pending || state.success}
         className="relative mt-1 flex h-[50px] items-center justify-center gap-2.5 overflow-hidden rounded-[13px] bg-primary text-[14.5px] font-medium text-primary-foreground transition-[transform,translate,scale,rotate,box-shadow,filter] duration-200 hover:-translate-y-px hover:shadow-[0_14px_30px_-12px_var(--primary)] hover:brightness-105 active:scale-[0.98] disabled:cursor-wait disabled:opacity-90"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-2/5"
-          style={{
-            background: "linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent)",
-            animation: "avm-shine 3.2s ease-in-out infinite",
-          }}
-        />
         {pending ? (
           <span className="size-[15px] animate-spin rounded-full border-2 border-white/35 border-t-white" />
         ) : null}
