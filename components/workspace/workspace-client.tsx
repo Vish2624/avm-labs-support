@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ImageIcon, LoaderCircleIcon, SearchIcon, XIcon } from "lucide-react";
+import { ImageIcon, LoaderCircleIcon, ReceiptTextIcon, SearchIcon, XIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./service-type-filter";
@@ -281,6 +281,8 @@ export function WorkspaceClient({
   // below (reading it during the initial render would mismatch the
   // server-rendered HTML, which has no access to it).
   const [leftColumnPercent, setLeftColumnPercent] = useState(DEFAULT_LEFT_PERCENT);
+  // Phones show one column at a time; the bottom bar switches between them.
+  const [mobileView, setMobileView] = useState<"search" | "quote">("search");
   const [isResizingColumns, setIsResizingColumns] = useState(false);
 
   useEffect(() => {
@@ -628,292 +630,337 @@ export function WorkspaceClient({
     : null;
 
   return (
-    <div ref={columnsRef} className="flex h-full items-stretch overflow-hidden avm-fade-up [animation-duration:.45s]">
-      <section
-        style={{ width: `${leftColumnPercent}%` }}
-        className="flex h-full min-w-[380px] flex-none flex-col overflow-hidden"
-      >
-        {/* Static: mode tabs, filters and the search/paste box never scroll —
-            only the results below them do. */}
-        <div
-          className="flex shrink-0 flex-col gap-4 border-b border-border px-7 pt-[22px] pb-[18px] avm-fade-up"
-          style={{ animationDelay: "50ms" }}
+    <div className="flex h-full flex-col">
+      <div ref={columnsRef} className="flex min-h-0 flex-1 items-stretch overflow-hidden avm-fade-up [animation-duration:.45s]">
+        <section
+          style={{ width: `${leftColumnPercent}%` }}
+          className={cn(
+            "flex h-full flex-none flex-col overflow-hidden max-md:w-full! md:min-w-[380px]",
+            mobileView === "quote" && "max-md:hidden"
+          )}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Two equal segments with a card that slides under the active one
-                  (hidden while the separate AI assistant is open). */}
-              <div className="relative grid grid-cols-2 rounded-xl bg-muted p-1">
-                <span
-                  aria-hidden
+          {/* Static: mode tabs, filters and the search/paste box never scroll —
+              only the results below them do. */}
+          <div
+            className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pt-4 pb-3.5 avm-fade-up md:gap-4 md:px-7 md:pt-[22px] md:pb-[18px]"
+            style={{ animationDelay: "50ms" }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 max-md:w-full max-md:flex-nowrap max-md:gap-2">
+                {/* Two equal segments with a card that slides under the active one
+                    (hidden while the separate AI assistant is open). */}
+                <div className="relative grid grid-cols-2 rounded-xl bg-muted p-1 max-md:flex-1">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-[9px] bg-card shadow-[0_1px_3px_rgb(0_0_0/0.08)] transition-[transform,translate,scale,rotate,opacity] duration-400 ease-[cubic-bezier(.34,1.3,.64,1)]",
+                      tab === "paste" && "translate-x-full",
+                      tab === "ai" && "opacity-0"
+                    )}
+                  />
+                  <button type="button" onClick={() => setTab("search")} className={segmentClassName(tab === "search")}>
+                    Search<span className="max-md:hidden"> tests</span>
+                  </button>
+                  <button type="button" onClick={() => setTab("paste")} className={segmentClassName(tab === "paste")}>
+                    Paste<span className="max-md:hidden"> text or image</span>
+                  </button>
+                </div>
+                {/* Kept apart from the search/paste switch: a separate module,
+                    not another way of searching. */}
+                <button
+                  type="button"
+                  onClick={() => setTab("ai")}
+                  aria-pressed={tab === "ai"}
                   className={cn(
-                    "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-[9px] bg-card shadow-[0_1px_3px_rgb(0_0_0/0.08)] transition-[transform,translate,scale,rotate,opacity] duration-400 ease-[cubic-bezier(.34,1.3,.64,1)]",
-                    tab === "paste" && "translate-x-full",
-                    tab === "ai" && "opacity-0"
+                    "flex h-[42px] shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium whitespace-nowrap md:px-4 transition-[transform,translate,scale,rotate,box-shadow,background] duration-250 hover:-translate-y-px",
+                    tab === "ai"
+                      ? "border-primary bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_var(--primary)]"
+                      : "border-border text-primary avm-shimmer-bg hover:shadow-[0_8px_20px_-10px_var(--primary)]"
                   )}
-                />
-                <button type="button" onClick={() => setTab("search")} className={segmentClassName(tab === "search")}>
-                  Search tests
-                </button>
-                <button type="button" onClick={() => setTab("paste")} className={segmentClassName(tab === "paste")}>
-                  Paste text or image
+                >
+                  <span
+                    aria-hidden
+                    className={cn("size-2.5 rotate-45 rounded-[2px]", tab === "ai" ? "bg-primary-foreground" : "bg-primary")}
+                  />
+                  <span className="md:hidden">Assistant</span>
+                  <span className="max-md:hidden">Support Assistant</span>
                 </button>
               </div>
-              {/* Kept apart from the search/paste switch: a separate module,
-                  not another way of searching. */}
-              <button
-                type="button"
-                onClick={() => setTab("ai")}
-                aria-pressed={tab === "ai"}
-                className={cn(
-                  "flex h-[42px] items-center gap-2 rounded-xl border px-4 text-sm font-medium whitespace-nowrap transition-[transform,translate,scale,rotate,box-shadow,background] duration-250 hover:-translate-y-px",
-                  tab === "ai"
-                    ? "border-primary bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_var(--primary)]"
-                    : "border-border text-primary avm-shimmer-bg hover:shadow-[0_8px_20px_-10px_var(--primary)]"
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn("size-2.5 rotate-45 rounded-[2px]", tab === "ai" ? "bg-primary-foreground" : "bg-primary")}
-                />
-                Support Assistant
-              </button>
+              <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
             </div>
-            <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
-          </div>
 
-          {tab === "search" ? (
-            <div key="search" className="avm-fade-up [animation-duration:.35s]">
-              <TestSearch
-                value={query}
-                onChange={setQuery}
-                onSubmit={handleSearchSubmit}
-                inputRef={searchInputRef}
-                onPasteMessage={handlePastedMessage}
-                onPasteImage={handleImage}
+            {tab === "search" ? (
+              <div key="search" className="avm-fade-up [animation-duration:.35s]">
+                <TestSearch
+                  value={query}
+                  onChange={setQuery}
+                  onSubmit={handleSearchSubmit}
+                  inputRef={searchInputRef}
+                  onPasteMessage={handlePastedMessage}
+                  onPasteImage={handleImage}
+                />
+              </div>
+            ) : tab === "ai" ? (
+              <div key="ai" className="avm-fade-up [animation-duration:.35s]">
+              <AiQuestionForm
+                value={aiQuestion}
+                onChange={setAiQuestion}
+                onSubmit={() => aiAssistant.ask(aiQuestion)}
+                loading={aiAssistant.loading}
               />
-            </div>
-          ) : tab === "ai" ? (
-            <div key="ai" className="avm-fade-up [animation-duration:.35s]">
-            <AiQuestionForm
-              value={aiQuestion}
-              onChange={setAiQuestion}
-              onSubmit={() => aiAssistant.ask(aiQuestion)}
-              loading={aiAssistant.loading}
-            />
-            </div>
-          ) : (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                submitPaste();
-              }}
-              key="paste"
-              onDragOver={(event) => {
-                if (!Array.from(event.dataTransfer.types).includes("Files")) return;
-                event.preventDefault();
-                setImageDragOver(true);
-              }}
-              onDragLeave={() => setImageDragOver(false)}
-              onDrop={(event) => {
-                setImageDragOver(false);
-                const image = imageFromDataTransfer(event.dataTransfer);
-                if (!image) return;
-                event.preventDefault();
-                handleImage(image);
-              }}
-              className="flex flex-col gap-2.5 avm-fade-up [animation-duration:.35s]"
-            >
-              <textarea
-                value={pasteText}
-                onChange={(event) => {
-                  setPasteText(event.target.value);
-                  if (!event.target.value.trim()) setSubmittedPasteText("");
+              </div>
+            ) : (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitPaste();
                 }}
-                onPaste={(event) => {
-                  const image = imageFromDataTransfer(event.clipboardData);
+                key="paste"
+                onDragOver={(event) => {
+                  if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+                  event.preventDefault();
+                  setImageDragOver(true);
+                }}
+                onDragLeave={() => setImageDragOver(false)}
+                onDrop={(event) => {
+                  setImageDragOver(false);
+                  const image = imageFromDataTransfer(event.dataTransfer);
                   if (!image) return;
                   event.preventDefault();
                   handleImage(image);
                 }}
-                onKeyDown={(event) => {
-                  // Enter searches; Shift+Enter is a new line (not mid IME composition).
-                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    if (pasteText.trim() && !extraction.loading) submitPaste();
-                  }
-                }}
-                placeholder="Paste the customer's message or a prescription image, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
-                aria-label="Customer message"
-                autoFocus
-                className={cn(
-                  "min-h-28 w-full resize-y rounded-[14px] border border-input bg-card px-4 py-3.5 text-[14.5px] leading-relaxed outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15",
-                  imageDragOver && "border-primary ring-4 ring-primary/15"
-                )}
-              />
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
+                className="flex flex-col gap-2.5 avm-fade-up [animation-duration:.35s]"
+              >
+                <textarea
+                  value={pasteText}
                   onChange={(event) => {
-                    const image = event.target.files?.[0];
-                    event.target.value = "";
-                    if (image) handleImage(image);
+                    setPasteText(event.target.value);
+                    if (!event.target.value.trim()) setSubmittedPasteText("");
                   }}
+                  onPaste={(event) => {
+                    const image = imageFromDataTransfer(event.clipboardData);
+                    if (!image) return;
+                    event.preventDefault();
+                    handleImage(image);
+                  }}
+                  onKeyDown={(event) => {
+                    // Enter searches; Shift+Enter is a new line (not mid IME composition).
+                    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      if (pasteText.trim() && !extraction.loading) submitPaste();
+                    }
+                  }}
+                  placeholder="Paste the customer's message or a prescription image, e.g. “Hi, how much for vit d, b12 and a sugar test?”"
+                  aria-label="Customer message"
+                  autoFocus
+                  className={cn(
+                    "min-h-28 w-full resize-y rounded-[14px] border border-input bg-card px-4 py-3.5 text-[14.5px] leading-relaxed outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/80 focus:border-primary focus:ring-4 focus:ring-primary/15",
+                    imageDragOver && "border-primary ring-4 ring-primary/15"
+                  )}
                 />
-                {imagePreview ? (
-                  <div className="relative size-[38px] shrink-0 overflow-hidden rounded-[9px] border border-border">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
-                    <img src={imagePreview} alt="Uploaded image" className="size-full object-cover" />
-                    {imageReading ? (
-                      <div className="absolute inset-0 grid place-items-center bg-background/70">
-                        <LoaderCircleIcon className="size-4 animate-spin text-primary" />
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        aria-label="Remove image"
-                        onClick={clearImage}
-                        className="absolute top-0 right-0 grid size-4 place-items-center rounded-bl-md bg-background/85 text-muted-foreground hover:text-foreground"
-                      >
-                        <XIcon className="size-3" />
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={imageReading}
-                  className="flex h-[38px] items-center gap-2 rounded-[11px] border border-border bg-card px-3.5 text-[13.5px] font-medium transition-[transform,translate,scale,rotate,border-color] duration-200 hover:-translate-y-px hover:border-primary active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {imageReading ? <LoaderCircleIcon className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
-                  {imageReading ? "Reading image…" : "Upload image"}
-                </button>
-                <span className="mr-auto" />
-                <span className="text-xs text-muted-foreground">
-                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> to search ·{" "}
-                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Shift</kbd> +{" "}
-                  <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> new line
-                </span>
-                <button
-                  type="submit"
-                  disabled={!pasteText.trim() || extraction.loading}
-                  className="flex h-[38px] items-center gap-2 rounded-[11px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-[transform,translate,scale,rotate,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_-10px_var(--primary)] active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-                >
-                  <SearchIcon className="size-4" />
-                  {extraction.loading ? "Finding…" : "Find tests"}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const image = event.target.files?.[0];
+                      event.target.value = "";
+                      if (image) handleImage(image);
+                    }}
+                  />
+                  {imagePreview ? (
+                    <div className="relative size-[38px] shrink-0 overflow-hidden rounded-[9px] border border-border">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
+                      <img src={imagePreview} alt="Uploaded image" className="size-full object-cover" />
+                      {imageReading ? (
+                        <div className="absolute inset-0 grid place-items-center bg-background/70">
+                          <LoaderCircleIcon className="size-4 animate-spin text-primary" />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label="Remove image"
+                          onClick={clearImage}
+                          className="absolute top-0 right-0 grid size-4 place-items-center rounded-bl-md bg-background/85 text-muted-foreground hover:text-foreground"
+                        >
+                          <XIcon className="size-3" />
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={imageReading}
+                    className="flex h-[38px] items-center gap-2 rounded-[11px] border border-border bg-card px-3.5 text-[13.5px] font-medium transition-[transform,translate,scale,rotate,border-color] duration-200 hover:-translate-y-px hover:border-primary active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {imageReading ? <LoaderCircleIcon className="size-4 animate-spin" /> : <ImageIcon className="size-4" />}
+                    {imageReading ? "Reading image…" : "Upload image"}
+                  </button>
+                  <span className="mr-auto" />
+                  <span className="text-xs text-muted-foreground max-md:hidden">
+                    <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> to search ·{" "}
+                    <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Shift</kbd> +{" "}
+                    <kbd className="rounded border border-border bg-muted px-1 py-px font-sans text-[11px]">Enter</kbd> new line
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={!pasteText.trim() || extraction.loading}
+                    className="flex h-[38px] items-center gap-2 rounded-[11px] bg-primary px-4 text-[13.5px] font-medium text-primary-foreground transition-[transform,translate,scale,rotate,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_20px_-10px_var(--primary)] active:scale-[0.97] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                  >
+                    <SearchIcon className="size-4" />
+                    {extraction.loading ? "Finding…" : "Find tests"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
 
-        {/* Scrollable: results only. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
-          {tab === "ai" ? (
-            <AiAssistantResults
-              loading={aiAssistant.loading}
-              error={aiAssistant.error}
-              response={aiAssistant.response}
-              locationName={selectedLocation?.name ?? null}
-              onOpenInSearch={(codes) => {
-                // The selected tests' codes, read (with prices) by the paste reader.
-                setPasteText(codes);
-                setSubmittedPasteText(codes);
-                setTab("paste");
-              }}
-            />
-          ) : tab === "search" ? (
-            <SearchResults
-              query={debouncedQuery}
-              browsing={browsing}
-              aiFound={aiFound}
-              aiSearching={Boolean(aiSearchKey && aiSearchLoading)}
-              exactMatch={anyExact}
-              locationName={selectedLocation?.name ?? null}
-              groups={searchGroups}
-              showGroupHeaders={serviceTypeFilter === "all" || browsing}
-              addedTestIds={addedTestIds}
-              addedProfileIds={addedProfileIds}
-              onAdd={(result) => {
-                handleAdd(result);
-                searchTelemetry.recordPick(result.testId);
-              }}
-              onRemove={handleRemoveTest}
-              onAddPackage={(result) => applyPackage(toPackageLine(result))}
-              onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
-              onSuggestion={setQuery}
-            />
-          ) : (
-            <MessageExtractionResults
-              text={submittedPasteText}
-              detected={extraction.detected}
-              packages={extraction.packages}
-              notOffered={extraction.notOffered}
-              unmatched={extraction.unmatched}
-              locationName={selectedLocation?.name ?? null}
-              loading={extraction.loading}
-              addedTestIds={addedTestIds}
-              onAdd={handleAdd}
-              onRemove={handleRemoveTest}
-              onAddMany={handleAddMany}
-              addedProfileIds={addedProfileIds}
-              onAddPackage={(result) => applyPackage(toPackageLine(result))}
-              onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
-              ai={messageAi}
-            />
-          )}
-        </div>
+          {/* Scrollable: results only. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-5 md:px-5">
+            {tab === "ai" ? (
+              <AiAssistantResults
+                loading={aiAssistant.loading}
+                error={aiAssistant.error}
+                response={aiAssistant.response}
+                locationName={selectedLocation?.name ?? null}
+                onOpenInSearch={(codes) => {
+                  // The selected tests' codes, read (with prices) by the paste reader.
+                  setPasteText(codes);
+                  setSubmittedPasteText(codes);
+                  setTab("paste");
+                }}
+              />
+            ) : tab === "search" ? (
+              <SearchResults
+                query={debouncedQuery}
+                browsing={browsing}
+                aiFound={aiFound}
+                aiSearching={Boolean(aiSearchKey && aiSearchLoading)}
+                exactMatch={anyExact}
+                locationName={selectedLocation?.name ?? null}
+                groups={searchGroups}
+                showGroupHeaders={serviceTypeFilter === "all" || browsing}
+                addedTestIds={addedTestIds}
+                addedProfileIds={addedProfileIds}
+                onAdd={(result) => {
+                  handleAdd(result);
+                  searchTelemetry.recordPick(result.testId);
+                }}
+                onRemove={handleRemoveTest}
+                onAddPackage={(result) => applyPackage(toPackageLine(result))}
+                onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
+                onSuggestion={setQuery}
+              />
+            ) : (
+              <MessageExtractionResults
+                text={submittedPasteText}
+                detected={extraction.detected}
+                packages={extraction.packages}
+                notOffered={extraction.notOffered}
+                unmatched={extraction.unmatched}
+                locationName={selectedLocation?.name ?? null}
+                loading={extraction.loading}
+                addedTestIds={addedTestIds}
+                onAdd={handleAdd}
+                onRemove={handleRemoveTest}
+                onAddMany={handleAddMany}
+                addedProfileIds={addedProfileIds}
+                onAddPackage={(result) => applyPackage(toPackageLine(result))}
+                onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
+                ai={messageAi}
+              />
+            )}
+          </div>
 
-        <PackageSuggestions
-          suggestions={profileSuggestions}
-          loading={profileLoading}
-          hasSelection={testLines.length > 0}
-          lineItems={lineItems}
-          locationName={selectedLocation?.name ?? null}
-          onUse={(suggestion) => applyPackage(toPackageLine(suggestion))}
-        />
-      </section>
+          <PackageSuggestions
+            suggestions={profileSuggestions}
+            loading={profileLoading}
+            hasSelection={testLines.length > 0}
+            lineItems={lineItems}
+            locationName={selectedLocation?.name ?? null}
+            onUse={(suggestion) => applyPackage(toPackageLine(suggestion))}
+          />
+        </section>
 
-      {/* Drag to resize the two columns; double-click resets the split. */}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize columns"
-        onPointerDown={(event) => {
-          event.preventDefault();
-          setIsResizingColumns(true);
-        }}
-        onDoubleClick={() => setLeftColumnPercent(DEFAULT_LEFT_PERCENT)}
-        className="group relative w-0 shrink-0 cursor-col-resize touch-none"
-      >
+        {/* Drag to resize the two columns; double-click resets the split. */}
         <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize columns"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsResizingColumns(true);
+          }}
+          onDoubleClick={() => setLeftColumnPercent(DEFAULT_LEFT_PERCENT)}
+          className="group relative w-0 shrink-0 cursor-col-resize touch-none max-md:hidden"
+        >
+          <div
+            className={cn(
+              "absolute inset-y-0 -left-1 w-2.5",
+              "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:transition-colors",
+              "group-hover:after:bg-primary/50",
+              isResizingColumns && "after:bg-primary"
+            )}
+          />
+        </div>
+
+        <aside
           className={cn(
-            "absolute inset-y-0 -left-1 w-2.5",
-            "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:transition-colors",
-            "group-hover:after:bg-primary/50",
-            isResizingColumns && "after:bg-primary"
+            "h-full flex-1 overflow-hidden bg-card transition-colors duration-300 avm-fade-up md:min-w-[340px]",
+            mobileView === "search" && "max-md:hidden"
           )}
-        />
+          style={{ animationDelay: "120ms" }}
+        >
+          <QuotationPanel
+            quotation={quotation}
+            whatsappMessage={whatsappMessage}
+            locationLabel={locationLabel}
+            customerName={customerName}
+            onCustomerNameChange={setCustomerName}
+            onRemove={handleRemove}
+            onClear={clear}
+          />
+        </aside>
       </div>
 
-      <aside
-        className="h-full min-w-[340px] flex-1 overflow-hidden bg-card transition-colors duration-300 avm-fade-up"
-        style={{ animationDelay: "120ms" }}
-      >
-        <QuotationPanel
-          quotation={quotation}
-          whatsappMessage={whatsappMessage}
-          locationLabel={locationLabel}
-          customerName={customerName}
-          onCustomerNameChange={setCustomerName}
-          onRemove={handleRemove}
-          onClear={clear}
-        />
-      </aside>
+      {/* Phones: switch between the search and the quote. */}
+      <nav className="grid shrink-0 grid-cols-2 gap-1.5 border-t border-border bg-card p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileView("search")}
+          aria-pressed={mobileView === "search"}
+          className={cn(
+            "flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors",
+            mobileView === "search" ? "bg-primary/10 text-primary" : "text-muted-foreground"
+          )}
+        >
+          <SearchIcon className="size-4" />
+          Search
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileView("quote")}
+          aria-pressed={mobileView === "quote"}
+          className={cn(
+            "flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-medium transition-colors",
+            mobileView === "quote" ? "bg-primary/10 text-primary" : "text-muted-foreground"
+          )}
+        >
+          <ReceiptTextIcon className="size-4" />
+          Quote
+          {lineItems.length > 0 ? (
+            <span
+              key={lineItems.length}
+              className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground avm-check"
+            >
+              {lineItems.length}
+            </span>
+          ) : null}
+        </button>
+      </nav>
     </div>
   );
 }

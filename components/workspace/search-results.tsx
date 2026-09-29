@@ -163,7 +163,7 @@ export function SearchResults({
           {locationName ? ` · ${locationName}` : ""}
         </span>
         {browsing ? null : (
-          <span className="text-[11.5px] text-muted-foreground">
+          <span className="text-[11.5px] text-muted-foreground max-md:hidden">
             <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top test
           </span>
         )}

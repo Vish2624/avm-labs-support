@@ -231,7 +231,8 @@ export function AiQuestionForm({
       />
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
-          Suggests tests from our own test list — you choose what goes on the quote. Enter to ask · Shift+Enter for a new line.
+          Suggests tests from our own test list — you choose what goes on the quote.
+          <span className="max-md:hidden"> Enter to ask · Shift+Enter for a new line.</span>
         </span>
         <button
           type="submit"

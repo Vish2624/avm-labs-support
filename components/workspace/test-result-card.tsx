@@ -78,14 +78,14 @@ export function TestResultCard({
     <div
       className={cn(
         // A quick fade, no stagger — results change on every keystroke.
-        "relative flex items-center gap-3.5 rounded-[14px] border border-transparent px-3 py-[13px] avm-row-quick",
+        "relative flex items-center gap-3.5 rounded-[14px] border border-transparent px-3 py-[13px] avm-row-quick max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-2.5",
         "transition-[background,border-color,transform,translate,scale,rotate,box-shadow] duration-300 hover:-translate-y-px hover:border-border hover:bg-card hover:shadow-elevated",
         exact && EXACT_MATCH_ROW_CLASS,
         result.availability === "unavailable" && "opacity-60"
       )}
     >
       {added ? <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[14px] avm-flash" /> : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 max-md:basis-full">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[15px] font-medium">{result.officialName}</span>
           <span className="rounded-[5px] bg-muted px-1.5 py-px font-mono text-[11px] text-muted-foreground">
@@ -101,7 +101,7 @@ export function TestResultCard({
       </div>
       <span
         className={cn(
-          "shrink-0 text-[15px] font-semibold whitespace-nowrap tabular-nums",
+          "shrink-0 text-[15px] font-semibold whitespace-nowrap tabular-nums max-md:ml-auto",
           // In-house prices in blue, outsourced in red.
           result.serviceType === "outsource" ? "text-[oklch(0.55_0.2_25)] dark:text-[oklch(0.72_0.17_25)]" : "text-primary"
         )}
