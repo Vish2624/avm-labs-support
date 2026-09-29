@@ -8,7 +8,7 @@ import {
   deleteSearchEventsBefore,
   listSearchEventsSince,
 } from "@/lib/database/search-events";
-import { summarizeSearchEvents } from "@/lib/search/summarize-search-events";
+import { summarizeSearchEvents } from "@/lib/search/learning/summarize-search-events";
 import { dismissSearchSchema } from "@/lib/validation/search-event-schema";
 
 /** The search log is kept this long, then pruned whenever this page loads. */

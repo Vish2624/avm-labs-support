@@ -11,20 +11,21 @@ const initialState: LoginState = { error: null };
 const inputClassName =
   "h-12 w-full rounded-xl border border-input bg-card pl-10 text-[14.5px] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 focus:border-primary focus:ring-4 focus:ring-primary/15";
 
-export function LoginForm() {
+export function LoginForm({ returnTo = "/workspace" }: { returnTo?: string }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  // Signed in: let the "✓ Welcome back" tick land, then open the workspace.
+  // Signed in: let the "✓ Welcome back" tick land, then go back to the
+  // page the agent was on (or the workspace).
   useEffect(() => {
     if (!state.success) return;
     const timeout = setTimeout(() => {
-      router.replace("/workspace");
+      router.replace(returnTo);
       router.refresh();
     }, 550);
     return () => clearTimeout(timeout);
-  }, [state.success, router]);
+  }, [state.success, router, returnTo]);
 
   return (
     <form
@@ -85,14 +86,6 @@ export function LoginForm() {
         disabled={pending || state.success}
         className="relative mt-1 flex h-[50px] items-center justify-center gap-2.5 overflow-hidden rounded-[13px] bg-primary text-[14.5px] font-medium text-primary-foreground transition-[transform,translate,scale,rotate,box-shadow,filter] duration-200 hover:-translate-y-px hover:shadow-[0_14px_30px_-12px_var(--primary)] hover:brightness-105 active:scale-[0.98] disabled:cursor-wait disabled:opacity-90"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-2/5"
-          style={{
-            background: "linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent)",
-            animation: "avm-shine 3.2s ease-in-out infinite",
-          }}
-        />
         {pending ? (
           <span className="size-[15px] animate-spin rounded-full border-2 border-white/35 border-t-white" />
         ) : null}

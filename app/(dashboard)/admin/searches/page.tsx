@@ -1,10 +1,13 @@
 import { listAllTests } from "@/lib/database/tests";
-import { SearchesClient } from "@/components/admin/searches/searches-client";
+import { SearchesClient, type SearchesTab } from "@/components/admin/searches/searches-client";
+import { pickTab } from "@/lib/utils/url-tab";
+
+const SEARCHES_TABS: readonly SearchesTab[] = ["missed", "misranked"];
 
 // Missed searches — what agents searched for and didn't find, turned into
 // aliases so the next search for it works.
-export default async function MissedSearchesPage() {
-  const tests = await listAllTests();
+export default async function MissedSearchesPage({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
+  const [tests, { tab }] = await Promise.all([listAllTests(), searchParams]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -16,7 +19,7 @@ export default async function MissedSearchesPage() {
         </p>
       </div>
 
-      <SearchesClient tests={tests} />
+      <SearchesClient tests={tests} initialTab={pickTab(tab, SEARCHES_TABS, "missed")} />
     </div>
   );
 }

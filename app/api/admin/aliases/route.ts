@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth/permissions";
 import { listAllAliasesWithTest, createAlias } from "@/lib/database/aliases";
 import { recordAuditLog } from "@/lib/database/audit-log";
 import { aliasInputSchema } from "@/lib/validation/alias-schema";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 
 export async function GET() {
   await requireAdmin();

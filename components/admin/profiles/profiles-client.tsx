@@ -64,7 +64,7 @@ export function ProfilesClient({ tests, locations }: { tests: Test[]; locations:
       const responseBody = await response.json();
       if (!response.ok) throw new Error(responseBody?.error ?? "Could not save profile.");
 
-      toast.success(editing ? "Profile updated." : "Profile created — now add its tests and pricing.");
+      toast.success(editing ? "Profile updated" : "Profile created");
       await mutate();
       if (editing) {
         setEditing(null);
@@ -106,7 +106,7 @@ export function ProfilesClient({ tests, locations }: { tests: Test[]; locations:
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body?.error ?? "Could not save tests.");
-      toast.success("Profile tests updated.");
+      toast.success("Tests updated");
       await mutate();
       setDetail((prev) => (prev ? { ...prev, testSelections: selection } : prev));
     } catch (error) {
@@ -127,7 +127,7 @@ export function ProfilesClient({ tests, locations }: { tests: Test[]; locations:
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body?.error ?? "Could not save price.");
-      toast.success("Profile price updated.");
+      toast.success("Price updated");
       setDetail((prev) =>
         prev ? { ...prev, prices: [...prev.prices.filter((p) => p.id !== body.price.id), body.price] } : prev
       );

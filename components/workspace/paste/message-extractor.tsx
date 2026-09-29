@@ -1,0 +1,449 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { SparklesIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TestResultCard } from "../search/test-result-card";
+import { PackageResultRow } from "../search/package-result-row";
+import type { MessageAiState } from "../search/use-semantic-search";
+import type { ProfileSearchResult } from "@/types/profile";
+import { resultsTitleClassName } from "../search/search-results";
+import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
+import { isPackageName } from "@/lib/search/matching/is-package-name";
+import type { ServiceTypeFilter } from "@/lib/constants/service-types";
+import type { SearchTestResult } from "@/types/search";
+import type { NotOfferedTest } from "@/lib/search/reading/extract-tests";
+
+export interface Extraction {
+  detected: SearchTestResult[];
+  packages: { token: string; result: ProfileSearchResult }[];
+  notOffered: NotOfferedTest[];
+  unmatched: string[];
+  /** Who read the message: Gemini, or the rule-based reader (no key, Gemini failed, or a clean list). */
+  readBy?: "ai" | "rules";
+}
+
+const EMPTY_EXTRACTION: Extraction = { detected: [], packages: [], notOffered: [], unmatched: [] };
+
+/** Packages grouped by the message name they matched ("women package" can match several). */
+function groupPackages(packages: Extraction["packages"]) {
+  const groups = new Map<string, ProfileSearchResult[]>();
+  for (const { token, result } of packages) groups.set(token, [...(groups.get(token) ?? []), result]);
+  return [...groups].map(([token, results]) => ({ token, results }));
+}
+
+// One toast id, so re-reading an edited message replaces the last
+// notification instead of stacking a new one per keystroke pause.
+const EXTRACTION_TOAST_ID = "message-extraction";
+const MAX_TOAST_NAMES = 4;
+
+/** Pop-up summary of a finished read: how many tests were found, how many weren't. */
+function notifyExtraction(extraction: Extraction, failed: boolean) {
+  if (failed) {
+    toast.error("Couldn't read the tests", { id: EXTRACTION_TOAST_ID });
+    return;
+  }
+  const packageNames = groupPackages(extraction.packages);
+  const requested =
+    extraction.detected.length + packageNames.length + extraction.notOffered.length + extraction.unmatched.length;
+  if (requested === 0) {
+    toast.error("No tests found", { id: EXTRACTION_TOAST_ID });
+    return;
+  }
+  const available =
+    extraction.detected.filter((result) => result.availability === "available").length +
+    packageNames.filter(({ results }) => results.some((result) => result.availability === "available")).length;
+  const notAvailable = requested - available;
+  const found = `${available} of ${requested} found`;
+  if (notAvailable === 0) {
+    toast.success(found, { id: EXTRACTION_TOAST_ID });
+  } else {
+    // Name them right in the pop-up — what's missing is what the agent has
+    // to tell the customer. Only the first few; the red box has them all.
+    const names = [
+      ...extraction.unmatched,
+      ...extraction.notOffered.map((test) => test.code),
+      ...extraction.detected.filter((result) => result.availability !== "available").map((result) => result.code),
+      ...packageNames
+        .filter(({ results }) => results.every((result) => result.availability !== "available"))
+        .map(({ token }) => token),
+    ];
+    const shown = names.slice(0, MAX_TOAST_NAMES).join(", ");
+    const more = names.length > MAX_TOAST_NAMES ? ` +${names.length - MAX_TOAST_NAMES} more` : "";
+    toast.warning(`${found} · ${notAvailable} not available`, {
+      id: EXTRACTION_TOAST_ID,
+      description: `${shown}${more}`,
+      duration: 6000,
+    });
+  }
+}
+
+/**
+ * Reads every test mentioned in a customer's raw message or a pasted list
+ * of codes ("ACCP, ALKP, AMYL, ...") via /api/search/extract — the same
+ * alias/fuzzy matcher as the search box, run server-side over the whole
+ * message in one request (lib/search/reading/extract-tests.ts). Only real
+ * catalog/alias matches with a current price at this location come back;
+ * tokens that matched nothing are returned too, so the agent can see what
+ * still needs a manual search.
+ */
+const extractionKey = (text: string, locationId: string, serviceType: ServiceTypeFilter, useAi: boolean) =>
+  JSON.stringify([text.trim(), locationId, serviceType, useAi]);
+
+/** Reads that arrived already priced (an image read), so they aren't requested again. */
+const primedExtractions = new Map<string, Extraction>();
+const MAX_PRIMED = 20;
+
+/**
+ * Hands the hook a read that is already done — the image reader returns
+ * the priced results with the text — so showing that text costs no second
+ * request. Call before setting the text.
+ */
+export function primeExtraction(
+  text: string,
+  locationId: string,
+  serviceType: ServiceTypeFilter,
+  useAi: boolean,
+  extraction: Extraction
+): void {
+  if (primedExtractions.size >= MAX_PRIMED) primedExtractions.clear();
+  primedExtractions.set(extractionKey(text, locationId, serviceType, useAi), extraction);
+  notifyExtraction(extraction, false);
+}
+
+export function useMessageExtraction(text: string, locationId: string, serviceType: ServiceTypeFilter, useAi = false) {
+  // Results are stored with the request they answer, so "loading" can be
+  // derived (does the stored result match the current input?) instead of
+  // being reset inside the effect.
+  const [result, setResult] = useState<{ key: string; scope: string; extraction: Extraction } | null>(null);
+
+  const trimmed = text.trim();
+  const key = trimmed && locationId ? extractionKey(trimmed, locationId, serviceType, useAi) : null;
+  // Prices belong to one location + service type.
+  const scope = JSON.stringify([locationId, serviceType]);
+  const primed = key ? primedExtractions.get(key) : undefined;
+
+  useEffect(() => {
+    if (!key || primed) return;
+
+    // Only runs for an explicit read (Find tests, a paste, an image), never
+    // per keystroke — so no debounce.
+    let cancelled = false;
+    (async () => {
+      let extraction = EMPTY_EXTRACTION;
+      let failed = false;
+      try {
+        const response = await fetch("/api/search/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: trimmed, locationId, serviceType, ai: useAi }),
+        });
+        if (response.ok) extraction = (await response.json()) as Extraction;
+        else failed = true;
+      } catch {
+        // Network error — show nothing found rather than a stale list.
+        failed = true;
+      }
+      if (cancelled) return;
+      setResult({ key, scope, extraction });
+      notifyExtraction(extraction, failed);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [key, primed, scope, trimmed, locationId, serviceType, useAi]);
+
+  if (!key) return { ...EMPTY_EXTRACTION, loading: false };
+  if (primed) return { ...primed, loading: false };
+  // While a new read of edited text is pending, keep showing the previous
+  // matches rather than flashing back to a skeleton on every keystroke —
+  // but never another location's (or service type's) prices.
+  const previous = result?.scope === scope ? result.extraction : EMPTY_EXTRACTION;
+  return { ...previous, loading: result?.key !== key };
+}
+
+/**
+ * What the agent needs to tell the customer can't be quoted, grouped by
+ * why: not a test we have at all, a real test not priced at this
+ * location/service type, or priced but currently marked unavailable.
+ */
+function NotAvailableSummary({
+  notFound,
+  notOffered,
+  unavailable,
+  locationName,
+}: {
+  notFound: string[];
+  notOffered: NotOfferedTest[];
+  unavailable: SearchTestResult[];
+  locationName: string | null;
+}) {
+  const total = notFound.length + notOffered.length + unavailable.length;
+  if (total === 0) return null;
+
+  const groups = [
+    {
+      label: "Not in our test list",
+      items: notFound.map((token) => ({ key: token, primary: token, secondary: null as string | null })),
+    },
+    {
+      label: locationName ? `Not offered at ${locationName}` : "Not offered at this location",
+      items: notOffered.map((test) => ({ key: test.code, primary: test.officialName, secondary: test.code })),
+    },
+    {
+      label: "Currently unavailable",
+      items: unavailable.map((result) => ({
+        key: result.testId,
+        primary: result.officialName,
+        secondary: AVAILABILITY_LABELS[result.availability],
+      })),
+    },
+  ].filter((group) => group.items.length > 0);
+
+  return (
+    <div className="mx-2 mb-3 rounded-xl border border-destructive/25 bg-destructive/5 px-3.5 py-3">
+      <p className="text-[13px] font-semibold text-destructive">
+        {total} test{total === 1 ? "" : "s"} not available
+      </p>
+      <div className="mt-2 flex flex-col gap-2.5">
+        {groups.map((group) => (
+          <div key={group.label}>
+            <p className="text-[12px] font-medium text-muted-foreground">
+              {group.label} ({group.items.length})
+            </p>
+            <ol className="mt-1 list-decimal pl-5 text-[13px] leading-relaxed">
+              {group.items.map((item) => (
+                <li key={item.key}>
+                  {item.primary}
+                  {item.secondary ? <span className="text-muted-foreground"> · {item.secondary}</span> : null}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function MessageExtractionResults({
+  text,
+  detected,
+  packages = [],
+  notOffered = [],
+  unmatched = [],
+  loading,
+  locationName = null,
+  addedTestIds,
+  addedProfileIds,
+  onAdd,
+  onRemove,
+  onAddMany,
+  onAddPackage,
+  onRemovePackage,
+  ai = null,
+  readingImage = false,
+}: {
+  /** An image is being read — its tests replace whatever is shown now. */
+  readingImage?: boolean;
+  text: string;
+  detected: SearchTestResult[];
+  packages?: { token: string; result: ProfileSearchResult }[];
+  notOffered?: NotOfferedTest[];
+  unmatched?: string[];
+  loading: boolean;
+  locationName?: string | null;
+  addedTestIds: Set<string>;
+  onAdd: (result: SearchTestResult) => void;
+  onRemove: (testId: string) => void;
+  onAddMany: (results: SearchTestResult[]) => void;
+  addedProfileIds: Set<string>;
+  onAddPackage: (result: ProfileSearchResult) => void;
+  onRemovePackage: (profileId: string) => void;
+  /** The in-browser AI's picks for the names the reader couldn't recognise. */
+  ai?: MessageAiState | null;
+}) {
+  // Names the AI placed leave "Not in our test list" and show as AI matches.
+  const aiTokens = new Set((ai?.matches ?? []).map((match) => match.token));
+  const stillUnmatched = unmatched.filter((token) => !aiTokens.has(token));
+  const aiFound = (ai?.matches ?? []).filter(
+    (match) => match.confidence === "high" && match.item.result.availability === "available"
+  ).length;
+  const available = detected.filter((result) => result.availability === "available");
+  const unavailable = detected.filter((result) => result.availability !== "available");
+  const newAvailable = available.filter((result) => !addedTestIds.has(result.testId));
+  const packageNames = groupPackages(packages);
+  const availablePackages = packageNames.filter(({ results }) =>
+    results.some((result) => result.availability === "available")
+  ).length;
+  const requested = detected.length + packageNames.length + notOffered.length + unmatched.length;
+  const notAvailableCount = requested - available.length - availablePackages - aiFound;
+
+  if (readingImage || (loading && requested === 0)) {
+    return (
+      <div className="flex flex-col gap-2" aria-busy>
+        <p className="flex items-center gap-2 px-2 pt-1 pb-1 text-[13px] text-muted-foreground">
+          <SparklesIcon className="size-3.5 animate-pulse text-primary" />
+          {readingImage ? "Reading the image and finding its tests…" : "Finding the tests…"}
+        </p>
+        <Skeleton className="h-[62px] w-full rounded-xl" />
+        <Skeleton className="h-[62px] w-full rounded-xl" />
+        <Skeleton className="h-[62px] w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  if (requested === 0) {
+    return (
+      <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
+        <p className="text-[15px] font-medium">{text.trim() ? "No tests recognised" : "Paste text or an image, then press Find tests"}</p>
+        <p className="text-[13px] text-muted-foreground">
+          We match test names, codes and common nicknames like &ldquo;sugar test&rdquo;.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-2">
+        <span className={resultsTitleClassName}>
+          {requested} requested · {available.length + availablePackages + aiFound} available
+          {notAvailableCount > 0 ? <span className="text-destructive"> · {notAvailableCount} not available</span> : null}
+        </span>
+        {newAvailable.length > 1 ? (
+          <button
+            type="button"
+            onClick={() => onAddMany(newAvailable)}
+            className="h-7 shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Add all {newAvailable.length}
+          </button>
+        ) : null}
+      </div>
+      {/* Tests first, then profiles & packages, then what can't be quoted. */}
+      {detected.length > 0 ? (
+        <div className="px-2 pt-1 pb-1 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+          Tests · {detected.length}
+        </div>
+      ) : null}
+      {[...available, ...unavailable].map((result) => (
+        <TestResultCard
+          key={result.testId}
+          result={result}
+          added={addedTestIds.has(result.testId)}
+          onAdd={onAdd}
+          onRemove={onRemove}
+        />
+      ))}
+      {/* Then profiles, and packages last. */}
+      {[
+        { label: "Profiles", named: packageNames.filter(({ results }) => !isPackageName(results[0].name)) },
+        { label: "Packages", named: packageNames.filter(({ results }) => isPackageName(results[0].name)) },
+      ].map(({ label, named }) =>
+        named.length > 0 ? (
+          <div key={label} className="mt-3 flex flex-col gap-2">
+            <div className="px-2 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+              {label} · {named.length}
+            </div>
+            {named.map(({ token, results }) => (
+              <div key={token} className="flex flex-col gap-1.5">
+                <p className="px-1.5 text-[12px] text-muted-foreground">
+                  For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;
+                  {results.length > 1 ? ` · ${results.length} match equally — choose one` : ""}
+                </p>
+                {results.map((result) => (
+                  <PackageResultRow
+                    key={result.profileId}
+                    result={result}
+                    added={addedProfileIds.has(result.profileId)}
+                    onAdd={onAddPackage}
+                    onRemove={onRemovePackage}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : null
+      )}
+      {ai && (ai.loading || ai.matches.length > 0) ? (
+        <AiMessageMatches
+          ai={ai}
+          addedTestIds={addedTestIds}
+          addedProfileIds={addedProfileIds}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          onAddPackage={onAddPackage}
+          onRemovePackage={onRemovePackage}
+        />
+      ) : null}
+      <div className="mt-3">
+        <NotAvailableSummary
+          notFound={stillUnmatched}
+          notOffered={notOffered}
+          unavailable={unavailable}
+          locationName={locationName}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Names from the message the reader couldn't recognise, matched by meaning
+// by the free in-browser AI. Each is shown with the words the customer used
+// and is never added automatically: the agent confirms with + Add.
+function AiMessageMatches({
+  ai,
+  addedTestIds,
+  addedProfileIds,
+  onAdd,
+  onRemove,
+  onAddPackage,
+  onRemovePackage,
+}: {
+  ai: MessageAiState;
+  addedTestIds: Set<string>;
+  addedProfileIds: Set<string>;
+  onAdd: (result: SearchTestResult) => void;
+  onRemove: (testId: string) => void;
+  onAddPackage: (result: ProfileSearchResult) => void;
+  onRemovePackage: (profileId: string) => void;
+}) {
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-primary/15 bg-primary/[0.025] p-2 dark:bg-primary/[0.05]">
+      <div className="flex items-center gap-2 px-1.5 pt-1 text-[11px] font-semibold tracking-[0.05em] text-primary/80 uppercase">
+        <SparklesIcon className={ai.loading ? "size-3.5 animate-pulse" : "size-3.5"} />
+        {ai.loading
+          ? ai.preparing
+            ? "Getting AI ready (first time on this computer only)…"
+            : "Checking unrecognised names with AI…"
+          : "AI matched"}
+      </div>
+      {[...ai.matches].sort((a, b) => Number(a.item.kind === "package") - Number(b.item.kind === "package")).map(({ token, confidence, item }) => (
+        <div key={token} className="flex flex-col gap-1">
+          <p className="px-1.5 text-[12px] text-muted-foreground">
+            For &ldquo;<span className="font-medium text-foreground">{token}</span>&rdquo;
+            {confidence === "low" ? " · possible match, please check" : ""}
+          </p>
+          {item.kind === "test" ? (
+            <TestResultCard
+              result={item.result}
+              added={addedTestIds.has(item.result.testId)}
+              onAdd={onAdd}
+              onRemove={onRemove}
+            />
+          ) : (
+            <PackageResultRow
+              result={item.result}
+              added={addedProfileIds.has(item.result.profileId)}
+              onAdd={onAddPackage}
+              onRemove={onRemovePackage}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

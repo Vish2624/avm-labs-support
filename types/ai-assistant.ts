@@ -83,6 +83,14 @@ export interface AiAssistantResponse {
   /** What the customer wants, e.g. "Checks before starting medication". */
   intent: string | null;
   results: AiSuggestion[];
+  /**
+   * A ready-to-send, WhatsApp-style reply to the question ("Hi! Tests
+   * commonly considered for hair loss: …", "Hi! How can I help you?").
+   * Written by Gemini, or built from DB fields for price/report-time/
+   * availability/parameter questions. Null when neither could (the client
+   * then builds a message from the ticked tests).
+   */
+  reply: string | null;
   /** Clinically relevant tests the assistant looked for but the catalog doesn't sell here. */
   unavailableNote: string | null;
   /** Which engine answered: Gemini with Google Search, or the built-in topic guide. */

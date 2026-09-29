@@ -1,4 +1,4 @@
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 
 /**
  * The profiles catalog holds some packages twice under the same name: an

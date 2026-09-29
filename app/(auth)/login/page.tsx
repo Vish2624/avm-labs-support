@@ -1,66 +1,65 @@
 import { LoginForm } from "./login-form";
 import { BrandPanel } from "./brand-panel";
-import { FormSide } from "./form-side";
-import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { listActiveLocations } from "@/lib/database/locations";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 const ease = "cubic-bezier(.2,.8,.2,1)";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  // The page the agent was on before being asked to sign in (proxy.ts).
+  const { next } = await searchParams;
+  const returnTo = safeNextPath(typeof next === "string" ? next : null) ?? "/workspace";
+
   // The brand panel's location chips are the real pricing locations; the
   // page still renders (without chips) if they can't be loaded.
   const locations = await listActiveLocations().catch(() => []);
 
   return (
-    <main className="grid min-h-svh grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] bg-background">
+    <main className="grid min-h-svh grid-cols-1 bg-background lg:grid-cols-[1.1fr_1fr]">
       <BrandPanel locations={locations.map(({ name, currencyCode }) => ({ name, currencyCode }))} />
 
-      <FormSide>
-        <div className="absolute top-6 right-6">
-          <ThemeToggle />
-        </div>
-
-        <div className="relative flex w-full max-w-[380px] flex-col gap-7">
-          <div className="flex flex-col gap-2">
+      <section className="flex min-w-0 flex-col items-center px-6 pt-12 pb-6">
+        <div className="my-auto flex w-full max-w-[420px] flex-col gap-8">
+          <div className="flex flex-col gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no benefit from next/image */}
             <img
               src="/logo/avm-labs-logo-full.svg"
               alt="AVM Labs"
-              className="mb-3 h-20 w-auto self-start rounded-xl dark:bg-white dark:p-1.5"
+              className="mb-4 h-20 w-auto self-start lg:hidden dark:rounded-xl dark:bg-white dark:px-3 dark:py-1.5"
               style={{ animation: `avm-fade-up .6s .05s ${ease} both` }}
             />
-            <span
-              className="flex items-center gap-[7px] self-start rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-              style={{ animation: `avm-fade-up .6s .1s ${ease} both` }}
-            >
-              <span className="size-1.5 rounded-full bg-primary avm-pulse" />
-              Welcome back
-            </span>
-            <h1 className="m-0 flex flex-wrap gap-2 text-[32px] font-semibold tracking-[-0.025em]">
+            <h1 className="m-0 flex flex-wrap gap-2 text-[34px] font-semibold tracking-[-0.025em]">
               {["Sign", "in", "to"].map((word, index) => (
                 <span key={word} className="inline-block" style={{ animation: `avm-word-in .7s ${0.14 + index * 0.06}s ${ease} both` }}>
                   {word}
                 </span>
               ))}
-              <span
-                className="inline-block avm-shimmer-text"
-                style={{ animation: `avm-word-in .7s .32s ${ease} both, avm-shimmer 5s 1s linear infinite` }}
-              >
+              <span className="inline-block" style={{ animation: `avm-word-in .7s .32s ${ease} both` }}>
                 AVM Support
               </span>
             </h1>
+            <p
+              className="m-0 text-[14.5px] text-muted-foreground"
+              style={{ animation: `avm-fade-up .6s .38s ${ease} both` }}
+            >
+              Enter your work email and password to continue.
+            </p>
           </div>
 
-          <LoginForm />
+          <LoginForm returnTo={returnTo} />
 
           <p
-            className="m-0 border-t border-border pt-5 text-[13px] leading-relaxed text-muted-foreground"
+            className="m-0 text-center text-[13px] text-muted-foreground"
             style={{ animation: `avm-fade-up .6s .34s ${ease} both` }}
           >
-            Internal use only. Trouble signing in? Ask an admin to reset your access.
+            Trouble signing in? Ask an admin to reset your access.
           </p>
         </div>
-      </FormSide>
+
+        <p className="m-0 pt-10 text-center text-xs text-muted-foreground/80">
+          © {new Date().getFullYear()} AVM Labs · Internal use only
+        </p>
+      </section>
     </main>
   );
 }

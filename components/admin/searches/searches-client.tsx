@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,20 +13,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TestSelect } from "@/components/admin/test-select";
 import { fetcher } from "@/lib/utils/fetcher";
 import { formatDateTime } from "@/lib/utils/dates";
+import { writeTabToUrl } from "@/lib/utils/url-tab";
 import type { Test } from "@/types/test";
 import type { MisrankedSearch, MissedSearch, SearchLearningSummary } from "@/types/search";
 
-type Tab = "missed" | "misranked";
+export type SearchesTab = "missed" | "misranked";
+type Tab = SearchesTab;
 
 const SUMMARY_URL = "/api/admin/searches";
 
 // Admin > Missed searches: the search log (use-search-telemetry.ts) as two
 // review lists. Adding an alias is the fix — an entry drops off once an
 // alias covers it (summarizeSearchEvents()); Dismiss deletes its log rows.
-export function SearchesClient({ tests }: { tests: Test[] }) {
+export function SearchesClient({ tests, initialTab = "missed" }: { tests: Test[]; initialTab?: Tab }) {
   const { data, error, isLoading, mutate } = useSWR<SearchLearningSummary>(SUMMARY_URL, fetcher);
   const testById = useMemo(() => new Map(tests.map((test) => [test.id, test])), [tests]);
-  const [tab, setTab] = useState<Tab>("missed");
+  const [tab, setTab] = useState<Tab>(initialTab);
+  // In the URL, so a refresh stays on this tab.
+  useEffect(() => writeTabToUrl(tab, "missed"), [tab]);
   const [mapping, setMapping] = useState<MissedSearch | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 

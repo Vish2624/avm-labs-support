@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
-import { queryNamesSeveralTests, searchTests } from "@/lib/search/search-tests";
-import { suggestCorrection } from "@/lib/search/suggest-correction";
+import { searchTests } from "@/lib/search/catalog/search-tests";
+import { suggestCorrection } from "@/lib/search/matching/suggest-correction";
 import { isServiceType } from "@/lib/constants/service-types";
 
-// Test search endpoint backing the Support Workspace's live search box.
+// Server-side test search. The Quote search box itself searches in the
+// browser (/api/search/catalog + lib/search/catalog/search-catalog.ts); it only
+// calls this when nothing matched, for the "Did you mean …?" suggestion.
 export async function GET(request: NextRequest) {
   await requireUser();
 
@@ -20,11 +22,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "serviceType must be in_house or outsource" }, { status: 400 });
   }
 
-  const [results, isList] = await Promise.all([
-    searchTests(query, locationId, serviceType),
-    queryNamesSeveralTests(query),
-  ]);
+  const results = await searchTests(query, locationId, serviceType);
   // Nothing found: offer the closest real name as "Did you mean …?".
-  const didYouMean = results.length === 0 && !isList ? await suggestCorrection(query) : null;
-  return NextResponse.json({ results, isList, didYouMean });
+  const didYouMean = results.length === 0 ? await suggestCorrection(query) : null;
+  return NextResponse.json({ results, didYouMean });
 }

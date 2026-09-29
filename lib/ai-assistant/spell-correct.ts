@@ -1,7 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
-import { normalizeQuery } from "@/lib/search/normalize-query";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 import { PRE_TREATMENT_ITEMS, TOPICS } from "./topic-guide";
 import { QUESTION_FILLER } from "./test-question";
 import type { PricedCatalog } from "./priced-catalog";

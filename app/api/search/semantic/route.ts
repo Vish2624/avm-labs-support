@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
-import { priceSemanticMatches, type SemanticMatch } from "@/lib/search/semantic-search-results";
+import { priceSemanticMatches, type SemanticMatch } from "@/lib/search/semantic/semantic-search-results";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 
 // A pasted message can send up to 3 candidates for each of ~20 unrecognised names.
@@ -8,7 +8,7 @@ const MAX_MATCHES = 60;
 
 // Prices the items the in-browser semantic model picked for a Quote search.
 // Only ids are trusted from the browser; every item is re-read from the
-// catalog and priced from the DB (lib/search/semantic-search-results.ts).
+// catalog and priced from the DB (lib/search/semantic/semantic-search-results.ts).
 // serviceType "all" prices tests in-house first, then outsourced, and lists
 // in-house packages — the same as the rule-based "All" view.
 export async function POST(request: NextRequest) {

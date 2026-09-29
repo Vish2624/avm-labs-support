@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { UploadClient } from "./upload-client";
 import { DetailsUpload } from "./details-upload";
+import { writeTabToUrl } from "@/lib/utils/url-tab";
 import type { Location } from "@/types/location";
 
 const TABS = [
@@ -12,11 +13,15 @@ const TABS = [
   { id: "profiles", label: "Profiles & packages" },
 ] as const;
 
+export type UploadTab = (typeof TABS)[number]["id"];
+
 // The three Admin uploads: a location's price list (versioned import),
 // test details (catalog + aliases + prices), and profiles/packages
 // (test lists + bundle prices).
-export function UploadTabs({ locations }: { locations: Location[] }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("prices");
+export function UploadTabs({ locations, initialTab = "prices" }: { locations: Location[]; initialTab?: UploadTab }) {
+  const [tab, setTab] = useState<UploadTab>(initialTab);
+  // In the URL, so a refresh stays on this tab.
+  useEffect(() => writeTabToUrl(tab, "prices"), [tab]);
 
   return (
     <div className="flex flex-col gap-5">

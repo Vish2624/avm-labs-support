@@ -59,27 +59,58 @@ export async function updateSession(request: NextRequest): Promise<SessionInfo> 
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the session JWT's signature locally against the
+  // project's cached public keys (asymmetric signing keys), refreshing an
+  // expired session first — no Auth-server round trip per request, unlike
+  // getUser(), which cost 1-4 s on every page and API call.
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  const userId = typeof claims?.sub === "string" ? claims.sub : null;
 
-  if (!user) {
+  if (!userId) {
     return { response, userId: null, role: null };
   }
 
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const role = await roleFor(userId, () =>
+    supabase.from("user_profiles").select("role").eq("user_id", userId).maybeSingle()
+  );
 
-  const role = (profile?.role as UserRole | undefined) ?? null;
-
-  requestHeaders.set("x-user-id", user.id);
-  if (user.email) requestHeaders.set("x-user-email", user.email);
+  requestHeaders.set("x-user-id", userId);
+  if (typeof claims?.email === "string") requestHeaders.set("x-user-email", claims.email);
   if (role) requestHeaders.set("x-user-role", role);
   response = buildResponse();
   applyPendingCookies();
 
-  return { response, userId: user.id, role };
+  return { response, userId, role };
+}
+
+/** How long a user's role is reused before it's looked up again. */
+const ROLE_TTL_MS = 5 * 60_000;
+const roleCache = new Map<string, { role: UserRole | null; at: number }>();
+
+/**
+ * The user's role from user_profiles, remembered per server instance for
+ * ROLE_TTL_MS so it isn't a database round trip on every request. (A role
+ * change takes effect within 5 minutes; every Admin page/API still checks
+ * requireAdmin() on its own.) One retry on a failed lookup, and a failure
+ * is never cached: a brief network blip would otherwise read as "no role",
+ * and proxy.ts would bounce an admin who refreshed an Admin page back to
+ * /workspace.
+ */
+async function roleFor(
+  userId: string,
+  lookup: () => PromiseLike<{ data: { role: string } | null; error: unknown }>
+): Promise<UserRole | null> {
+  const cached = roleCache.get(userId);
+  if (cached && Date.now() - cached.at < ROLE_TTL_MS) return cached.role;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: profile, error } = await lookup();
+    if (!error) {
+      const role = (profile?.role as UserRole | undefined) ?? null;
+      roleCache.set(userId, { role, at: Date.now() });
+      return role;
+    }
+  }
+  return null;
 }

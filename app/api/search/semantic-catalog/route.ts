@@ -8,7 +8,7 @@ import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 const ALIASES_PER_TEST = 6;
 
 // The catalog's names and aliases (no prices) for the in-browser semantic
-// model (lib/search/semantic-worker.ts) to embed. Each item's `text` is what
+// model (lib/search/semantic/semantic-worker.ts) to embed. Each item's `text` is what
 // its meaning is compared against; the browser caches embeddings by text,
 // so only new or renamed items are re-embedded.
 export async function GET() {

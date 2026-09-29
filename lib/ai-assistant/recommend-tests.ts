@@ -1,14 +1,17 @@
 import "server-only";
-import { normalizeQuery } from "@/lib/search/normalize-query";
-import { loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
+import { normalizeQuery } from "@/lib/search/matching/normalize-query";
+import { listOrder, loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
 import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
 import { answerTestQuestionWithGemini, geminiConfigured, recommendWithGemini } from "./gemini-engine";
+import { answerAvailability } from "./availability-answer";
+import { recordAppEvent } from "@/lib/database/app-events";
 import {
   builtinAnswer,
   componentsAnswer,
   detectSubject,
   namesPackageExactly,
+  recordsReply,
   resolveNamedItems,
   testNameIn,
   toDetailSuggestions,
@@ -38,7 +41,10 @@ async function answerTestQuestion(
   question: string,
   catalog: PricedCatalog,
   forcedName: string | null
-): Promise<Pick<AiAssistantResponse, "kind" | "lookupQuery" | "answer" | "results" | "engine" | "sources" | "topic" | "intent"> | null> {
+): Promise<Pick<
+  AiAssistantResponse,
+  "kind" | "lookupQuery" | "answer" | "reply" | "results" | "engine" | "sources" | "topic" | "intent"
+> | null> {
   let subject: TestQuestionSubject | null = forcedName ? "details" : detectSubject(question);
   const name = forcedName ? normalizeQuery(forcedName) : testNameIn(question);
   if (!name) return null;
@@ -68,6 +74,7 @@ async function answerTestQuestion(
   let answer = effectiveSubject === "components" ? await componentsAnswer(results) : builtinAnswer(effectiveSubject, results);
   let engine: AiAssistantResponse["engine"] = "builtin";
   let sources: AiSource[] = [];
+  let reply: string | null = null;
 
   // Fasting/what-is questions can use Gemini + Google Search; price, TAT and
   // availability always come straight from our own records.
@@ -75,10 +82,16 @@ async function answerTestQuestion(
     try {
       const gemini = await answerTestQuestionWithGemini(question, effectiveSubject, results);
       answer = gemini.answer;
+      reply = gemini.reply;
       sources = gemini.sources;
       engine = "gemini";
     } catch (error) {
-      console.error("[ai-assistant] Gemini test answer failed, using the built-in guide:", error);
+      recordAppEvent({
+        kind: "fallback",
+        feature: "assistant",
+        message: "Test question answered from the built-in guide (Gemini's answer was unusable)",
+        detail: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -86,6 +99,7 @@ async function answerTestQuestion(
     kind: "test_question",
     lookupQuery: name,
     answer,
+    reply: reply ?? recordsReply(effectiveSubject, results, answer),
     results,
     engine,
     sources,
@@ -118,11 +132,16 @@ export async function recommendTests(
   locationId: string,
   serviceTypes: readonly ServiceType[]
 ): Promise<AiAssistantResponse> {
-  const base = { query: rawQuestion, warning: MEDICAL_NOTICE, unavailableNote: null };
+  const base = { query: rawQuestion, warning: MEDICAL_NOTICE, unavailableNote: null, reply: null };
   const catalog = await loadPricedCatalog(locationId, serviceTypes);
   // The built-in rules read the spell-corrected question ("lipd profle" ->
   // "lipid profile"); Gemini gets the agent's own words and copes with typos.
   const question = await correctSpelling(rawQuestion, catalog);
+
+  // "Is X available?" — a yes with price/report time, or "not available"
+  // plus the closest tests we do offer. Only from our records.
+  const availability = await answerAvailability(question, catalog, locationId, serviceTypes);
+  if (availability) return { ...base, ...availability };
 
   const testQuestion = await answerTestQuestion(question, catalog, null);
   if (testQuestion) return { ...base, ...testQuestion };
@@ -140,6 +159,7 @@ export async function recommendTests(
           kind: "test_question",
           lookupQuery: null,
           answer: { subject: "general", verdict: null, text: gemini.answer },
+          reply: gemini.reply,
           topic: gemini.topic,
           intent: gemini.intent,
           results: gemini.results,
@@ -153,6 +173,7 @@ export async function recommendTests(
         kind: gemini.requestType === "recommendation" ? "recommendation" : "not_a_test_request",
         lookupQuery: null,
         answer: null,
+        reply: gemini.reply,
         topic: gemini.topic,
         intent: gemini.intent,
         results: gemini.results,
@@ -162,7 +183,12 @@ export async function recommendTests(
       };
     } catch (error) {
       // Fall through to the built-in guide — the agent still gets an answer.
-      console.error("[ai-assistant] Gemini failed, using the built-in guide:", error);
+      recordAppEvent({
+        kind: "fallback",
+        feature: "assistant",
+        message: "Question answered from the built-in guide (Gemini's answer was unusable)",
+        detail: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -198,7 +224,8 @@ export async function recommendTests(
     answer: null,
     topic: guide.topicLabel,
     intent: guide.intent,
-    results: guide.results,
+    // Tests, then profiles, then packages.
+    results: [...guide.results].sort((a, b) => listOrder(a) - listOrder(b)),
     unavailableNote: unavailableNote(guide.unavailable),
     engine: "builtin",
     sources: [],

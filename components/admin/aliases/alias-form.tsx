@@ -14,7 +14,7 @@ const EMPTY: AliasInput = { testId: "", alias: "", aliasType: "customer_term", c
 
 // Add/update one alias mapping: which test it resolves to, the alias text
 // itself, its type, and a confidence score used only to break ranking ties
-// (never to invent a match — see lib/search/search-tests.ts).
+// (never to invent a match — see lib/search/catalog/search-tests.ts).
 export function AliasForm({
   tests,
   initial,
