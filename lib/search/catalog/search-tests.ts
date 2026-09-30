@@ -80,6 +80,7 @@ export function toSearchResult(test: Test, candidate: SearchCandidate, price: Te
     category: test.category,
     matchType: candidate.matchType,
     matchedAlias: candidate.matchedAlias ?? null,
+    includedParameter: candidate.includedParameter ?? null,
     price: { amount: price.price, currency: price.currencyCode },
     tatText: price.tatText,
     availability: price.availability,

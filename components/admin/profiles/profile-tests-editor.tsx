@@ -48,8 +48,16 @@ export function ProfileTestsEditor({
     setSelected((prev) => new Map(prev).set(testId, required));
   }
 
+  const included = tests.filter((test) => selected.has(test.id));
+
   return (
     <div className="flex flex-col gap-3">
+      <div className="rounded-xl bg-muted/50 px-3 py-2 text-sm">
+        <span className="font-medium">Included ({included.length}):</span>{" "}
+        <span className="text-muted-foreground">
+          {included.length > 0 ? included.map((test) => test.officialName).join(", ") : "nothing yet"}
+        </span>
+      </div>
       <Input placeholder="Search tests…" value={query} onChange={(event) => setQuery(event.target.value)} />
 
       <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-xl border border-border/50 p-2">
@@ -60,6 +68,11 @@ export function ProfileTestsEditor({
               <Checkbox checked={included} onCheckedChange={(checked) => toggleIncluded(test.id, checked)} />
               <span className="flex-1">
                 {test.officialName} <span className="text-muted-foreground">({test.code})</span>
+                {test.testType === "component" || test.testType === "calculated" ? (
+                  <span className="ml-1.5 rounded bg-muted px-1.5 py-px text-[10.5px] font-semibold text-muted-foreground uppercase">
+                    {test.testType === "component" ? "Component" : "Calculated · free"}
+                  </span>
+                ) : null}
               </span>
               {included ? (
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">

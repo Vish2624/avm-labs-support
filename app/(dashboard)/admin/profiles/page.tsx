@@ -12,7 +12,8 @@ export default async function ProfilesPage() {
       <div>
         <h1 className="text-xl font-semibold">Profiles</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage profiles/packages, which tests belong to each, and their bundle pricing.
+          Profiles bundle tests at one fixed price per location, e.g. Liver Profile. Packages are built from profiles under
+          Admin → Packages.
         </p>
       </div>
 

@@ -65,7 +65,21 @@ export function ProfileSearchClient() {
   } = useSWR<{ results: ProfileSuggestion[] }>(testSearchKey, fetcher);
 
   const hasQuery = mode === "name" ? true : testQueries.length > 0;
-  const results = mode === "name" ? (nameData?.results ?? []) : (testData?.results ?? []);
+  // Coverage counts every test the agent typed — one we don't recognise is
+  // still a test the package doesn't cover ("2 of 3", not "2 of 2").
+  const testResults = useMemo(
+    () =>
+      (testData?.results ?? []).map((result) => {
+        const requestedCount = Math.max(result.requestedCount, testQueries.length);
+        return {
+          ...result,
+          requestedCount,
+          matchPercentage: requestedCount === 0 ? 0 : Math.round((result.matchedCount / requestedCount) * 100),
+        };
+      }),
+    [testData, testQueries.length]
+  );
+  const results = mode === "name" ? (nameData?.results ?? []) : testResults;
   const loading = mode === "name" ? nameLoading : testLoading || (testQueries.length > 0 && resolveData === undefined);
   const errorObj = mode === "name" ? nameErrorObj : testErrorObj;
   const error = errorObj instanceof Error ? errorObj.message : null;

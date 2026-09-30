@@ -18,6 +18,8 @@ export interface SearchCandidate {
   exact?: boolean;
   /** The alias text that produced this candidate, when matchType is "alias". */
   matchedAlias?: string;
+  /** The parameter that matched, when this candidate is the component containing it (e.g. "Hemoglobin" -> H6). */
+  includedParameter?: string;
 }
 
 function tier(candidate: SearchCandidate): number {

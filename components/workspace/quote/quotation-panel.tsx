@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { XIcon } from "lucide-react";
+import { Trash2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
@@ -11,6 +11,8 @@ import { subtractMoney } from "@/lib/pricing/money";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import { lineItemKey, type Quotation, type QuotationLineItem } from "@/types/quotation";
+import type { ReplyStyle } from "@/lib/whatsapp/generate-response";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 
 function lineMeta(item: QuotationLineItem): string {
   const availability = item.availability === "available" ? "" : ` · ${AVAILABILITY_LABELS[item.availability]}`;
@@ -72,7 +74,7 @@ const EXIT_MS = 260;
 // generated WhatsApp reply and the Copy action.
 export function QuotationPanel({
   quotation,
-  whatsappMessage,
+  whatsappReplies,
   locationLabel,
   customerName,
   onCustomerNameChange,
@@ -80,7 +82,8 @@ export function QuotationPanel({
   onClear,
 }: {
   quotation: Quotation;
-  whatsappMessage: string;
+  /** The reply in both styles — the agent picks which one to copy. */
+  whatsappReplies: Record<ReplyStyle, string>;
   locationLabel: string | null;
   customerName: string;
   onCustomerNameChange: (name: string) => void;
@@ -88,6 +91,11 @@ export function QuotationPanel({
   onClear: () => void;
 }) {
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
+  const [replyStyle, setReplyStyle] = useState<ReplyStyle>("detailed");
+  // A single item (test, component or profile) has nothing to summarize — its
+  // one price is the total — so the choice only appears from two items up.
+  const canSummarize = quotation.lineItems.length > 1;
+  const whatsappMessage = whatsappReplies[canSummarize ? replyStyle : "detailed"];
   // Lines playing their slide-out before they're actually removed.
   const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
 
@@ -143,8 +151,9 @@ export function QuotationPanel({
         <button
           type="button"
           onClick={clearWithExit}
-          className="h-[30px] rounded-lg px-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive avm-check"
+          className="flex h-10 shrink-0 items-center gap-2 rounded-[10px] border border-destructive/30 bg-destructive/[0.06] px-4 text-sm font-medium text-destructive transition-colors hover:border-destructive/50 hover:bg-destructive/15 active:scale-[0.97] avm-check"
         >
+          <Trash2Icon className="size-4" />
           Clear all
         </button>
       ) : null}
@@ -157,7 +166,7 @@ export function QuotationPanel({
         {header}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-10 py-6 text-center avm-fade-up">
           <div className="grid size-[52px] place-items-center rounded-[14px] border-[1.5px] border-dashed border-input">
-            <span className="size-3.5 rounded bg-primary/15" style={{ animation: "avm-drift-sm 5s ease-in-out infinite" }} />
+            <span className="size-3.5 rounded bg-primary/15" />
           </div>
           <p className="mt-2 text-base font-medium">Nothing added yet</p>
           <p className="max-w-[320px] text-[13.5px] leading-relaxed text-pretty text-muted-foreground">
@@ -188,7 +197,7 @@ export function QuotationPanel({
                   <span className="truncate text-sm font-medium">{item.name}</span>
                   {item.kind === "package" ? (
                     <span className="shrink-0 rounded-[5px] bg-primary/10 px-1.5 py-px text-[10.5px] font-semibold text-primary">
-                      PACKAGE
+                      {isPackage(item) ? "PACKAGE" : "PROFILE"}
                     </span>
                   ) : null}
                 </div>
@@ -249,14 +258,43 @@ export function QuotationPanel({
         </div>
 
         <div className="flex flex-col gap-2.5 px-7 pt-5 pb-2.5">
-          <div className="flex items-center justify-between gap-2.5">
-            <h2 className="text-sm font-semibold">Reply to send</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              <h2 className="text-sm font-semibold whitespace-nowrap">Reply to send</h2>
+              {canSummarize ? (
+              <div role="radiogroup" aria-label="Reply style" className="flex rounded-[9px] bg-muted p-0.5">
+                {(
+                  [
+                    { style: "detailed", label: "Detailed", hint: "Every test with its own price" },
+                    { style: "summary", label: "Summary", hint: "Test names and one overall price" },
+                  ] as const
+                ).map(({ style, label, hint }) => (
+                  <button
+                    key={style}
+                    type="button"
+                    role="radio"
+                    aria-checked={replyStyle === style}
+                    title={hint}
+                    onClick={() => setReplyStyle(style)}
+                    className={cn(
+                      "h-7 rounded-[7px] px-2.5 text-[12px] font-medium transition-colors duration-150",
+                      replyStyle === style
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              ) : null}
+            </div>
             <input
               value={customerName}
               onChange={(event) => onCustomerNameChange(event.target.value)}
               placeholder="Customer name (optional)"
               aria-label="Customer name"
-              className="h-8 w-[190px] rounded-[9px] border border-input bg-card px-2.5 text-[12.5px] outline-none transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-[3px] focus:ring-primary/15"
+              className="h-8 w-[190px] max-w-full min-w-0 rounded-[9px] border border-input bg-card px-2.5 text-[12.5px] outline-none transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-[3px] focus:ring-primary/15"
             />
           </div>
           <div className="rounded-[4px_16px_16px_16px] bg-bubble px-4 py-3.5 transition-colors duration-300 dark:ring-1 dark:ring-success/20 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">

@@ -1,9 +1,7 @@
 import { listActiveLocations } from "@/lib/database/locations";
-import { TestsClient } from "@/components/admin/tests/tests-client";
+import { CatalogClient } from "@/components/admin/catalog/catalog-client";
 
-// Tests — Manage the master test catalog (add/update tests, categories,
-// descriptions). Pricing is Excel-import-only (Phase 6); this page only
-// touches catalog metadata and the active flag.
+// Tests — individual tests: details, price + TAT per location, other names.
 export default async function TestsPage() {
   const locations = await listActiveLocations();
 
@@ -12,11 +10,12 @@ export default async function TestsPage() {
       <div>
         <h1 className="text-xl font-semibold">Tests</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage the master test catalog. Prices come from the Excel import pipeline, not this page.
+          Individual tests, measured directly and ordered on their own. Open one to edit its details, its price and TAT at
+          each location, and the other names customers use for it.
         </p>
       </div>
 
-      <TestsClient locations={locations} />
+      <CatalogClient type="test" locations={locations} />
     </div>
   );
 }

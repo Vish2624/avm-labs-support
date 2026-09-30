@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/permissions";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
 import { aiReadImageTests } from "@/lib/search/reading/ai-read-message";
 import { extractFromAiList } from "@/lib/search/reading/extract-from-ai-list";
+import { withCalculated } from "@/lib/search/reading/match-calculated";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 
 /** Vercel caps a request body at ~4.5 MB; the client shrinks images well below this first. */
@@ -19,7 +20,7 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export async function POST(request: NextRequest) {
   await requireUser();
 
-  if (!geminiReaderConfigured("image")) {
+  if (!(await geminiReaderConfigured("image"))) {
     return NextResponse.json({ error: "Image AI is not configured" }, { status: 501 });
   }
 
@@ -48,12 +49,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Image AI request failed" }, { status: 502 });
   }
 
-  const extraction = await extractFromAiList(aiList, locationId, serviceTypes);
+  const extraction = await withCalculated(await extractFromAiList(aiList, locationId, serviceTypes), locationId, serviceTypes);
   // What the paste box shows: the tests read, by their catalog names, then
   // anything asked for that isn't offered, as read.
   const text = [
     ...extraction.detected.map((result) => result.officialName),
     ...extraction.packages.map(({ result }) => result.name),
+    ...extraction.calculated.map((result) => result.officialName),
     ...extraction.notOffered.map((test) => test.officialName),
     ...extraction.unmatched,
   ]

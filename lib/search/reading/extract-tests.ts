@@ -37,6 +37,19 @@ const PACKAGE_OVER_ALIAS_SCORE = 95;
 const PACKAGE_TIE_MARGIN = 2;
 const MAX_TIED_PACKAGES = 3;
 
+/** How far (0-100) a calculated parameter must lead the best other match to be taken as what was asked for. */
+const CALCULATED_LEAD = 2;
+
+/** Whether a calculated-parameter candidate beats every non-calculated candidate for the same name by a clear margin. */
+function clearlyAhead(
+  candidate: SearchCandidate,
+  candidates: SearchCandidate[],
+  testById: Map<string, { testType: string }>
+): boolean {
+  const rival = candidates.find((other) => other !== candidate && testById.get(other.testId)?.testType !== "calculated");
+  return !rival || candidate.score - rival.score >= CALCULATED_LEAD;
+}
+
 export interface NotOfferedTest {
   /** The text as the customer wrote it. */
   token: string;
@@ -158,6 +171,16 @@ export async function extractTests(
     for (const candidate of mention.candidates) {
       const test = testById.get(candidate.testId);
       if (!test) continue;
+      // The name is clearly closest to a calculated parameter ("Transferrin"
+      // -> Transferrin Saturation): that's what was asked for, never a priced
+      // lookalike further down (Gamma Glutamyl Transferase). It has no price
+      // itself; the extract route offers what to order for it. Only when it's
+      // clearly ahead, though — "bilirubin" ties Indirect Bilirubin with
+      // Total Bilirubin, and the test itself is what's meant.
+      if (test.testType === "calculated") {
+        if (isExact(candidate) || clearlyAhead(candidate, mention.candidates, testById)) break;
+        continue;
+      }
       for (const serviceType of serviceTypes) {
         // Only real price rows — a test not carried here is never shown with placeholder data.
         const price = priceByType.get(serviceType)?.get(candidate.testId);

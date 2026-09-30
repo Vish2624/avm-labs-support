@@ -1,6 +1,6 @@
 import "server-only";
 import { extractTests, type ExtractTestsResult } from "./extract-tests";
-import { isPackageName } from "../matching/is-package-name";
+import { isPackage } from "../matching/is-package-name";
 import type { ServiceType } from "@/lib/constants/service-types";
 
 /**
@@ -48,7 +48,7 @@ export async function extractFromAiList(
   return {
     ...fromCodes,
     detected,
-    packages: fromCodes.packages.filter(({ result }) => !isPackageName(result.name)),
+    packages: fromCodes.packages.filter(({ result }) => !isPackage(result)),
     unmatched: [...new Set([...fromCodes.unmatched, ...stillMissing])],
   };
 }

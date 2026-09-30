@@ -26,6 +26,9 @@ const UNAVAILABLE_NOTE = "Some clinically relevant tests may not be available in
 /** A question this short with no topic and no question words may just be a test name ("hba1c", "lipid profile"). */
 const SHORT_QUESTION_WORDS = 4;
 
+/** Asking which tests to do ("which tests for…", "what test should", "suggest tests") — a recommendation request. */
+const RECOMMENDATION_ASK = /\b(which|what)\s+(tests?|checks?|checkups?|investigations?)\b|\btests?\s+(for|to (do|take|check))\b|\b(suggest|recommend)\w*/;
+
 function unavailableNote(names: string[]): string | null {
   if (names.length === 0) return null;
   return `${UNAVAILABLE_NOTE} (${names.join(", ")})`;
@@ -61,10 +64,16 @@ async function answerTestQuestion(
     if (!bare) return null;
   }
 
+  // "Which tests for tiredness and hair fall?" asks for recommendations, even
+  // when it happens to contain a word like "eat" or "water": a fasting
+  // answer only fits when a test is actually named.
+  const asksWhichTests = RECOMMENDATION_ASK.test(normalizeQuery(question));
+  if (subject === "fasting" && asksWhichTests && (await resolveNamedItems(name, catalog, false)).length === 0) return null;
+
   // "Does sugar test need fasting?" names its tests loosely — its topic's
   // main tests answer it. A price/TAT question about a topic ("price of
   // diabetes tests") is better served by recommendations.
-  const items = await resolveNamedItems(name, catalog, subject === "fasting");
+  const items = await resolveNamedItems(name, catalog, subject === "fasting" && !asksWhichTests);
   if (items.length === 0) return null;
 
   const results = toDetailSuggestions(items);
@@ -78,7 +87,7 @@ async function answerTestQuestion(
 
   // Fasting/what-is questions can use Gemini + Google Search; price, TAT and
   // availability always come straight from our own records.
-  if ((effectiveSubject === "fasting" || (effectiveSubject === "details" && subject === null && !forcedName)) && geminiConfigured()) {
+  if ((effectiveSubject === "fasting" || (effectiveSubject === "details" && subject === null && !forcedName)) && (await geminiConfigured())) {
     try {
       const gemini = await answerTestQuestionWithGemini(question, effectiveSubject, results);
       answer = gemini.answer;
@@ -146,7 +155,7 @@ export async function recommendTests(
   const testQuestion = await answerTestQuestion(question, catalog, null);
   if (testQuestion) return { ...base, ...testQuestion };
 
-  if (geminiConfigured()) {
+  if (await geminiConfigured()) {
     try {
       const gemini = await recommendWithGemini(rawQuestion, catalog);
       if (gemini.requestType === "direct_lookup" && gemini.lookupQuery) {

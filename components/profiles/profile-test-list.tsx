@@ -2,7 +2,8 @@ import { cn } from "@/lib/utils";
 import type { ProfileTestSummary } from "@/types/profile";
 
 // Tests included in a profile bundle. In "search by test names" mode,
-// matchedTestIds highlights which of them the agent actually asked about.
+// matchedTestIds marks the ones the agent asked about in green and the
+// rest in red.
 export function ProfileTestList({
   tests,
   matchedTestIds,
@@ -21,10 +22,14 @@ export function ProfileTestList({
         return (
           <span
             key={test.testId}
-            title={matched ? "Requested" : undefined}
+            title={matchedTestIds ? (matched ? "Requested" : "Not requested") : undefined}
             className={cn(
               "rounded-full px-2.5 py-[3px] text-xs",
-              matched ? "bg-success/15 text-success-foreground" : "bg-muted text-muted-foreground"
+              matched
+                ? "bg-success/15 text-success-foreground"
+                : matchedTestIds
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-muted text-muted-foreground"
             )}
           >
             {matchedTestIds ? (matched ? "✓ " : "+ ") : null}

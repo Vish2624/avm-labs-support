@@ -2,6 +2,7 @@ import type { Money } from "@/lib/pricing/money";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { AvailabilityStatus } from "@/lib/constants/availability";
 import type { SearchMatchType } from "@/lib/search/matching/rank-results";
+import type { ProfileSearchResult } from "./profile";
 
 /**
  * One searchTests() result: a verified test catalog row joined to its
@@ -18,10 +19,38 @@ export interface SearchTestResult {
   matchType: SearchMatchType;
   /** The alias text that matched, when matchType is "alias"; otherwise null. */
   matchedAlias: string | null;
+  /** This is a component found through one of its parameters (e.g. "Hemoglobin" -> H6); that parameter's name. */
+  includedParameter?: string | null;
   price: Money;
   tatText: string;
   availability: AvailabilityStatus;
   serviceType: ServiceType;
+}
+
+/**
+ * A calculated parameter matching a search (e.g. "Serum Globulin"). It has
+ * no price of its own — the agent adds `sources`, the tests it's derived
+ * from, priced at the selected location. See searchCatalogCalculated().
+ */
+export interface CalculatedSearchResult {
+  testId: string;
+  code: string;
+  officialName: string;
+  shortName: string | null;
+  /** Extra note from the master, e.g. a source test that isn't in the price list. */
+  description: string | null;
+  /** The direct sources' names, as the master lists them ("Serum Albumin + Serum Globulin"). */
+  sourceNames: string[];
+  /** The orderable tests to add, priced here. */
+  sources: SearchTestResult[];
+  /** Orderable sources with no price here, by name. */
+  unpricedSources: string[];
+  /** Its own name/code matched the query exactly. */
+  exact: boolean;
+  /** Only orderable within a profile (e.g. eGFR -> KFT): that profile's code; null = add `sources`. */
+  viaProfileCode: string | null;
+  /** That profile, priced here — null when it isn't offered at this location. */
+  viaProfile: ProfileSearchResult | null;
 }
 
 /**

@@ -246,6 +246,15 @@
 @keyframes avm-word-cycle { 0%, 5% { opacity: 0.4; } 10%, 30% { opacity: 1; text-shadow: 0 0 24px rgb(255 255 255 / 0.5); } 38%, 100% { opacity: 0.4; text-shadow: none; } }
 @keyframes avm-word-in { from { opacity: 0; transform: translateY(60%) rotate(4deg); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 
+/* Sign-in brand panel's workflow preview: a 9s loop of type → rows added → reply.
+   One keyframes per step (rather than animation-delay) so every step fades out together before the loop restarts. */
+@keyframes avm-demo-type { 0%, 4% { max-width: 0; } 26%, 88% { max-width: 13em; } 94%, 100% { max-width: 0; } }
+@keyframes avm-demo-1 { 0%, 30% { opacity: 0; transform: translateY(8px); } 36%, 84% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; transform: none; } }
+@keyframes avm-demo-2 { 0%, 34% { opacity: 0; transform: translateY(8px); } 40%, 84% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; transform: none; } }
+@keyframes avm-demo-3 { 0%, 38% { opacity: 0; transform: translateY(8px); } 44%, 84% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; transform: none; } }
+@keyframes avm-demo-4 { 0%, 46% { opacity: 0; transform: translateY(8px); } 52%, 84% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; transform: none; } }
+@keyframes avm-demo-5 { 0%, 52% { opacity: 0; transform: translateY(8px) scale(0.96); } 58%, 84% { opacity: 1; transform: none; } 90%, 100% { opacity: 0; transform: none; } }
+
 @keyframes avm-added { 0% { transform: scale(0.88); } 55% { transform: scale(1.07); } 100% { transform: none; } }
 @keyframes avm-fade-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
 @keyframes avm-item-out { from { opacity: 1; transform: none; max-height: 80px; } to { opacity: 0; transform: translateX(24px); max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; } }

@@ -1,5 +1,5 @@
 import "server-only";
-import { readSheet } from "@/lib/excel/read-sheet";
+import { readSheet, readWideSheet } from "@/lib/excel/read-sheet";
 import { listAllTests } from "@/lib/database/tests";
 import { listActiveLocations } from "@/lib/database/locations";
 import {
@@ -16,7 +16,10 @@ import type { Profile } from "@/types/profile";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { AvailabilityStatus } from "@/lib/constants/availability";
 
-// Profile/package upload (Admin → Upload → "Profiles & packages"): one row
+// Profile/package upload (Admin → Upload → "Profiles & packages"). Laid out
+// like the master's Profile Prices file — one row per profile with a price +
+// TAT column pair per location (readWideSheet; Service Type defaults to
+// In-House; a Tests column holding just a count is ignored) — or one row
 // per profile per location + service type. Creates missing profiles,
 // updates names/descriptions, sets each profile's test list from its
 // "Test Codes" cell (the preview lists any test that would be removed), and
@@ -74,12 +77,12 @@ interface ProfilePlan {
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((value) => b.includes(value));
 
 async function plan(buffer: Buffer): Promise<ProfilePlan> {
-  const [rows, tests, profiles, locations] = await Promise.all([
-    readSheet<Column>(buffer, PROFILE_DETAIL_HEADERS, ["profileCode"]),
-    listAllTests(),
-    listAllProfilesWithTestSelections(),
-    listActiveLocations(),
-  ]);
+  const [tests, profiles, locations] = await Promise.all([listAllTests(), listAllProfilesWithTestSelections(), listActiveLocations()]);
+  const wideRows = await readWideSheet<Column>(buffer, PROFILE_DETAIL_HEADERS, ["profileCode"], locations);
+  const rows = wideRows ?? (await readSheet<Column>(buffer, PROFILE_DETAIL_HEADERS, ["profileCode"]));
+  if (wideRows) {
+    for (const { values } of wideRows) if (values.location) values.serviceType ??= "In-House";
+  }
   const errors: UploadIssue[] = [];
   const warnings: UploadIssue[] = [];
   const testByCode = new Map(tests.map((test) => [test.code.toUpperCase(), test]));
@@ -104,7 +107,8 @@ async function plan(buffer: Buffer): Promise<ProfilePlan> {
       }
     }
     if (values.description && entry.description === undefined) entry.description = values.description;
-    if (values.testCodes) {
+    // A bare number is the master file's test count, not a list of codes.
+    if (values.testCodes && !/^\d+$/.test(values.testCodes)) {
       const codes = splitList(values.testCodes).map((c) => c.toUpperCase());
       if (entry.testCodes === undefined) {
         entry.testCodes = codes;
@@ -176,6 +180,10 @@ async function plan(buffer: Buffer): Promise<ProfilePlan> {
   for (const { row, code, values } of priceRows) {
     const location = values.location ? resolveLocation(values.location, locations) : null;
     const serviceType = values.serviceType ? parseServiceType(values.serviceType) : null;
+    if (!values.price && values.available && parseYesNo(values.available) === false) {
+      warnings.push({ row, message: `${code}: marked not available at ${values.location ?? "a location"} with no price — skipped.` });
+      continue;
+    }
     const rowErrors: string[] = [];
     if (!values.location) rowErrors.push("Location is required when a price is given");
     else if (!location) rowErrors.push(`unknown Location "${values.location}" (use ${locations.map((l) => l.name).join(", ")})`);
@@ -252,7 +260,7 @@ async function plan(buffer: Buffer): Promise<ProfilePlan> {
       errors,
       warnings,
       stats: [
-        { label: "Rows read", value: rows.length },
+        { label: "Rows read", value: new Set(rows.map((row) => row.rowNumber)).size },
         { label: "New profiles", value: create.length },
         { label: "Profiles updated", value: update.length },
         { label: "Test lists changed", value: rosters.length },

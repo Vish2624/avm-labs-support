@@ -6,13 +6,14 @@ import { SparklesIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "../search/test-result-card";
 import { PackageResultRow } from "../search/package-result-row";
+import { CalculatedResultCard, calculatedIsOrderable } from "../search/calculated-result-card";
 import type { MessageAiState } from "../search/use-semantic-search";
 import type { ProfileSearchResult } from "@/types/profile";
 import { resultsTitleClassName } from "../search/search-results";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
-import { isPackageName } from "@/lib/search/matching/is-package-name";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
-import type { SearchTestResult } from "@/types/search";
+import type { CalculatedSearchResult, SearchTestResult } from "@/types/search";
 import type { NotOfferedTest } from "@/lib/search/reading/extract-tests";
 
 export interface Extraction {
@@ -20,11 +21,16 @@ export interface Extraction {
   packages: { token: string; result: ProfileSearchResult }[];
   notOffered: NotOfferedTest[];
   unmatched: string[];
+  /** Calculated parameters asked for ("eGFR"), each with the tests to order for it. */
+  calculated?: CalculatedSearchResult[];
   /** Who read the message: Gemini, or the rule-based reader (no key, Gemini failed, or a clean list). */
   readBy?: "ai" | "rules";
 }
 
-const EMPTY_EXTRACTION: Extraction = { detected: [], packages: [], notOffered: [], unmatched: [] };
+const EMPTY_EXTRACTION: Extraction = { detected: [], packages: [], notOffered: [], unmatched: [], calculated: [] };
+
+/** A calculated parameter counts as found when it can be ordered here (its tests, or its profile). */
+const calculatedFound = (calculated: CalculatedSearchResult[] = []) => calculated.filter(calculatedIsOrderable).length;
 
 /** Packages grouped by the message name they matched ("women package" can match several). */
 function groupPackages(packages: Extraction["packages"]) {
@@ -45,15 +51,21 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
     return;
   }
   const packageNames = groupPackages(extraction.packages);
+  const calculated = extraction.calculated ?? [];
   const requested =
-    extraction.detected.length + packageNames.length + extraction.notOffered.length + extraction.unmatched.length;
+    extraction.detected.length +
+    packageNames.length +
+    extraction.notOffered.length +
+    extraction.unmatched.length +
+    calculated.length;
   if (requested === 0) {
     toast.error("No tests found", { id: EXTRACTION_TOAST_ID });
     return;
   }
   const available =
     extraction.detected.filter((result) => result.availability === "available").length +
-    packageNames.filter(({ results }) => results.some((result) => result.availability === "available")).length;
+    packageNames.filter(({ results }) => results.some((result) => result.availability === "available")).length +
+    calculatedFound(calculated);
   const notAvailable = requested - available;
   const found = `${available} of ${requested} found`;
   if (notAvailable === 0) {
@@ -64,6 +76,7 @@ function notifyExtraction(extraction: Extraction, failed: boolean) {
     const names = [
       ...extraction.unmatched,
       ...extraction.notOffered.map((test) => test.code),
+      ...calculated.filter((result) => !calculatedIsOrderable(result)).map((result) => result.officialName),
       ...extraction.detected.filter((result) => result.availability !== "available").map((result) => result.code),
       ...packageNames
         .filter(({ results }) => results.every((result) => result.availability !== "available"))
@@ -234,6 +247,7 @@ export function MessageExtractionResults({
   packages = [],
   notOffered = [],
   unmatched = [],
+  calculated = [],
   loading,
   locationName = null,
   addedTestIds,
@@ -253,6 +267,7 @@ export function MessageExtractionResults({
   packages?: { token: string; result: ProfileSearchResult }[];
   notOffered?: NotOfferedTest[];
   unmatched?: string[];
+  calculated?: CalculatedSearchResult[];
   loading: boolean;
   locationName?: string | null;
   addedTestIds: Set<string>;
@@ -278,8 +293,8 @@ export function MessageExtractionResults({
   const availablePackages = packageNames.filter(({ results }) =>
     results.some((result) => result.availability === "available")
   ).length;
-  const requested = detected.length + packageNames.length + notOffered.length + unmatched.length;
-  const notAvailableCount = requested - available.length - availablePackages - aiFound;
+  const requested = detected.length + packageNames.length + notOffered.length + unmatched.length + calculated.length;
+  const notAvailableCount = requested - available.length - availablePackages - aiFound - calculatedFound(calculated);
 
   if (readingImage || (loading && requested === 0)) {
     return (
@@ -310,7 +325,7 @@ export function MessageExtractionResults({
     <div className="flex flex-col">
       <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-2">
         <span className={resultsTitleClassName}>
-          {requested} requested · {available.length + availablePackages + aiFound} available
+          {requested} requested · {available.length + availablePackages + aiFound + calculatedFound(calculated)} available
           {notAvailableCount > 0 ? <span className="text-destructive"> · {notAvailableCount} not available</span> : null}
         </span>
         {newAvailable.length > 1 ? (
@@ -338,10 +353,28 @@ export function MessageExtractionResults({
           onRemove={onRemove}
         />
       ))}
+      {/* Calculated parameters asked for: each adds the tests it's derived from. */}
+      {calculated.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="px-2 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+            Calculated parameters · {calculated.length}
+          </div>
+          {calculated.map((result) => (
+            <CalculatedResultCard
+              key={result.testId}
+              result={result}
+              addedTestIds={addedTestIds}
+              addedProfileIds={addedProfileIds}
+              onAddMany={onAddMany}
+              onAddPackage={onAddPackage}
+            />
+          ))}
+        </div>
+      ) : null}
       {/* Then profiles, and packages last. */}
       {[
-        { label: "Profiles", named: packageNames.filter(({ results }) => !isPackageName(results[0].name)) },
-        { label: "Packages", named: packageNames.filter(({ results }) => isPackageName(results[0].name)) },
+        { label: "Profiles", named: packageNames.filter(({ results }) => !isPackage(results[0])) },
+        { label: "Packages", named: packageNames.filter(({ results }) => isPackage(results[0])) },
       ].map(({ label, named }) =>
         named.length > 0 ? (
           <div key={label} className="mt-3 flex flex-col gap-2">

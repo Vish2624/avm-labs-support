@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth/permissions";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
 import { aiSearchCatalog } from "@/lib/search/reading/ai-read-message";
 import { extractTests } from "@/lib/search/reading/extract-tests";
-import { isPackageName } from "@/lib/search/matching/is-package-name";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 
 // The Quote search box's second step: only asked when the fuzzy search
@@ -13,7 +13,7 @@ import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 // Answers 501 without a Gemini key (the search then just shows "no match").
 export async function GET(request: NextRequest) {
   await requireUser();
-  if (!geminiReaderConfigured("search")) {
+  if (!(await geminiReaderConfigured("search"))) {
     return NextResponse.json({ error: "Search AI is not configured" }, { status: 501 });
   }
 
@@ -35,6 +35,6 @@ export async function GET(request: NextRequest) {
   const result = await extractTests(codes, locationId, serviceTypes);
   return NextResponse.json({
     tests: result.detected,
-    profiles: result.packages.map(({ result: profile }) => profile).filter((profile) => !isPackageName(profile.name)),
+    profiles: result.packages.map(({ result: profile }) => profile).filter((profile) => !isPackage(profile)),
   });
 }

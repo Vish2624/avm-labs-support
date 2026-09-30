@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { RefreshCwIcon } from "lucide-react";
+import { RefreshButton } from "@/components/admin/refresh-button";
 import { deleteAppEventsBefore, listAppEventsSince } from "@/lib/database/app-events";
 import { geminiOwnKeyConfigured, type GeminiKeyRole } from "@/lib/ai/gemini";
 import { cn } from "@/lib/utils";
@@ -126,12 +125,7 @@ export default async function SystemHealthPage() {
             used. Kept for {KEEP_DAYS} days.
           </p>
         </div>
-        <Link
-          href="/admin/health"
-          className="flex h-9 items-center gap-2 rounded-[10px] border border-border px-3.5 text-[13px] font-medium transition-colors hover:bg-muted"
-        >
-          <RefreshCwIcon className="size-3.5" /> Refresh
-        </Link>
+        <RefreshButton />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5">

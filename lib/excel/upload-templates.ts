@@ -6,14 +6,14 @@ import { listCurrentPricesWithTestInfo } from "@/lib/database/prices";
 import { listAllProfilesWithTestSelections, listCurrentProfilePricesWithProfileInfo } from "@/lib/database/profiles";
 import { listActiveLocations } from "@/lib/database/locations";
 import { getCurrencyFractionDigits } from "@/lib/pricing/money";
-import { SERVICE_TYPES, type ServiceType } from "@/lib/constants/service-types";
+import { testTypeFromCategory } from "@/types/test";
+import type { Location } from "@/types/location";
 
-// Downloadable Excel files for the Test details and Profiles uploads
-// (lib/imports/test-details-import.ts, profile-details-import.ts). Either a
-// template with example rows, or the current data in exactly the upload's
-// format — so an admin can download, edit and re-upload.
-
-const SERVICE_LABEL: Record<ServiceType, string> = { in_house: "In-House", outsource: "Outsource" };
+// Downloadable Excel files for the Master price list and Profiles uploads
+// (lib/imports/test-details-import.ts, profile-details-import.ts), laid out
+// like the master file (one row per item, a column pair per location).
+// Either a template with example rows, or the current data in exactly the
+// upload's format — so an admin can download, edit and re-upload.
 
 interface ColumnSpec {
   header: string;
@@ -21,33 +21,6 @@ interface ColumnSpec {
   width: number;
   help: string;
 }
-
-const TEST_COLUMNS: ColumnSpec[] = [
-  { header: "Test Code", key: "code", width: 14, help: "Required. The test's code (e.g. TSH). Matches an existing test, or creates a new one." },
-  { header: "Test Name", key: "name", width: 36, help: "Required for a new test. Filled in = renames an existing test; blank = keep the current name." },
-  { header: "Short Name", key: "shortName", width: 14, help: "Optional. Blank = keep current." },
-  { header: "Category", key: "category", width: 16, help: "Optional (e.g. Thyroid, Diabetes). Blank = keep current." },
-  { header: "Description", key: "description", width: 30, help: "Optional. Blank = keep current." },
-  { header: "Aliases", key: "aliases", width: 40, help: "Optional. Other names customers use, separated by ; (e.g. Vit D; Vitamin D Total). Only added, never removed." },
-  { header: "Active", key: "active", width: 9, help: "Optional. Yes or No. Blank = keep current." },
-  { header: "Location", key: "location", width: 11, help: "For a price: Dubai, Bahrain, Khobar or Riyadh. Leave the price columns blank on a details-only row." },
-  { header: "Service Type", key: "serviceType", width: 13, help: "For a price: In-House or Outsource." },
-  { header: "Price", key: "price", width: 11, help: "For a price: amount in that location's currency (e.g. 45.50 AED, 4.600 BHD)." },
-  { header: "TAT", key: "tat", width: 16, help: "For a price: turnaround time as agents should read it (e.g. 8 hours, 3 working days)." },
-  { header: "Available", key: "available", width: 10, help: "For a price: Yes or No. Blank = Yes." },
-];
-
-const PROFILE_COLUMNS: ColumnSpec[] = [
-  { header: "Profile Code", key: "code", width: 14, help: "Required. The package/profile code (e.g. LIPID). Matches an existing one, or creates a new one." },
-  { header: "Profile Name", key: "name", width: 36, help: "Required for a new profile. Blank = keep the current name." },
-  { header: "Description", key: "description", width: 30, help: "Optional. Blank = keep current." },
-  { header: "Test Codes", key: "testCodes", width: 44, help: "The tests inside, by Test Code, separated by commas (e.g. CHOL, TRIG, HDL, LDL). This REPLACES the profile's test list; blank = keep the current list. Codes must already exist (add new tests with the Test details upload first)." },
-  { header: "Location", key: "location", width: 11, help: "Dubai, Bahrain, Khobar or Riyadh. One row per profile per location + service type." },
-  { header: "Service Type", key: "serviceType", width: 13, help: "In-House or Outsource." },
-  { header: "Price", key: "price", width: 11, help: "Bundle price in that location's currency (e.g. 45.00 AED, 4.600 BHD)." },
-  { header: "TAT", key: "tat", width: 16, help: "Turnaround time (e.g. 8 hours, 24-48 hrs)." },
-  { header: "Available", key: "available", width: 10, help: "Yes or No. Blank = Yes." },
-];
 
 function workbookWith(
   sheetName: string,
@@ -122,122 +95,160 @@ export async function buildPriceListTemplate(): Promise<ExcelJS.Buffer> {
   ).xlsx.writeBuffer();
 }
 
-const COMMON_NOTES = [
-  "Keep the first sheet and its header row as they are. Column order doesn't matter; extra columns are ignored.",
-  "One row per item per location + service type. Repeat the code on each row; details only need filling on one of them.",
+const MASTER_NOTES = [
+  "Keep the first sheet and its header row as they are. Column order doesn't matter; extra columns (like \"sum of tests (reference)\") are ignored.",
+  "All prices here are In-House. A blank price leaves that location as it is; write NA to mark it not available there (its current price is kept).",
   "After uploading you'll see a preview of every change. Nothing is saved until you confirm, and any error blocks the whole file.",
 ];
 
-export async function buildTestDetailsWorkbook(filled: boolean): Promise<ExcelJS.Buffer> {
-  const notes = [
-    ...COMMON_NOTES,
-    "A row with no Location only updates the test's details. Prices are saved as a new price-list version per location + service type, like the Price list upload.",
-  ];
-  if (!filled) {
-    return workbookWith(
-      "Tests",
-      TEST_COLUMNS,
-      [],
-      notes,
-      [
-        { code: "TSH", name: "THYROID STIMULATING HORMONE (TSH)", shortName: "TSH", category: "Thyroid", aliases: "Thyrotropin; Thyroid test", active: "Yes", location: "Dubai", serviceType: "In-House", price: 92, tat: "8 hours", available: "Yes" },
-        { code: "TSH", location: "Bahrain", serviceType: "In-House", price: 0.95, tat: "8 hours", available: "Yes" },
-        { code: "VITDC", name: "25-OH VITAMIN D (TOTAL)", category: "Vitamins", aliases: "Vitamin D; Vit D; Vit D Total", active: "Yes" },
-      ]
-    ).xlsx.writeBuffer();
-  }
+// The master file's location order; any other location follows.
+const LOCATION_ORDER = ["dubai", "bahrain", "khobar", "riyadh"];
+function inMasterOrder(locations: Location[]): Location[] {
+  const rank = (l: Location) => {
+    const i = LOCATION_ORDER.indexOf(l.name.toLowerCase());
+    return i === -1 ? LOCATION_ORDER.length : i;
+  };
+  return [...locations].sort((a, b) => rank(a) - rank(b));
+}
 
-  const [tests, aliases, locations] = await Promise.all([listAllTests(), listAllAliasesWithTest(), listActiveLocations()]);
-  const aliasesByTest = new Map<string, string[]>();
-  for (const alias of aliases) aliasesByTest.set(alias.testId, [...(aliasesByTest.get(alias.testId) ?? []), alias.alias]);
+const exampleAmount = (location: Location, aed: number) => (location.currencyCode === "BHD" ? Number((aed / 10).toFixed(3)) : aed);
+const toMajor = (amount: number, currencyCode: string) => {
+  const digits = getCurrencyFractionDigits(currencyCode);
+  return Number((amount / 10 ** digits).toFixed(digits));
+};
 
-  const priceRows = new Map<string, Record<string, string | number>[]>();
+/** In-House price + TAT cells per item id, keyed like the location columns. */
+async function inHousePrices(
+  locations: Location[],
+  list: (location: Location) => Promise<{ id: string; price: number; tatText: string; availability: string }[]>
+) {
+  const byItem = new Map<string, Record<string, string | number>>();
   for (const location of locations) {
-    const digits = getCurrencyFractionDigits(location.currencyCode);
-    for (const serviceType of SERVICE_TYPES) {
-      for (const price of await listCurrentPricesWithTestInfo({ locationId: location.id, serviceType })) {
-        const list = priceRows.get(price.testId) ?? [];
-        list.push({
-          location: location.name,
-          serviceType: SERVICE_LABEL[serviceType],
-          price: Number((price.price / 10 ** digits).toFixed(digits)),
-          tat: price.tatText,
-          available: price.availability === "available" ? "Yes" : "No",
-        });
-        priceRows.set(price.testId, list);
-      }
+    for (const price of await list(location)) {
+      const row = byItem.get(price.id) ?? {};
+      row[`price:${location.id}`] = price.availability === "available" ? toMajor(price.price, location.currencyCode) : "NA";
+      row[`tat:${location.id}`] = price.tatText;
+      byItem.set(price.id, row);
     }
   }
+  return byItem;
+}
 
-  const rows: Record<string, string | number>[] = [];
-  for (const test of [...tests].sort((a, b) => a.code.localeCompare(b.code))) {
-    const details = {
+// Test details: the master file's Tests sheet — Test Code, Test Name, Alias
+// Names, then "<Location> (TAT)" + "<Location> (B2C) <currency>" per location.
+function testColumns(locations: Location[]): ColumnSpec[] {
+  return [
+    { header: "Test Code", key: "code", width: 14, help: "Required. The test's code (e.g. TSH). Matches an existing test, or creates a new one." },
+    { header: "Test Name", key: "name", width: 40, help: "Required for a new test. Filled in = renames an existing test; blank = keep the current name." },
+    { header: "Alias Names", key: "aliases", width: 40, help: "Optional. Other names customers use, separated by ; (e.g. ALT; SGPT). Only added, never removed." },
+    ...locations.flatMap((location) => [
+      { header: `${location.name} (TAT)`, key: `tat:${location.id}`, width: 14, help: `Turnaround time at ${location.name} (e.g. 4 hrs, 48 hrs).` },
+      {
+        header: `${location.name} (B2C) ${location.currencyCode}`,
+        key: `price:${location.id}`,
+        width: 18,
+        help: `Price at ${location.name} in ${location.currencyCode} (e.g. ${exampleAmount(location, 7.3)}). Blank = leave as is; NA = not available there.`,
+      },
+    ]),
+  ];
+}
+
+export async function buildTestDetailsWorkbook(filled: boolean): Promise<ExcelJS.Buffer> {
+  const locations = inMasterOrder(await listActiveLocations());
+  const columns = testColumns(locations);
+  const notes = [
+    "Same layout as the master file's Tests sheet: one row per test, with a TAT and a price column for each location.",
+    ...MASTER_NOTES,
+    "Parameters and calculated parameters aren't priced — manage them under Admin → Components and Calculated.",
+  ];
+  if (!filled) {
+    const example = (code: string, name: string, aliases: string, aed: number, tat: string) => ({
+      code,
+      name,
+      aliases,
+      ...Object.fromEntries(locations.flatMap((l) => [[`tat:${l.id}`, tat], [`price:${l.id}`, exampleAmount(l, aed)]])),
+    });
+    return workbookWith("Tests", columns, [], notes, [
+      example("SGPT", "Alanine Transaminase (SGPT)", "ALT; Alanine Aminotransferase", 7.3, "4 hrs"),
+      example("TSH", "Thyroid Stimulating Hormone (TSH)", "Thyrotropin", 30, "48 hrs"),
+    ]).xlsx.writeBuffer();
+  }
+
+  const [tests, aliases] = await Promise.all([listAllTests(), listAllAliasesWithTest()]);
+  const aliasesByTest = new Map<string, string[]>();
+  for (const alias of aliases) aliasesByTest.set(alias.testId, [...(aliasesByTest.get(alias.testId) ?? []), alias.alias]);
+  const prices = await inHousePrices(locations, async (location) =>
+    (await listCurrentPricesWithTestInfo({ locationId: location.id, serviceType: "in_house" })).map((p) => ({ ...p, id: p.testId }))
+  );
+
+  const rows = tests
+    .filter((test) => prices.has(test.id) || (test.active && ["test", "component"].includes(testTypeFromCategory(test.category))))
+    .sort((a, b) => a.officialName.localeCompare(b.officialName))
+    .map((test) => ({
       code: test.code,
       name: test.officialName,
-      shortName: test.shortName ?? "",
-      category: test.category ?? "",
-      description: test.description ?? "",
       aliases: (aliasesByTest.get(test.id) ?? []).sort().join("; "),
-      active: test.active ? "Yes" : "No",
-    };
-    const prices = priceRows.get(test.id) ?? [];
-    if (prices.length === 0) rows.push(details);
-    prices.forEach((price, i) => rows.push(i === 0 ? { ...details, ...price } : { code: test.code, ...price }));
-  }
-  return workbookWith("Tests", TEST_COLUMNS, rows, notes).xlsx.writeBuffer();
+      ...prices.get(test.id),
+    }));
+  return workbookWith("Tests", columns, rows, notes).xlsx.writeBuffer();
+}
+
+// Profiles: the master's Profile Prices file — Profile Code, Profile Name,
+// Test Codes, then "<Location> Price (<currency>)" + "<Location> TAT" per location.
+function profileColumns(locations: Location[]): ColumnSpec[] {
+  return [
+    { header: "Profile Code", key: "code", width: 14, help: "Required. The package/profile code (e.g. LFT). Matches an existing one, or creates a new one." },
+    { header: "Profile Name", key: "name", width: 36, help: "Required for a new profile. Blank = keep the current name." },
+    {
+      header: "Test Codes",
+      key: "testCodes",
+      width: 44,
+      help: "The tests inside, by Test Code, separated by commas (e.g. CHOL, TRIG, HDL). This REPLACES the profile's test list; blank = keep the current list. Codes must already exist.",
+    },
+    ...locations.flatMap((location) => [
+      {
+        header: `${location.name} Price (${location.currencyCode})`,
+        key: `price:${location.id}`,
+        width: 18,
+        help: `Fixed bundle price at ${location.name} in ${location.currencyCode}. Blank = leave as is.`,
+      },
+      { header: `${location.name} TAT`, key: `tat:${location.id}`, width: 13, help: `Turnaround time at ${location.name} (e.g. 4 hrs).` },
+    ]),
+  ];
 }
 
 export async function buildProfileWorkbook(filled: boolean): Promise<ExcelJS.Buffer> {
+  const locations = inMasterOrder(await listActiveLocations());
+  const columns = profileColumns(locations);
   const notes = [
-    ...COMMON_NOTES,
+    "Same layout as the Profile Prices file: one row per profile, with a price and a TAT column for each location.",
+    ...MASTER_NOTES,
     "Test Codes replaces the whole test list of that profile — the preview shows any test that would be removed before you confirm.",
   ];
   if (!filled) {
-    return workbookWith(
-      "Profiles",
-      PROFILE_COLUMNS,
-      [],
-      notes,
-      [
-        { code: "LIPID", name: "LIPID PROFILE", testCodes: "CHOL, TRIG, HDL, LDL", location: "Dubai", serviceType: "In-House", price: 45, tat: "8 hours", available: "Yes" },
-        { code: "LIPID", location: "Bahrain", serviceType: "In-House", price: 4.6, tat: "8 hours", available: "Yes" },
-        { code: "TFT", name: "TOTAL THYROID", testCodes: "T3, T4, TSH", location: "Dubai", serviceType: "In-House", price: 60, tat: "8 hours", available: "Yes" },
-      ]
-    ).xlsx.writeBuffer();
+    return workbookWith("Profile Prices", columns, [], notes, [
+      {
+        code: "LIPID",
+        name: "Lipid Profile",
+        testCodes: "CHOL, TRIG, HDL, LDL",
+        ...Object.fromEntries(locations.flatMap((l) => [[`price:${l.id}`, exampleAmount(l, 45)], [`tat:${l.id}`, "4 hrs"]])),
+      },
+    ]).xlsx.writeBuffer();
   }
 
-  const [profiles, tests, locations] = await Promise.all([listAllProfilesWithTestSelections(), listAllTests(), listActiveLocations()]);
+  const [profiles, tests] = await Promise.all([listAllProfilesWithTestSelections(), listAllTests()]);
   const codeById = new Map(tests.map((test) => [test.id, test.code]));
-  const priceRows = new Map<string, Record<string, string | number>[]>();
-  for (const location of locations) {
-    const digits = getCurrencyFractionDigits(location.currencyCode);
-    for (const serviceType of SERVICE_TYPES) {
-      for (const price of await listCurrentProfilePricesWithProfileInfo({ locationId: location.id, serviceType })) {
-        const list = priceRows.get(price.profileId) ?? [];
-        list.push({
-          location: location.name,
-          serviceType: SERVICE_LABEL[serviceType],
-          price: Number((price.price / 10 ** digits).toFixed(digits)),
-          tat: price.tatText,
-          available: price.availability === "available" ? "Yes" : "No",
-        });
-        priceRows.set(price.profileId, list);
-      }
-    }
-  }
-
-  const rows: Record<string, string | number>[] = [];
-  for (const { profile, tests: roster } of [...profiles].sort((a, b) => a.profile.code.localeCompare(b.profile.code))) {
-    if (!profile.active) continue;
-    const details = {
+  const prices = await inHousePrices(locations, async (location) =>
+    (await listCurrentProfilePricesWithProfileInfo({ locationId: location.id, serviceType: "in_house" })).map((p) => ({ ...p, id: p.profileId }))
+  );
+  const rows = profiles
+    .filter(({ profile }) => profile.active)
+    .sort((a, b) => a.profile.code.localeCompare(b.profile.code))
+    .map(({ profile, tests: roster }) => ({
       code: profile.code,
       name: profile.name,
-      description: profile.description ?? "",
       testCodes: roster.map((t) => codeById.get(t.testId) ?? "").filter(Boolean).join(", "),
-    };
-    const prices = priceRows.get(profile.id) ?? [];
-    if (prices.length === 0) rows.push(details);
-    prices.forEach((price, i) => rows.push(i === 0 ? { ...details, ...price } : { code: profile.code, ...price }));
-  }
-  return workbookWith("Profiles", PROFILE_COLUMNS, rows, notes).xlsx.writeBuffer();
+      ...prices.get(profile.id),
+    }));
+  return workbookWith("Profile Prices", columns, rows, notes).xlsx.writeBuffer();
 }

@@ -1,7 +1,11 @@
 import "server-only";
 import { READER_MODELS, geminiGenerate } from "@/lib/ai/gemini";
 import { browseProfiles, browseTests } from "../catalog/browse-catalog";
-import { isPackageName } from "../matching/is-package-name";
+import { isPackage } from "../matching/is-package-name";
+import { listActiveAliases } from "@/lib/database/aliases";
+
+/** Other names listed per test in the readers' catalog — enough for the common ones, without bloating the prompt. */
+const MAX_LISTED_ALIASES = 4;
 import type { ServiceType } from "@/lib/constants/service-types";
 
 /** Marks a requested item that isn't in the catalog list, as the customer wrote it. */
@@ -152,6 +156,17 @@ async function catalogListing(
   serviceTypes: readonly ServiceType[],
   includePackages: boolean
 ): Promise<string[]> {
+  // Other names agents and customers use ("CBC" for the Hemogram), so the
+  // model doesn't mark a common name as not listed.
+  const aliasesByTest = new Map<string, string[]>();
+  for (const alias of await listActiveAliases()) {
+    const list = aliasesByTest.get(alias.testId) ?? [];
+    if (list.length < MAX_LISTED_ALIASES) aliasesByTest.set(alias.testId, [...list, alias.alias]);
+  }
+  const alsoKnownAs = (testId: string) => {
+    const names = aliasesByTest.get(testId);
+    return names?.length ? ` — also: ${names.join(", ")}` : "";
+  };
   const catalogs = await Promise.all(
     serviceTypes.map(async (serviceType) => {
       const [tests, profiles] = await Promise.all([
@@ -159,10 +174,12 @@ async function catalogListing(
         browseProfiles(locationId, serviceType),
       ]);
       return [
-        ...tests.map((test) => `${test.code} | ${test.officialName}${test.shortName ? ` (${test.shortName})` : ""}`),
+        ...tests.map(
+          (test) => `${test.code} | ${test.officialName}${test.shortName ? ` (${test.shortName})` : ""}${alsoKnownAs(test.testId)}`
+        ),
         ...profiles
-          .filter((profile) => includePackages || !isPackageName(profile.name))
-          .map((profile) => `${profile.code} | ${profile.name} (${isPackageName(profile.name) ? "package" : "profile"})`),
+          .filter((profile) => includePackages || !isPackage(profile))
+          .map((profile) => `${profile.code} | ${profile.name} (${isPackage(profile) ? "package" : "profile"})`),
       ];
     })
   );

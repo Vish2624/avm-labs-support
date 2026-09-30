@@ -3,8 +3,9 @@ import { requireUser } from "@/lib/auth/permissions";
 import { extractTests } from "@/lib/search/reading/extract-tests";
 import { aiListRequestedTests } from "@/lib/search/reading/ai-read-message";
 import { extractFromAiList } from "@/lib/search/reading/extract-from-ai-list";
+import { withCalculated } from "@/lib/search/reading/match-calculated";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
-import { isPackageName } from "@/lib/search/matching/is-package-name";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import { SERVICE_TYPES, isServiceType } from "@/lib/constants/service-types";
 
 // Bulk test extraction backing the Support Workspace's "Paste text or image"
@@ -37,27 +38,28 @@ export async function POST(request: NextRequest) {
   // The rule-based reader first: a plain list it matches exactly and
   // completely ("TSH, FT4, HBA" — e.g. codes sent over from the Support
   // Assistant) needs no Gemini request at all.
-  const rules = await extractTests(text, locationId, serviceTypes);
+  // Names that are calculated parameters ("eGFR") come back with their source tests.
+  const rules = await withCalculated(await extractTests(text, locationId, serviceTypes), locationId, serviceTypes);
   const readCleanly =
     rules.unmatched.length === 0 &&
     rules.notOffered.length === 0 &&
-    rules.detected.length + rules.packages.length > 0 &&
+    rules.detected.length + rules.packages.length + rules.calculated.length > 0 &&
     rules.detected.every((result) => result.matchType === "exact");
   // A clean list of exact codes keeps any package in it (e.g. one the
   // agent ticked in the Support Assistant); anything read from a message
   // never shows packages — tests and profiles only.
   if (readCleanly) return NextResponse.json({ ...rules, readBy: "rules" });
   const withoutPackages = (packages: typeof rules.packages) =>
-    packages.filter(({ result }) => !isPackageName(result.name));
+    packages.filter(({ result }) => !isPackage(result));
 
   // ai=true (the paste tab): otherwise Gemini picks the catalog codes the
   // message asks for (lib/search/reading/ai-read-message.ts), then the usual reader
   // prices them. Without a key, or if Gemini fails or finds nothing, the
   // rule-based reading stands.
-  if (body?.ai === true && geminiReaderConfigured()) {
+  if (body?.ai === true && (await geminiReaderConfigured())) {
     const aiList = await aiListRequestedTests(text, locationId, serviceTypes).catch(() => null);
     if (aiList && (aiList.codes || aiList.notListed.length > 0)) {
-      const result = await extractFromAiList(aiList, locationId, serviceTypes);
+      const result = await withCalculated(await extractFromAiList(aiList, locationId, serviceTypes), locationId, serviceTypes);
       return NextResponse.json({ ...result, readBy: "ai" });
     }
   }

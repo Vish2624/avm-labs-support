@@ -4,8 +4,9 @@ import { SparklesIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "./test-result-card";
 import { PackageResultRow } from "./package-result-row";
+import { CalculatedResultCard } from "./calculated-result-card";
 import { SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/constants/service-types";
-import type { SearchTestResult } from "@/types/search";
+import type { CalculatedSearchResult, SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult } from "@/types/profile";
 
 export interface SearchResultGroup {
@@ -44,10 +45,12 @@ export function SearchResults({
   exactMatch = false,
   locationName,
   groups,
+  calculated = [],
   showGroupHeaders,
   addedTestIds,
   addedProfileIds,
   onAdd,
+  onAddMany,
   onRemove,
   onAddPackage,
   onRemovePackage,
@@ -64,10 +67,13 @@ export function SearchResults({
   exactMatch?: boolean;
   locationName: string | null;
   groups: SearchResultGroup[];
+  /** Calculated parameters matching the query — each adds its source tests. */
+  calculated?: CalculatedSearchResult[];
   showGroupHeaders: boolean;
   addedTestIds: Set<string>;
   addedProfileIds: Set<string>;
   onAdd: (result: SearchTestResult) => void;
+  onAddMany: (results: SearchTestResult[]) => void;
   onRemove: (testId: string) => void;
   onAddPackage: (result: ProfileSearchResult) => void;
   onRemovePackage: (profileId: string) => void;
@@ -89,6 +95,7 @@ export function SearchResults({
   const anyLoading = groups.some((group) => group.testsLoading || group.profilesLoading);
   const totalCount =
     groups.reduce((sum, group) => sum + group.tests.length, 0) +
+    calculated.length +
     shownProfileGroups.reduce((sum, group) => sum + group.profiles.length, 0);
 
   // Nothing has come back yet for ANY of the in-flight requests — e.g. the
@@ -164,7 +171,7 @@ export function SearchResults({
         </span>
         {browsing ? null : (
           <span className="text-[11.5px] text-muted-foreground max-md:hidden">
-            <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top test
+            <kbd className="rounded border bg-muted px-1 font-mono text-[0.7rem]">Enter</kbd> adds the top result
           </span>
         )}
       </div>
@@ -203,6 +210,26 @@ export function SearchResults({
         </div>
       ))}
 
+      {/* Calculated parameters: no price of their own — each adds the tests it's derived from. */}
+      {calculated.length > 0 ? (
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="px-2 pt-2 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
+            Calculated parameters · {calculated.length}
+          </div>
+          {calculated.map((result) => (
+            <CalculatedResultCard
+              key={result.testId}
+              result={result}
+              addedTestIds={addedTestIds}
+              addedProfileIds={addedProfileIds}
+              onAddMany={onAddMany}
+              onAddPackage={onAddPackage}
+              exact={exactMatch && result.exact}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {/* Then profiles. */}
       {shownProfileGroups.map((group) =>
         group.profilesLoading ? (
@@ -210,7 +237,7 @@ export function SearchResults({
         ) : group.profiles.length > 0 ? (
           <ProfileSection
             key={`profiles-${group.serviceType}`}
-            label={`${showGroupHeaders ? `${SERVICE_TYPE_LABELS[group.serviceType]} profiles` : "Profiles"} · ${group.profiles.length}`}
+            label={`${showGroupHeaders ? `${SERVICE_TYPE_LABELS[group.serviceType]} profiles & packages` : "Profiles & packages"} · ${group.profiles.length}`}
             results={group.profiles}
             addedProfileIds={addedProfileIds}
             exact={exactMatch}

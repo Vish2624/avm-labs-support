@@ -7,10 +7,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatTat } from "@/lib/utils/format-tat";
+import { formatCurrency } from "@/lib/utils/format-currency";
 import { AvailabilityPill } from "../availability-pill";
 import { resultsTitleClassName } from "../search/search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
-import { isPackageName } from "@/lib/search/matching/is-package-name";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import type { AiAnswer, AiAssistantResponse, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
 
@@ -317,9 +318,8 @@ function AnswerCard({ answer }: { answer: AiAnswer }) {
   );
 }
 
-// One suggestion: name, code, why it's relevant, TAT, availability and
-// fasting — no price (prices are read in Test search, where tests are added).
-// The whole row toggles its checkbox.
+// One suggestion: name, code, price here, why it's relevant, TAT,
+// availability and fasting. The whole row toggles its checkbox.
 function SuggestionRow({
   item,
   checked,
@@ -329,12 +329,14 @@ function SuggestionRow({
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
+  const unavailable = item.availability === "unavailable";
   return (
     <label
       className={cn(
         "flex cursor-pointer items-start gap-3 rounded-[14px] px-2.5 py-3 transition-colors hover:bg-muted/70 avm-row-in",
         checked && "bg-primary/[0.04]",
-        item.availability === "unavailable" && "opacity-60"
+        // Not offered here: flagged in red so it isn't quoted by mistake.
+        unavailable && "border border-destructive/30 bg-destructive/[0.06] hover:bg-destructive/10"
       )}
     >
       <Checkbox
@@ -345,16 +347,24 @@ function SuggestionRow({
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[15px] font-medium">{item.name}</span>
+          <span className={cn("text-[15px] font-medium", unavailable && "text-destructive")}>{item.name}</span>
           <span className="rounded-[5px] bg-muted px-1.5 py-px font-mono text-[11px] text-muted-foreground">{item.code}</span>
           {item.kind === "package" ? (
             <span
               title={item.tests.map((test) => test.officialName).join(", ")}
               className="rounded-[5px] bg-primary/10 px-1.5 py-px text-[10.5px] font-semibold text-primary"
             >
-              PACKAGE · {item.tests.length} tests
+              {isPackage(item) ? "PACKAGE" : "PROFILE"} · {item.tests.length} tests
             </span>
           ) : null}
+          <span
+            className={cn(
+              "ml-auto text-[14px] font-semibold whitespace-nowrap tabular-nums",
+              unavailable ? "text-destructive line-through" : "text-primary"
+            )}
+          >
+            {formatCurrency(item.price)}
+          </span>
         </div>
         <span className="text-[12.5px] text-foreground/80">{item.reason}</span>
         <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] text-muted-foreground">
@@ -434,7 +444,7 @@ export function AiAssistantResults({
   }
 
   // Tests first, then profiles, then packages (the sort keeps relevance order within each).
-  const order = (item: AiSuggestion) => (item.kind === "test" ? 0 : isPackageName(item.name) ? 2 : 1);
+  const order = (item: AiSuggestion) => (item.kind === "test" ? 0 : isPackage(item) ? 2 : 1);
   const results = [...response.results].sort((a, b) => order(a) - order(b));
   const high = results.filter((item) => item.relevanceLevel === "high");
   const maybe = results.filter((item) => item.relevanceLevel === "medium");

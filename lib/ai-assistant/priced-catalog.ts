@@ -5,7 +5,7 @@ import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
 import { dedupeProfilesByName } from "@/lib/profiles/dedupe-profiles";
 import { fastingForPackage, fastingForTest } from "./fasting-guide";
-import { isPackageName } from "@/lib/search/matching/is-package-name";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { AiRelevanceLevel, AiSuggestion } from "@/types/ai-assistant";
 
@@ -97,11 +97,11 @@ export async function loadPricedCatalog(
 
 /**
  * Where an item goes in the assistant's lists: tests first, then profiles,
- * then packages last (profiles and packages share a table; see isPackageName()).
+ * then packages last (profiles and packages share a table; see isPackage()).
  */
-export function listOrder(item: { kind: string; name: string }): number {
+export function listOrder(item: { kind: string; name: string; code?: string }): number {
   if (item.kind === "test") return 0;
-  return isPackageName(item.name) ? 2 : 1;
+  return isPackage(item) ? 2 : 1;
 }
 
 export function findPriced(catalog: PricedCatalog, code: string): PricedItem | undefined {

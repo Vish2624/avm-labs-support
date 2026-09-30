@@ -7,6 +7,7 @@ import { formatTat } from "@/lib/utils/format-tat";
 import { AvailabilityPill } from "../availability-pill";
 import { AddToggleButton, EXACT_MATCH_ROW_CLASS, ExactMatchTag } from "./test-result-card";
 import { ProfileTestList } from "@/components/profiles/profile-test-list";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import type { ProfileSearchResult } from "@/types/profile";
 
 // A package (profile) matched by name — or by containing the searched
@@ -44,7 +45,7 @@ export function PackageResultRow({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-medium">{result.name}</span>
             <span className="rounded-[5px] bg-primary/10 px-1.5 py-px text-[10.5px] font-semibold text-primary">
-              PACKAGE
+              {isPackage(result) ? "PACKAGE" : "PROFILE"}
             </span>
             {exact ? <ExactMatchTag /> : null}
           </div>

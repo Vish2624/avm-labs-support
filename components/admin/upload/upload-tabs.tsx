@@ -2,23 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { UploadClient } from "./upload-client";
 import { DetailsUpload } from "./details-upload";
 import { writeTabToUrl } from "@/lib/utils/url-tab";
-import type { Location } from "@/types/location";
 
 const TABS = [
-  { id: "prices", label: "Price list" },
-  { id: "tests", label: "Test details" },
+  { id: "prices", label: "Master price list" },
   { id: "profiles", label: "Profiles & packages" },
 ] as const;
 
 export type UploadTab = (typeof TABS)[number]["id"];
 
-// The three Admin uploads: a location's price list (versioned import),
-// test details (catalog + aliases + prices), and profiles/packages
+// The two Admin uploads, both laid out like the master file (one row per
+// item, a TAT + price column pair per location): the master price list
+// (tests, aliases and prices at every location) and profiles/packages
 // (test lists + bundle prices).
-export function UploadTabs({ locations, initialTab = "prices" }: { locations: Location[]; initialTab?: UploadTab }) {
+export function UploadTabs({ initialTab = "prices" }: { initialTab?: UploadTab }) {
   const [tab, setTab] = useState<UploadTab>(initialTab);
   // In the URL, so a refresh stays on this tab.
   useEffect(() => writeTabToUrl(tab, "prices"), [tab]);
@@ -41,17 +39,18 @@ export function UploadTabs({ locations, initialTab = "prices" }: { locations: Lo
         ))}
       </div>
 
-      {tab === "prices" ? <UploadClient locations={locations} /> : null}
-      {tab === "tests" ? (
+      {tab === "prices" ? (
         <DetailsUpload
+          key="tests"
           kind="tests"
-          description="Create or update tests (name, short name, category, aliases, active) and set their prices at any location in one file. Blank cells keep the current value; aliases are only added."
+          description="Same layout as the master Excel's Tests sheet: Test Code, Test Name, Alias Names, then a TAT and a price column for each location. One file updates every location. Blank cells keep the current value; aliases are only added."
         />
       ) : null}
       {tab === "profiles" ? (
         <DetailsUpload
+          key="profiles"
           kind="profiles"
-          description="Create or update profiles/packages, set the tests inside each one (by test code), and set their bundle price at each location. Blank cells keep the current value."
+          description="Same layout as the Profile Prices file: Profile Code, Profile Name, Test Codes, then a price and a TAT column for each location. Blank cells keep the current value."
         />
       ) : null}
     </div>

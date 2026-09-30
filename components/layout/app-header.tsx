@@ -83,17 +83,19 @@ export function AppHeader({ user }: { user: AuthUser }) {
 
   return (
     <header className="relative z-20 shrink-0 border-b border-border bg-card">
-      <div className="grid h-16 grid-cols-[auto_1fr_auto] items-center gap-2 px-3 md:h-[88px] md:grid-cols-[1fr_auto_1fr] md:gap-5 md:px-5">
-        <div className="flex min-w-0 items-center gap-5">
+      {/* The logo + menu column takes the width it needs (so "Admin" is never
+          cut off); the location picker centres in the space left. */}
+      <div className="grid h-16 grid-cols-[auto_1fr_auto] items-center gap-2 px-3 md:h-[88px] md:gap-4 md:px-5">
+        <div className="flex min-w-0 items-center gap-3 lg:gap-5">
           <Link href="/workspace" className="shrink-0" title="AVM Support">
             {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no benefit from next/image */}
             <img
               src="/logo/avm-labs-logo-full.svg"
               alt="AVM Labs"
-              className="h-12 w-auto rounded-lg p-0.5 md:h-[72px] dark:bg-white"
+              className="h-12 w-auto rounded-lg p-0.5 md:h-[60px] xl:h-[72px] dark:bg-white"
             />
           </Link>
-          <nav className="hidden min-w-0 gap-0.5 overflow-x-auto md:flex">{navLinks}</nav>
+          <nav className="hidden shrink-0 gap-0.5 md:flex">{navLinks}</nav>
         </div>
 
         {showLocation && locations.length > 0 ? (
@@ -103,16 +105,7 @@ export function AppHeader({ user }: { user: AuthUser }) {
               style={locationColor(selectedLocation?.code)}
               className="group relative flex h-10 min-w-0 cursor-pointer items-center gap-2 justify-self-center rounded-full border border-(--loc)/35 bg-(--loc)/[0.07] pr-3 pl-3.5 text-[11px] font-semibold md:h-11 md:gap-2.5 md:pr-3.5 md:pl-4 tracking-[0.06em] whitespace-nowrap text-(--loc) uppercase shadow-[0_2px_10px_-4px] shadow-(color:--loc)/30 transition-[background,border-color,box-shadow,transform,translate,scale,rotate] duration-200 outline-none hover:-translate-y-px hover:border-(--loc)/60 hover:bg-(--loc)/[0.12] hover:shadow-[0_8px_20px_-8px] hover:shadow-(color:--loc)/40 focus-visible:ring-2 focus-visible:ring-(--loc)/40 data-popup-open:border-(--loc)/60 data-popup-open:bg-(--loc)/[0.14]"
             >
-              {/* Attention motion: a ring in the location's colour ripples out, a light sweeps across,
-                  and the dot pings — so the pricing location is never missed. */}
-              <span aria-hidden className="pointer-events-none absolute -inset-px rounded-full border-2 border-(--loc)/50 avm-location-ring" />
-              <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
-                <span className="absolute inset-y-0 left-0 w-1/3 avm-location-shine" />
-              </span>
-              <span aria-hidden className="relative grid size-2.5 place-items-center">
-                <span className="absolute size-full animate-ping rounded-full bg-(--loc)/60" />
-                <span className="relative size-2.5 rounded-full bg-(--loc)" />
-              </span>
+              <span aria-hidden className="relative size-2.5 shrink-0 rounded-full bg-(--loc)" />
               <span
                 key={locationId}
                 className="relative truncate text-[14px] font-semibold tracking-normal text-(--loc) normal-case avm-check md:text-[15px]"

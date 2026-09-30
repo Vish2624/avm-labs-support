@@ -12,7 +12,7 @@ const MIN_SCORE = 0.5;
 const HIGH_SCORE = 0.75;
 const MAX_RESULTS = 12;
 
-export function geminiConfigured(): boolean {
+export function geminiConfigured(): Promise<boolean> {
   return geminiReaderConfigured("assistant");
 }
 

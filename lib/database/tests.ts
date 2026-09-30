@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "./fetch-all-rows";
-import type { Test } from "@/types/test";
+import { testTypeFromCategory, viaProfileFromCategory, type Test, type TestComponent } from "@/types/test";
 import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
 
 const TEST_COLUMNS =
@@ -19,6 +19,23 @@ interface TestRow {
   updated_at: string;
 }
 
+interface TestComponentRow {
+  id: string;
+  parent_test_id: string;
+  component_test_id: string;
+  created_at: string;
+}
+
+function mapTestComponent(row: TestComponentRow): TestComponent {
+  return {
+    id: row.id,
+    parentTestId: row.parent_test_id,
+    componentTestId: row.component_test_id,
+    createdAt: row.created_at,
+  };
+}
+
+/** A test row without its links — componentIds/sourceTestIds come from withLinks(). */
 function mapTest(row: TestRow): Test {
   return {
     id: row.id,
@@ -27,20 +44,71 @@ function mapTest(row: TestRow): Test {
     shortName: row.short_name,
     category: row.category,
     description: row.description,
+    testType: testTypeFromCategory(row.category),
+    componentIds: [],
+    sourceTestIds: [],
+    viaProfileCode: viaProfileFromCategory(row.category),
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-/** Every active test in the master catalog — the candidate set searchTests() ranks against. */
+/** Every parent -> child link (component -> parameter, calculated -> source). */
+export function listTestComponents(): Promise<TestComponent[]> {
+  return cachedCatalogRead("test-components", async () => {
+    const supabase = createAdminClient();
+    const rows = await fetchAllRows<TestComponentRow>((from, to) =>
+      supabase
+        .from("test_components")
+        .select("id, parent_test_id, component_test_id, created_at")
+        .order("id")
+        .range(from, to)
+    );
+    return rows.map(mapTestComponent);
+  });
+}
+
+/**
+ * Fills in each test's links: a parameter's components, a calculated
+ * parameter's source tests (ordered by the source's code). Links are read by
+ * the parent's type, so a component's own row never gets sourceTestIds and
+ * vice versa.
+ */
+function withLinks(tests: Test[], allLinks: TestComponent[]): Test[] {
+  const typeById = new Map(tests.map((test) => [test.id, test.testType]));
+  const codeById = new Map(tests.map((test) => [test.id, test.code]));
+  const links = [...allLinks].sort((a, b) =>
+    (codeById.get(a.componentTestId) ?? "").localeCompare(codeById.get(b.componentTestId) ?? "")
+  );
+  const componentIds = new Map<string, string[]>();
+  const sourceTestIds = new Map<string, string[]>();
+  for (const link of links) {
+    const parentType = typeById.get(link.parentTestId);
+    if (parentType === "component") {
+      componentIds.set(link.componentTestId, [...(componentIds.get(link.componentTestId) ?? []), link.parentTestId]);
+    } else if (parentType === "calculated") {
+      sourceTestIds.set(link.parentTestId, [...(sourceTestIds.get(link.parentTestId) ?? []), link.componentTestId]);
+    }
+  }
+  return tests.map((test) => ({
+    ...test,
+    componentIds: componentIds.get(test.id) ?? [],
+    sourceTestIds: sourceTestIds.get(test.id) ?? [],
+  }));
+}
+
+/** Every active test in the master catalog, with its links — the candidate set searchTests() ranks against. */
 export function listActiveTests(): Promise<Test[]> {
   return cachedCatalogRead("tests:active", async () => {
     const supabase = createAdminClient();
-    const rows = await fetchAllRows<TestRow>((from, to) =>
-      supabase.from("tests").select(TEST_COLUMNS).eq("active", true).order("id").range(from, to)
-    );
-    return rows.map(mapTest);
+    const [rows, links] = await Promise.all([
+      fetchAllRows<TestRow>((from, to) =>
+        supabase.from("tests").select(TEST_COLUMNS).eq("active", true).order("id").range(from, to)
+      ),
+      listTestComponents(),
+    ]);
+    return withLinks(rows.map(mapTest), links);
   });
 }
 
@@ -55,13 +123,16 @@ export async function getTestsByIds(ids: string[]): Promise<Test[]> {
   return ((data ?? []) as TestRow[]).map(mapTest);
 }
 
-/** Every test, active or not — the Admin Tests catalog table. */
+/** Every test, active or not, with its links — the Admin Tests catalog table. */
 export async function listAllTests(): Promise<Test[]> {
   const supabase = createAdminClient();
-  const rows = await fetchAllRows<TestRow>((from, to) =>
-    supabase.from("tests").select(TEST_COLUMNS).order("code", { ascending: true }).order("id").range(from, to)
-  );
-  return rows.map(mapTest);
+  const [rows, links] = await Promise.all([
+    fetchAllRows<TestRow>((from, to) =>
+      supabase.from("tests").select(TEST_COLUMNS).order("code", { ascending: true }).order("id").range(from, to)
+    ),
+    listTestComponents(),
+  ]);
+  return withLinks(rows.map(mapTest), links);
 }
 
 export interface TestInput {

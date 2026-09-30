@@ -7,7 +7,7 @@ const ease = "cubic-bezier(.2,.8,.2,1)";
 
 // While true, /login shows a maintenance screen instead of the sign-in form,
 // so nobody new can sign in. Flip back to false to restore the login page.
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 
 function MaintenanceNotice() {
   return (
@@ -60,7 +60,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               className="m-0 text-[14.5px] text-muted-foreground"
               style={{ animation: `avm-fade-up .6s .38s ${ease} both` }}
             >
-              Enter your work email and password to continue.
+              Enter your username and password to continue.
             </p>
           </div>
 

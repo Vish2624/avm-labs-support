@@ -1,5 +1,5 @@
 import "server-only";
-import { readSheet } from "@/lib/excel/read-sheet";
+import { readSheet, readWideSheet } from "@/lib/excel/read-sheet";
 import { createTest, listAllTests, setTestActive, updateTest } from "@/lib/database/tests";
 import { createAlias, listAllAliasesWithTest } from "@/lib/database/aliases";
 import { listCurrentPricesWithTestInfo } from "@/lib/database/prices";
@@ -18,10 +18,12 @@ import type { ServiceType } from "@/lib/constants/service-types";
 import type { AvailabilityStatus } from "@/lib/constants/availability";
 import type { ParsedPriceRow } from "@/types/import";
 
-// Test details upload (Admin → Upload → "Test details"): one sheet that can
-// create/update catalog tests, add search aliases, and set prices. One row
-// per test per location + service type; a row with no Location only
-// carries details. Blank detail cells keep the current value — the upload
+// Master price list upload (Admin → Upload): one sheet that can
+// create/update catalog tests, add search aliases, and set prices. Laid out
+// like the master file — one row per test with a TAT + price column pair per
+// location (read by readWideSheet; Service Type defaults to In-House) — or
+// one row per test per location + service type, where a row with no
+// Location only carries details. Blank detail cells keep the current value — the upload
 // never blanks out data — and aliases are only ever added. Prices go
 // through the same versioned pipeline as the price-list upload (one
 // version per location + service type, activated by the
@@ -34,7 +36,7 @@ export const TEST_DETAIL_HEADERS = {
   shortName: ["Short Name", "Abbreviation"],
   category: ["Category", "Department"],
   description: ["Description"],
-  aliases: ["Aliases", "Alias", "Search Names", "Nicknames", "Other Names"],
+  aliases: ["Aliases", "Alias Names", "Alias", "Search Names", "Nicknames", "Other Names"],
   active: ["Active"],
   location: ["Location", "Branch"],
   serviceType: ["Service Type", "Type"],
@@ -70,6 +72,8 @@ interface PlannedPrice {
   tatText: string;
   availability: AvailabilityStatus;
   status: "new" | "changed" | "unchanged";
+  /** Marked not offered with no price: keeps the current price and TAT. */
+  keepsCurrent: boolean;
 }
 
 interface TestDetailsPlan {
@@ -82,12 +86,12 @@ interface TestDetailsPlan {
 }
 
 async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
-  const [rows, tests, aliases, locations] = await Promise.all([
-    readSheet<Column>(buffer, TEST_DETAIL_HEADERS, ["testCode"]),
-    listAllTests(),
-    listAllAliasesWithTest(),
-    listActiveLocations(),
-  ]);
+  const [tests, aliases, locations] = await Promise.all([listAllTests(), listAllAliasesWithTest(), listActiveLocations()]);
+  const wideRows = await readWideSheet<Column>(buffer, TEST_DETAIL_HEADERS, ["testCode"], locations);
+  const rows = wideRows ?? (await readSheet<Column>(buffer, TEST_DETAIL_HEADERS, ["testCode"]));
+  if (wideRows) {
+    for (const { values } of wideRows) if (values.location) values.serviceType ??= "In-House";
+  }
   const errors: UploadIssue[] = [];
   const warnings: UploadIssue[] = [];
   const testByCode = new Map(tests.map((test) => [test.code.toUpperCase(), test]));
@@ -116,7 +120,9 @@ async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
       if (active === null) errors.push({ row: rowNumber, message: `Active must be Yes or No (got "${values.active}").` });
       else entry.active ??= active;
     }
-    entry.aliases.push(...splitList(values.aliases));
+    for (const alias of splitList(values.aliases)) {
+      if (!entry.aliases.some((a) => a.toLowerCase() === alias.toLowerCase())) entry.aliases.push(alias);
+    }
     details.set(key, entry);
 
     if (values.location || values.serviceType || values.price || values.tat || values.available) {
@@ -203,12 +209,14 @@ async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
     else if (!location) rowErrors.push(`unknown Location "${values.location}" (use ${locations.map((l) => l.name).join(", ")})`);
     if (!values.serviceType) rowErrors.push("Service Type is required when a price is given");
     else if (!serviceType) rowErrors.push(`Service Type must be In-House or Outsource (got "${values.serviceType}")`);
-    const price = values.price && location ? parsePrice(values.price, location.currencyCode) : null;
-    if (!values.price) rowErrors.push("Price is required when a Location is given");
-    else if (location && price === null) rowErrors.push(`Price "${values.price}" isn't a valid amount`);
-    if (!values.tat) rowErrors.push("TAT is required when a price is given");
     const available = values.available ? parseYesNo(values.available) : true;
     if (available === null) rowErrors.push(`Available must be Yes or No (got "${values.available}")`);
+    // "NA" in the master file: not offered here, keeping the current price and TAT.
+    const keepsCurrent = !values.price && available === false;
+    const price = values.price && location ? parsePrice(values.price, location.currencyCode) : keepsCurrent ? 0 : null;
+    if (!values.price && !keepsCurrent) rowErrors.push("Price is required when a Location is given");
+    else if (location && price === null) rowErrors.push(`Price "${values.price}" isn't a valid amount`);
+    if (!values.tat && !keepsCurrent) rowErrors.push("TAT is required when a price is given");
     if (rowErrors.length > 0 || !location || !serviceType || price === null) {
       errors.push({ row, message: `${code}: ${rowErrors.join("; ")}.` });
       continue;
@@ -227,9 +235,10 @@ async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
       currencyCode: location.currencyCode,
       serviceType,
       price,
-      tatText: values.tat!,
+      tatText: values.tat ?? "",
       availability: available ? "available" : "unavailable",
       status: "new",
+      keepsCurrent,
     });
   }
 
@@ -243,6 +252,15 @@ async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
     for (const p of prices.filter((x) => x.locationId === locationId && x.serviceType === serviceType)) {
       const now = current.get(p.testCode.toUpperCase());
       const label = `${p.testCode} · ${p.locationName} ${p.serviceType === "in_house" ? "In-House" : "Outsource"}`;
+      if (p.keepsCurrent) {
+        if (!now) {
+          warnings.push({ row: p.row, message: `${label}: marked not available but has no price yet — skipped.` });
+          p.status = "unchanged";
+          continue;
+        }
+        p.price = now.price;
+        p.tatText = now.tatText;
+      }
       if (!now) {
         p.status = "new";
         priceLines.new.push(`${label}: ${formatMajor(p.price, p.currencyCode)}`);
@@ -261,7 +279,7 @@ async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
         p.status = "unchanged";
         priceLines.unchanged.push(label);
       }
-      if (p.price === 0) warnings.push({ row: p.row, message: `${label}: price is 0 — it would be quoted as free.` });
+      if (p.price === 0 && p.availability === "available") warnings.push({ row: p.row, message: `${label}: price is 0 — it would be quoted as free.` });
     }
   }
 
@@ -276,7 +294,7 @@ async function plan(buffer: Buffer): Promise<TestDetailsPlan> {
       errors,
       warnings,
       stats: [
-        { label: "Rows read", value: rows.length },
+        { label: "Rows read", value: new Set(rows.map((row) => row.rowNumber)).size },
         { label: "New tests", value: create.length },
         { label: "Tests updated", value: update.length + activeChanges.length },
         { label: "New aliases", value: plannedAliases.length },

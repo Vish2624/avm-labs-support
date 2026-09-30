@@ -9,15 +9,17 @@ import type { ProfileWithTestCount } from "@/lib/database/profiles";
 // Profiles/packages list — every profile, active or not, with how many tests it bundles.
 export function ProfileTable({
   profiles,
+  noun = "profile",
   onEdit,
   onToggleActive,
 }: {
   profiles: ProfileWithTestCount[];
+  noun?: "profile" | "package";
   onEdit: (profile: ProfileWithTestCount) => void;
   onToggleActive: (profile: ProfileWithTestCount, active: boolean) => void;
 }) {
   if (profiles.length === 0) {
-    return <p className="text-sm text-muted-foreground">No profiles yet.</p>;
+    return <p className="text-sm text-muted-foreground">No {noun}s yet.</p>;
   }
 
   return (

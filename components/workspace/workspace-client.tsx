@@ -8,8 +8,12 @@ import { ServiceTypeFilterSelector } from "./search/service-type-filter";
 import { TestSearch, looksLikeMessage } from "./search/test-search";
 import { SearchResults, type SearchResultGroup } from "./search/search-results";
 import { useSemanticMessageMatches } from "./search/use-semantic-search";
-import { isPackageName } from "@/lib/search/matching/is-package-name";
-import { searchCatalogProfiles, searchCatalogTests, type SearchCatalog } from "@/lib/search/catalog/search-catalog";
+import {
+  searchCatalogCalculated,
+  searchCatalogProfiles,
+  searchCatalogTests,
+  type SearchCatalog,
+} from "@/lib/search/catalog/search-catalog";
 import { MessageExtractionResults, primeExtraction, useMessageExtraction } from "./paste/message-extractor";
 import { QuotationPanel } from "./quote/quotation-panel";
 import { PackageSuggestions } from "./quote/package-suggestions";
@@ -24,7 +28,7 @@ import { SERVICE_TYPES, type ServiceType, type ServiceTypeFilter } from "@/lib/c
 import { cn } from "@/lib/utils";
 import { writeParamToUrl, writeTabToUrl } from "@/lib/utils/url-tab";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
-import type { SearchTestResult } from "@/types/search";
+import type { CalculatedSearchResult, SearchTestResult } from "@/types/search";
 import type { ProfileSuggestion, ProfileSearchResult } from "@/types/profile";
 import type {
   Quotation,
@@ -92,6 +96,17 @@ function useCatalogGroup(
   };
 }
 
+/** Calculated parameters matching `query` in a loaded catalog — none while browsing or with an empty box. */
+function useCalculatedResults(
+  catalog: SearchCatalog | undefined,
+  { browsing, query }: { browsing: boolean; query: string }
+): CalculatedSearchResult[] {
+  return useMemo(
+    () => (browsing || !query || !catalog ? EMPTY_CALCULATED_RESULTS : searchCatalogCalculated(query, catalog)),
+    [catalog, browsing, query]
+  );
+}
+
 /**
  * From profiles already ranked by match (best first): the top match, plus
  * the cheapest profile among those covering the most selected tests when
@@ -108,6 +123,7 @@ function pickTopAndCheapest(ranked: ProfileSuggestion[]): ProfileSuggestion[] {
   return cheapest.profileId === top.profileId ? [top] : [top, cheapest];
 }
 const EMPTY_TEST_RESULTS: SearchTestResult[] = [];
+const EMPTY_CALCULATED_RESULTS: CalculatedSearchResult[] = [];
 const EMPTY_PROFILE_RESULTS: ProfileSearchResult[] = [];
 const EMPTY_TOKENS: string[] = [];
 
@@ -214,6 +230,19 @@ export function WorkspaceClient({
       if (restoredQuery) {
         setQuery(restoredQuery);
         setDebouncedQuery(restoredQuery);
+      }
+      // A search brought back from before the reload is shown selected, so
+      // the next thing typed replaces it instead of being appended to it
+      // ("egfr" + "anemia" must not become "egfranemia").
+      const input = searchInputRef.current;
+      if (!typedEarly && restoredQuery && input) {
+        const selectRestored = () => {
+          if (input.value === restoredQuery) input.select();
+        };
+        requestAnimationFrame(() => {
+          if (document.activeElement === input) selectRestored();
+          else input.addEventListener("focus", () => requestAnimationFrame(selectRestored), { once: true });
+        });
       }
       if (saved) {
         if (typeof saved.pasteText === "string") setPasteText(saved.pasteText);
@@ -346,17 +375,48 @@ export function WorkspaceClient({
 
   // "/" and Cmd/Ctrl+K jump to the search tab and focus the box, from
   // anywhere on the page — unless the agent is already typing somewhere.
+  // On the search tab, typing anywhere else (after clicking a result, say)
+  // lands in the search box too.
+  const tabRef = useRef(tab);
+  useEffect(() => {
+    tabRef.current = tab;
+  });
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      const typing = Boolean(target && /INPUT|TEXTAREA|SELECT/.test(target.tagName));
+      const typing = Boolean(
+        target && (/INPUT|TEXTAREA|SELECT/.test(target.tagName) || target.isContentEditable),
+      );
       const isSlash = event.key === "/" && !typing;
       const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
       if (isSlash || isCmdK) {
         event.preventDefault();
         setTab("search");
         searchInputRef.current?.focus();
+        return;
       }
+
+      const input = searchInputRef.current;
+      if (typing || !input || tabRef.current !== "search") return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+      const isChar = event.key.length === 1;
+      // Space still presses a focused button/link rather than typing.
+      const onControl = Boolean(target?.closest("button, a, [role='button']"));
+      if (isChar && !(event.key === " " && onControl)) {
+        event.preventDefault();
+        setQuery((current) => current + event.key);
+      } else if (event.key === "Backspace") {
+        event.preventDefault();
+        setQuery((current) => current.slice(0, -1));
+      } else {
+        return;
+      }
+      input.focus();
+      // Caret after the text React is about to write in.
+      requestAnimationFrame(() => {
+        const end = input.value.length;
+        input.setSelectionRange(end, end);
+      });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -452,12 +512,18 @@ export function WorkspaceClient({
   );
   const didYouMean = nothingFound ? (correction?.didYouMean ?? null) : null;
 
+  // Calculated parameters matching the search, their source tests priced in
+  // the first active service type (in-house before outsourced).
+  const rawCalculated = useCalculatedResults(
+    (isActiveServiceType("in_house") ? inHouseCatalog : outsourceCatalog).data,
+    { browsing, query: trimmedQuery }
+  );
+
   const groupDataByType: Record<ServiceType, SearchResultGroup> = {
     in_house: { ...inHouseGroup, didYouMean },
     outsource: { ...outsourceGroup, didYouMean },
   };
-  // What the search shows: tests and profiles only — never packages (the
-  // Support Assistant and the Packages page still show those). When
+  // What the search shows: tests, profiles and packages. When
   // something matches exactly — a test's code/name, an alias typed in full,
   // or a profile's own name — only the exact match(es), not the lookalikes;
   // with no exact match, the closest names.
@@ -466,13 +532,11 @@ export function WorkspaceClient({
     result.matchType === "exact" ||
     (result.matchedAlias !== null && result.matchedAlias.toLowerCase().replace(/[^a-z0-9]/g, "") === queryCompact);
   const isExactProfile = (result: ProfileSearchResult) => (result.nameScore ?? 0) >= EXACT_PROFILE_SCORE;
-  const rawGroups = activeServiceTypes.map((type) => {
-    const group = groupDataByType[type];
-    return { ...group, profiles: group.profiles.filter((result) => !isPackageName(result.name)) };
-  });
+  const rawGroups = activeServiceTypes.map((type) => groupDataByType[type]);
   const anyExact =
     !browsing &&
-    rawGroups.some((group) => group.tests.some(isExactTest) || group.profiles.some(isExactProfile));
+    (rawGroups.some((group) => group.tests.some(isExactTest) || group.profiles.some(isExactProfile)) ||
+      rawCalculated.some((result) => result.exact));
   const fuzzyGroups = anyExact
     ? rawGroups.map((group) => ({
         ...group,
@@ -480,12 +544,15 @@ export function WorkspaceClient({
         profiles: group.profiles.filter(isExactProfile),
       }))
     : rawGroups;
+  const calculatedResults = anyExact ? rawCalculated.filter((result) => result.exact) : rawCalculated;
 
   // Fuzzy search first; only when it finds nothing at all is Gemini asked
   // (/api/search/ai — tests and profiles only, priced from the DB).
   const fuzzyLoaded = fuzzyGroups.every((group) => !group.testsLoading && !group.profilesLoading);
   const fuzzyEmpty =
-    fuzzyLoaded && fuzzyGroups.every((group) => group.tests.length === 0 && group.profiles.length === 0 && !group.testsError);
+    fuzzyLoaded &&
+    calculatedResults.length === 0 &&
+    fuzzyGroups.every((group) => group.tests.length === 0 && group.profiles.length === 0 && !group.testsError);
   const aiSearchKey =
     tab === "search" && !browsing && trimmedQuery.length >= AI_SEARCH_MIN_LENGTH && locationId && fuzzyEmpty
       ? `/api/search/ai?${new URLSearchParams({ q: trimmedQuery, locationId, serviceType: serviceTypeFilter })}`
@@ -540,16 +607,20 @@ export function WorkspaceClient({
     [lineItems]
   );
 
-  // Package suggestions for the tests on the quote — only meaningful when
-  // those tests share one real service type (a package has one service
-  // type too, so there's no single sensible comparison once the tests
-  // themselves mix in-house and outsourced).
+  // Profile/package suggestions for everything on the quote — its tests and
+  // the tests inside the profiles/packages on it. Only meaningful when those
+  // share one real service type (a package has one service type too, so
+  // there's no single sensible comparison once in-house and outsourced mix).
   const selectedTestIds = useMemo(() => testLines.map((item) => item.testId), [testLines]);
-  const testServiceTypes = useMemo(() => new Set(testLines.map((item) => item.serviceType)), [testLines]);
-  const uniformServiceType = testServiceTypes.size === 1 ? [...testServiceTypes][0] : null;
+  const requestedTestIds = useMemo(
+    () => [...new Set(lineItems.flatMap((item) => (item.kind === "test" ? [item.testId] : item.tests.map((t) => t.testId))))],
+    [lineItems]
+  );
+  const lineServiceTypes = useMemo(() => new Set(lineItems.map((item) => item.serviceType)), [lineItems]);
+  const uniformServiceType = lineServiceTypes.size === 1 ? [...lineServiceTypes][0] : null;
   const profileKey =
-    selectedTestIds.length > 0 && locationId && uniformServiceType
-      ? `/api/profiles?${new URLSearchParams({ testIds: selectedTestIds.join(","), locationId, serviceType: uniformServiceType })}`
+    requestedTestIds.length > 0 && locationId && uniformServiceType
+      ? `/api/profiles?${new URLSearchParams({ testIds: requestedTestIds.join(","), locationId, serviceType: uniformServiceType })}`
       : null;
   const { data: profileData, isLoading: profileLoading } = useSWR<{ results: ProfileSuggestion[] }>(
     profileKey,
@@ -559,17 +630,21 @@ export function WorkspaceClient({
     () => new Set(lineItems.flatMap((item) => (item.kind === "package" ? [item.profileId] : []))),
     [lineItems]
   );
-  // Profiles (never packages) covering the tests on the quote — just two:
-  // the top match, and the cheapest profile among those covering the most
-  // of the selected tests. One already on the quote isn't suggested again.
+  // Profiles and packages that contain EVERYTHING on the quote (one missing
+  // even a single requested test is never suggested) — just two: the
+  // tightest fit (fewest extra tests), and the cheapest. One already on the
+  // quote isn't suggested again.
   const profileSuggestions = useMemo(
     () =>
       pickTopAndCheapest(
         (profileData?.results ?? EMPTY_PROFILE_SUGGESTIONS).filter(
-          (suggestion) => !addedProfileIds.has(suggestion.profileId) && !isPackageName(suggestion.name)
+          (suggestion) =>
+            !addedProfileIds.has(suggestion.profileId) &&
+            suggestion.requestedCount === requestedTestIds.length &&
+            suggestion.matchedCount === suggestion.requestedCount
         )
       ),
-    [profileData, addedProfileIds]
+    [profileData, addedProfileIds, requestedTestIds]
   );
 
   const addedTestIds = useMemo(() => new Set(selectedTestIds), [selectedTestIds]);
@@ -581,7 +656,7 @@ export function WorkspaceClient({
     addLineItem(toTestLine(result));
     // Still added (the agent may be quoting ahead), but flagged right away.
     if (result.availability !== "available") {
-      toast.warning(`${result.code} added · ${AVAILABILITY_LABELS[result.availability].toLowerCase()}`);
+      toast.warning(`${result.officialName} added · ${AVAILABILITY_LABELS[result.availability].toLowerCase()}`);
     }
   }
 
@@ -599,33 +674,50 @@ export function WorkspaceClient({
     removeLineItem(item.kind === "test" ? { kind: "test", testId: item.testId } : { kind: "package", profileId: item.profileId });
   }
 
-  // Enter in the search box adds the first result (across active service
+  // Enter in the search box adds the top result (across active service
   // types, in_house before outsource) that isn't already in the quote, then
-  // clears the box for the next test — so an agent can type a customer's
-  // list without touching the mouse.
+  // clears the box for the next one — so an agent can type a customer's
+  // list without touching the mouse. The top result is a profile/package when
+  // its name is what was typed ("lipid profile") and no test matches exactly,
+  // or when no test matches at all.
   function handleSearchSubmit() {
     const typed = query.trim();
     if (!typed) return;
     // Enter pressed straight after typing arrives before the shown results
     // catch up (they wait for a short pause) — search what's in the box now.
-    const results =
-      typed === trimmedQuery
-        ? searchGroups.flatMap((group) => group.tests)
-        : activeServiceTypes.flatMap((type) => {
-            const catalog = (type === "in_house" ? inHouseCatalog : outsourceCatalog).data;
-            return catalog ? searchCatalogTests(typed, catalog) : [];
-          });
+    const fresh = typed === trimmedQuery;
+    const catalogs = activeServiceTypes.flatMap((type) => {
+      const catalog = (type === "in_house" ? inHouseCatalog : outsourceCatalog).data;
+      return catalog ? [catalog] : [];
+    });
+    const results = fresh
+      ? searchGroups.flatMap((group) => group.tests)
+      : catalogs.flatMap((catalog) => searchCatalogTests(typed, catalog));
+    const profiles = fresh
+      ? searchGroups.flatMap((group) => group.profiles)
+      : catalogs.flatMap((catalog) => searchCatalogProfiles(typed, catalog));
     const next = results.find((result) => !addedTestIds.has(result.testId));
-    if (next) {
-      handleAdd(next);
-      searchTelemetry.recordPick(next.testId);
-      toast.success(`Added ${next.code}`);
+    const nextProfile = profiles.find((result) => !addedProfileIds.has(result.profileId));
+    const profileFirst = nextProfile && (!next || (isExactProfile(nextProfile) && !isExactTest(next)));
+    if (nextProfile && profileFirst) {
+      applyPackage(toPackageLine(nextProfile));
       setQuery("");
       return;
     }
-    const stillSearching = typed === trimmedQuery && searchGroups.some((group) => group.testsLoading);
+    if (next) {
+      handleAdd(next);
+      searchTelemetry.recordPick(next.testId);
+      toast.success(`Added ${next.officialName}`);
+      setQuery("");
+      return;
+    }
+    const stillSearching = fresh && searchGroups.some((group) => group.testsLoading || group.profilesLoading);
     toast.info(
-      results.length > 0 ? "Already in the quote" : stillSearching ? "Still searching…" : `No test matches “${typed}”`
+      results.length + profiles.length > 0
+        ? "Already in the quote"
+        : stillSearching
+          ? "Still searching…"
+          : `Nothing matches “${typed}”`
     );
   }
 
@@ -642,7 +734,13 @@ export function WorkspaceClient({
     [locationId, lineItems, customerName, selectedLocation]
   );
 
-  const whatsappMessage = useMemo(() => generateWhatsAppResponse(quotation), [quotation]);
+  const whatsappReplies = useMemo(
+    () => ({
+      detailed: generateWhatsAppResponse(quotation, "detailed"),
+      summary: generateWhatsAppResponse(quotation, "summary"),
+    }),
+    [quotation]
+  );
 
   const locationLabel = selectedLocation
     ? `${selectedLocation.name} · prices in ${selectedLocation.currencyCode}`
@@ -694,7 +792,7 @@ export function WorkspaceClient({
                     "flex h-[42px] shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium whitespace-nowrap md:px-4 transition-[transform,translate,scale,rotate,box-shadow,background] duration-250 hover:-translate-y-px",
                     tab === "ai"
                       ? "border-primary bg-primary text-primary-foreground shadow-[0_8px_20px_-10px_var(--primary)]"
-                      : "border-border text-primary avm-shimmer-bg hover:shadow-[0_8px_20px_-10px_var(--primary)]"
+                      : "border-border bg-card text-primary hover:shadow-[0_8px_20px_-10px_var(--primary)]"
                   )}
                 >
                   <span
@@ -724,7 +822,11 @@ export function WorkspaceClient({
               <AiQuestionForm
                 value={aiQuestion}
                 onChange={setAiQuestion}
-                onSubmit={() => aiAssistant.ask(aiQuestion)}
+                onSubmit={() => {
+                  // The answer repeats the question, so the box is freed for the next one.
+                  aiAssistant.ask(aiQuestion);
+                  setAiQuestion("");
+                }}
                 loading={aiAssistant.loading}
               />
               </div>
@@ -861,6 +963,7 @@ export function WorkspaceClient({
                 exactMatch={anyExact}
                 locationName={selectedLocation?.name ?? null}
                 groups={searchGroups}
+                calculated={aiFound ? EMPTY_CALCULATED_RESULTS : calculatedResults}
                 showGroupHeaders={serviceTypeFilter === "all" || browsing}
                 addedTestIds={addedTestIds}
                 addedProfileIds={addedProfileIds}
@@ -868,6 +971,7 @@ export function WorkspaceClient({
                   handleAdd(result);
                   searchTelemetry.recordPick(result.testId);
                 }}
+                onAddMany={handleAddMany}
                 onRemove={handleRemoveTest}
                 onAddPackage={(result) => applyPackage(toPackageLine(result))}
                 onRemovePackage={(profileId) => removeLineItem({ kind: "package", profileId })}
@@ -879,6 +983,7 @@ export function WorkspaceClient({
                 detected={extraction.detected}
                 packages={extraction.packages}
                 notOffered={extraction.notOffered}
+                calculated={extraction.calculated}
                 unmatched={extraction.unmatched}
                 locationName={selectedLocation?.name ?? null}
                 loading={extraction.loading}
@@ -898,7 +1003,7 @@ export function WorkspaceClient({
           <PackageSuggestions
             suggestions={profileSuggestions}
             loading={profileLoading}
-            hasSelection={testLines.length > 0}
+            hasSelection={lineItems.length > 0}
             lineItems={lineItems}
             locationName={selectedLocation?.name ?? null}
             onUse={(suggestion) => applyPackage(toPackageLine(suggestion))}
@@ -936,7 +1041,7 @@ export function WorkspaceClient({
         >
           <QuotationPanel
             quotation={quotation}
-            whatsappMessage={whatsappMessage}
+            whatsappReplies={whatsappReplies}
             locationLabel={locationLabel}
             customerName={customerName}
             onCustomerNameChange={setCustomerName}

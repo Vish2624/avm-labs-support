@@ -32,8 +32,21 @@ export function matchScore(query: string, candidate: string): number {
   }
 
   best = Math.max(best, wordScore(query, candidate));
+  // A short identifying word the candidate doesn't have at all ("k" in
+  // "vitamin k", "t4" in "ft4 test") means it's a different test, however
+  // alike the rest of the letters are — so letter similarity can't rescue it
+  // ("vitamin k" must never read as Vitamin B12).
+  if (missesShortWord(query, candidate)) return Math.min(best, 1);
   best = Math.max(best, trigramSimilarity(query, candidate), trigramSimilarity(queryCompact, candidateCompact));
   return Math.min(best, 1);
+}
+
+/** A meaningful query word of 1-3 characters that matches none of the candidate's words (or its run-together pairs). */
+function missesShortWord(query: string, candidate: string): boolean {
+  const candidateWords = candidate.split(" ");
+  const words = meaningfulWords(query);
+  if (words.length < 2) return false;
+  return words.some((word) => word.length <= 3 && scoreWord(word, candidateWords) === 0);
 }
 
 // Words customers add around a test name that carry no matching signal.
@@ -41,6 +54,22 @@ const FILLER_WORDS = new Set([
   "test", "tests", "testing", "level", "levels", "check", "checkup", "price", "prices", "cost", "rate",
   "please", "pls", "for", "the", "of", "a", "an", "and", "my", "in", "blood", "serum",
 ]);
+
+/**
+ * The query's words that carry matching signal: filler words dropped, and a
+ * last word that is a filler word still being typed ("thyroid tes", "vit d
+ * lev"). Falls back to all words when nothing else is left.
+ */
+function meaningfulWords(query: string): string[] {
+  const words = query.split(" ");
+  const last = words.length - 1;
+  const meaningful = words.filter(
+    (word, i) =>
+      !FILLER_WORDS.has(word) &&
+      !(i === last && last > 0 && word.length >= 2 && [...FILLER_WORDS].some((filler) => filler.length > word.length && filler.startsWith(word)))
+  );
+  return meaningful.length > 0 ? meaningful : words;
+}
 
 function compact(value: string): string {
   return value.replace(/\s+/g, "");
@@ -94,9 +123,7 @@ function scoreWord(word: string, candidateWords: string[]): number {
 }
 
 function wordScore(query: string, candidate: string): number {
-  const allQueryWords = query.split(" ");
-  const meaningful = allQueryWords.filter((word) => !FILLER_WORDS.has(word));
-  const queryWords = meaningful.length > 0 ? meaningful : allQueryWords;
+  const queryWords = meaningfulWords(query);
   const candidateWords = candidate.split(" ");
 
   let total = 0;

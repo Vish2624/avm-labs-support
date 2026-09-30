@@ -5,8 +5,9 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
 // Minimal notifications: a small card with one coloured icon and a short
-// line of text — no tinted background, no close button (they fade out on
-// their own, or swipe them away).
+// line of text. They fade out on their own (or close with ×), at most two
+// at a time, and sit below menus and dialogs (z-index 40) so they never
+// cover an open dropdown's options.
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
 
@@ -17,10 +18,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       // Top centre, just under the header — clear of the quotation's Copy
       // reply button and the package bar along the bottom.
       position="top-center"
-      offset={{ top: 84 }}
-      mobileOffset={{ top: 64 }}
-      duration={3000}
-      visibleToasts={3}
+      offset={{ top: 100 }}
+      mobileOffset={{ top: 72 }}
+      duration={2500}
+      visibleToasts={2}
+      closeButton
       gap={6}
       icons={{
         success: <CircleCheckIcon className="size-4 text-success" />,
@@ -36,6 +38,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-border": "var(--border)",
           "--border-radius": "10px",
           "--width": "300px",
+          zIndex: 40,
         } as React.CSSProperties
       }
       toastOptions={{

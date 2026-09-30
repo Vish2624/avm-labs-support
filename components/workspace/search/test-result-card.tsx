@@ -70,6 +70,7 @@ export function TestResultCard({
   exact?: boolean;
 }) {
   const showAlias =
+    !result.includedParameter &&
     result.matchType === "alias" &&
     result.matchedAlias &&
     !result.officialName.toLowerCase().includes(result.matchedAlias.toLowerCase());
@@ -96,7 +97,11 @@ export function TestResultCard({
         <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] text-muted-foreground">
           <span className="whitespace-nowrap">Ready in {formatTat(result.tatText)}</span>
           <AvailabilityPill status={result.availability} />
-          {showAlias ? <span className="text-primary">matched &ldquo;{result.matchedAlias}&rdquo;</span> : null}
+          {result.includedParameter ? (
+            <span className="text-primary">includes {result.includedParameter}</span>
+          ) : showAlias ? (
+            <span className="text-primary">matched &ldquo;{result.matchedAlias}&rdquo;</span>
+          ) : null}
         </div>
       </div>
       <span

@@ -3,9 +3,12 @@ import { requireAdmin } from "@/lib/auth/permissions";
 import { getProfileById, updateProfile, setProfileActive, getProfileTestSelections, listProfilePricesForProfile } from "@/lib/database/profiles";
 import { recordAuditLog } from "@/lib/database/audit-log";
 import { profileInputSchema } from "@/lib/validation/profile-schema";
+import { listProfileRosters, packageReferences, profileReferences } from "@/lib/catalog/admin-catalog";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 
-// One profile's detail: the record, its component test ids, and its
-// current bundle prices across every location/service type.
+// One profile's detail: the record, its test ids, its current bundle prices
+// across every location/service type, and per location the guide figures
+// for pricing it (its tests' summed prices and slowest TAT).
 export async function GET(_request: Request, { params }: { params: Promise<{ profileId: string }> }) {
   await requireAdmin();
   const { profileId } = await params;
@@ -17,7 +20,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
     getProfileTestSelections(profileId),
     listProfilePricesForProfile(profileId),
   ]);
-  return NextResponse.json({ profile, testSelections, prices });
+  const testIds = testSelections.map((selection) => selection.testId);
+  // A package's guide is the sum of its parts (included profiles' own prices + other tests).
+  const references = isPackage(profile)
+    ? await packageReferences(testIds, (await listProfileRosters()).filter((roster) => roster.id !== profileId))
+    : await profileReferences(testIds);
+  return NextResponse.json({ profile, testSelections, prices, references });
 }
 
 // Body is either { action: "update", ...ProfileInput } or { action: "setActive", active }.

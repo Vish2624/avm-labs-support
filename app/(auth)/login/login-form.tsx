@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AtSignIcon, CheckIcon, LockIcon } from "lucide-react";
+import { CheckIcon, LockIcon, UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signInAction, type LoginState } from "./actions";
 
@@ -38,16 +38,18 @@ export function LoginForm({ returnTo = "/workspace" }: { returnTo?: string }) {
       }}
     >
       <label className="flex flex-col gap-[7px] text-[13px] font-medium">
-        Work email
+        User Name
         <div className="relative">
-          <AtSignIcon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <UserIcon className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            name="email"
-            type="email"
+            name="username"
+            type="text"
             required
             autoFocus
             autoComplete="username"
-            placeholder="name@avmlabs.com"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="User Name"
             className={cn(inputClassName, "pr-3.5")}
           />
         </div>

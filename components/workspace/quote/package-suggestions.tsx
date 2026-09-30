@@ -9,37 +9,40 @@ import { AvailabilityPill } from "../availability-pill";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { sumMoney, subtractMoney, type Money } from "@/lib/pricing/money";
+import { isPackage } from "@/lib/search/matching/is-package-name";
 import type { ProfileSuggestion } from "@/types/profile";
 import type { QuotationLineItem } from "@/types/quotation";
 
-// The combined price of the selected tests a package actually matches, minus
-// the package's own bundle price — only surfaced when it's genuinely
-// cheaper, never a vague "save" claim without real numbers behind it.
-function calculateSavings(suggestion: ProfileSuggestion, lineItems: QuotationLineItem[]): Money | null {
-  const priceById = new Map(
-    lineItems.flatMap((item) => (item.kind === "test" ? [[item.testId, item.price] as const] : []))
+// A suggestion always contains everything on the quote, so it's compared
+// with the quote's whole current price: real numbers, never a vague claim.
+function compareWithQuote(suggestion: ProfileSuggestion, lineItems: QuotationLineItem[]): { save: Money | null; extra: Money | null } {
+  if (lineItems.some((item) => item.price.currency !== suggestion.price.currency)) return { save: null, extra: null };
+  const now = sumMoney(
+    lineItems.map((item) => item.price),
+    suggestion.price.currency
   );
-  const matchedPrices = suggestion.matchedTestIds.map((id) => priceById.get(id));
-  if (matchedPrices.length === 0 || matchedPrices.some((price) => !price || price.currency !== suggestion.price.currency)) {
-    return null;
-  }
-  const combined = sumMoney(matchedPrices as Money[], suggestion.price.currency);
-  if (combined.amount <= suggestion.price.amount) return null;
-  return subtractMoney(combined, suggestion.price);
+  if (now.amount > suggestion.price.amount) return { save: subtractMoney(now, suggestion.price), extra: null };
+  if (now.amount < suggestion.price.amount) return { save: null, extra: subtractMoney(suggestion.price, now) };
+  return { save: null, extra: null };
 }
 
 function coversLabel(suggestion: ProfileSuggestion): string {
-  return `Covers ${suggestion.matchedCount}/${suggestion.requestedCount} selected · ${suggestion.profileTestCount} tests · ready in ${formatTat(suggestion.tatText)}`;
+  const extra = suggestion.profileTestCount - suggestion.matchedCount;
+  const more = extra > 0 ? ` + ${extra} more test${extra === 1 ? "" : "s"}` : "";
+  return `Everything on the quote${more} · ready in ${formatTat(suggestion.tatText)}`;
 }
 
-function PriceAndSavings({ suggestion, savings }: { suggestion: ProfileSuggestion; savings: Money | null }) {
+function PriceAndSavings({ suggestion, lineItems }: { suggestion: ProfileSuggestion; lineItems: QuotationLineItem[] }) {
+  const { save, extra } = compareWithQuote(suggestion, lineItems);
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       <span className="text-sm font-semibold whitespace-nowrap text-primary tabular-nums">{formatCurrency(suggestion.price)}</span>
-      {savings ? (
+      {save ? (
         <span className="rounded-full bg-success/15 px-2 py-px text-[11px] font-semibold whitespace-nowrap text-success-foreground">
-          Save {formatCurrency(savings)}
+          Save {formatCurrency(save)}
         </span>
+      ) : extra ? (
+        <span className="text-[11px] whitespace-nowrap text-muted-foreground">+{formatCurrency(extra)} vs now</span>
       ) : suggestion.availability !== "available" ? (
         <AvailabilityPill status={suggestion.availability} className="text-[11px]" />
       ) : null}
@@ -80,12 +83,14 @@ export function PackageSuggestions({
     onUse(suggestion);
   }
 
-  // The first is the top match; a second one is the cheapest.
-  const tagFor = (index: number) => (index === 0 ? (suggestions.length === 1 ? "Top match · cheapest" : "Top match") : "Cheapest");
+  // The first is the closest fit (fewest extra tests); a second one is the cheapest.
+  const tagFor = (index: number) => (index === 0 ? (suggestions.length === 1 ? "Best fit · cheapest" : "Best fit") : "Cheapest");
 
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-7 pt-3 pb-4">
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">Suggested profiles</p>
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+        Includes everything on the quote
+      </p>
 
       {loading || suggestions.length === 0 ? (
         <Skeleton className="h-[66px] w-full rounded-2xl" />
@@ -103,12 +108,12 @@ export function PackageSuggestions({
                     {tagFor(index)}
                   </span>
                   <span className="rounded-full border border-border bg-card px-2 py-px text-[11px] font-medium text-muted-foreground">
-                    {suggestion.matchPercentage}% match
+                    {isPackage(suggestion) ? "Package" : "Profile"}
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{coversLabel(suggestion)}</p>
               </div>
-              <PriceAndSavings suggestion={suggestion} savings={calculateSavings(suggestion, lineItems)} />
+              <PriceAndSavings suggestion={suggestion} lineItems={lineItems} />
               <button type="button" onClick={() => handleUse(suggestion)} className={useButtonClassName}>
                 Use
               </button>
@@ -128,9 +133,9 @@ export function PackageSuggestions({
       <Dialog open={showAll} onOpenChange={setShowAll}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>Suggested profiles</DialogTitle>
+            <DialogTitle>Includes everything on the quote</DialogTitle>
             <DialogDescription>
-              The top match and the cheapest profile for the tests you&apos;ve added
+              The closest fit and the cheapest profile or package containing every test on the quote
               {locationName ? ` · ${locationName}` : ""}
             </DialogDescription>
           </DialogHeader>
@@ -142,7 +147,7 @@ export function PackageSuggestions({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-semibold">{suggestion.name}</span>
                       <span className="rounded-full bg-muted px-2 py-px text-[11px] font-medium text-muted-foreground">
-                        {suggestion.matchPercentage}% match
+                        {isPackage(suggestion) ? "Package" : "Profile"}
                       </span>
                       <span className="rounded-full bg-primary/10 px-2 py-px text-[11px] font-semibold text-primary">
                         {tagFor(index)}
@@ -150,7 +155,7 @@ export function PackageSuggestions({
                     </div>
                     <p className="mt-0.5 text-[12.5px] text-muted-foreground">{coversLabel(suggestion)}</p>
                   </div>
-                  <PriceAndSavings suggestion={suggestion} savings={calculateSavings(suggestion, lineItems)} />
+                  <PriceAndSavings suggestion={suggestion} lineItems={lineItems} />
                 </div>
                 <ProfileTestList tests={suggestion.tests} matchedTestIds={new Set(suggestion.matchedTestIds)} />
                 <div className="flex justify-end">

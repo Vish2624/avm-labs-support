@@ -10,13 +10,22 @@ export interface LoginState {
   success?: boolean;
 }
 
+/** Supabase Auth signs in by email, so a bare username maps to `<username>@avmlabs.com`. */
+const USERNAME_EMAIL_DOMAIN = "avmlabs.com";
+
+function usernameToEmail(username: string): string {
+  return username.includes("@") ? username : `${username.toLowerCase()}@${USERNAME_EMAIL_DOMAIN}`;
+}
+
 export async function signInAction(prevState: LoginState, formData: FormData): Promise<LoginState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !password) {
-    return { error: "Enter your email and password.", attempt: (prevState.attempt ?? 0) + 1 };
+  if (!username || !password) {
+    return { error: "Enter your username and password.", attempt: (prevState.attempt ?? 0) + 1 };
   }
+
+  const email = usernameToEmail(username);
 
   const supabase = await createAuthServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
