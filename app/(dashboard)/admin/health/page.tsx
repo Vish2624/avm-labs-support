@@ -1,4 +1,6 @@
 import { RefreshButton } from "@/components/admin/refresh-button";
+import { ApiUsageSection } from "@/components/admin/api-usage/api-usage-section";
+import { quotaDayStart } from "@/lib/api-usage/summarize";
 import { deleteAppEventsBefore, listAppEventsSince } from "@/lib/database/app-events";
 import { geminiOwnKeyConfigured, type GeminiKeyRole } from "@/lib/ai/gemini";
 import { cn } from "@/lib/utils";
@@ -90,18 +92,28 @@ export default async function SystemHealthPage() {
       ? "amber"
       : "green";
 
-  // Per Gemini key: failures on that key in the last 24 h.
+  // Per Gemini key: failures on that key in the last 24 h. A daily limit
+  // only counts as "needs attention" until Google resets it (midnight US
+  // Pacific) — after that the key works again.
+  const resetAt = quotaDayStart(new Date(now)).getTime();
   const keyStatus = KEYS.map((key) => {
     const own = lastDay.filter((event) => event.keyRole === key.role);
     const quota = own.filter((event) => event.kind === "gemini_quota");
+    const limitNow = quota.some((event) => new Date(event.createdAt).getTime() >= resetAt);
     const level: Level = !geminiOwnKeyConfigured(key.role)
       ? "grey"
-      : quota.length > 0
+      : limitNow
         ? "red"
         : own.length > 0
           ? "amber"
           : "green";
-    return { ...key, level, failures: own.length, quota: quota.length, last: own[0]?.createdAt ?? null };
+    return { ...key, level, limitNow, failures: own.length, quota: quota.length, last: own[0]?.createdAt ?? null };
+  });
+
+  const resetTime = new Date(resetAt + DAY).toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Dubai",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
   // Same problem grouped: kind + feature + message.
@@ -119,10 +131,10 @@ export default async function SystemHealthPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">System health</h1>
+          <h1 className="text-xl font-semibold">System health &amp; API usage</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Problems the app ran into while agents were using it — Gemini failures and limits, and when a backup had to be
-            used. Kept for {KEEP_DAYS} days.
+            used — and how much each Gemini key is being used. Problems are kept for {KEEP_DAYS} days.
           </p>
         </div>
         <RefreshButton />
@@ -147,7 +159,10 @@ export default async function SystemHealthPage() {
             <div key={key.role} className="flex flex-col gap-2 rounded-xl border border-border bg-card px-4 py-3.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold">{key.label}</span>
-                <StatusBadge level={key.level} />
+                <StatusBadge
+                  level={key.level}
+                  label={key.limitNow ? "Limit reached" : key.level === "amber" ? "Had problems" : undefined}
+                />
               </div>
               <p className="text-[12.5px] text-muted-foreground">
                 {key.level === "grey"
@@ -158,12 +173,29 @@ export default async function SystemHealthPage() {
                         key.quota > 0 ? `, daily limit hit ${key.quota}×` : ""
                       } · last ${timeAgo(key.last!, now)}`}
               </p>
+              {key.limitNow ? (
+                <p className="text-[12px] text-muted-foreground">
+                  Other keys are covering for it until the limit resets at {resetTime}.
+                </p>
+              ) : key.quota > 0 ? (
+                <p className="text-[12px] text-muted-foreground">Limit has reset since — working again.</p>
+              ) : null}
             </div>
           ))}
         </div>
+        <p className="text-[12.5px] text-muted-foreground">
+          Backup key (GEMINI_API_KEY_BACKUP):{" "}
+          {process.env.GEMINI_API_KEY_BACKUP
+            ? "set — used when a feature's own key fails or hits its limit."
+            : "not set — nothing to fall back on if a key hits its limit."}
+        </p>
       </section>
 
-      <section className="flex flex-col gap-3">
+      <div className="border-t border-border pt-6">
+        <ApiUsageSection />
+      </div>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-6">
         <h2 className="text-[13px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">Problems · last 7 days</h2>
         {grouped.length === 0 ? (
           <p className="rounded-xl border border-border px-4 py-6 text-center text-sm text-muted-foreground">

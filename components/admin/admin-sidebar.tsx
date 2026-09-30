@@ -13,8 +13,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/upload", label: "Upload" },
   { href: "/admin/aliases", label: "Aliases" },
   { href: "/admin/searches", label: "Missed searches" },
-  { href: "/admin/health", label: "System health" },
-  { href: "/admin/api-usage", label: "API usage" },
+  { href: "/admin/health", label: "Health & API usage" },
   { href: "/admin/export", label: "Export" },
 ] as const;
 

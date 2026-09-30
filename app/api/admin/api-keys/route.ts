@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
   const role = body?.role as ApiKeyRole;
   const dailyLimit = body?.dailyLimit ?? null;
   if (!label || label.length > 60) return NextResponse.json({ error: "Give the key a name (up to 60 characters)." }, { status: 400 });
-  if (!/^[\w-]{10,200}$/.test(apiKey)) return NextResponse.json({ error: "That doesn't look like a Gemini API key." }, { status: 400 });
+  // Allows "." for Google's newer "AQ.…" key format as well as classic "AIza…" keys.
+  if (!/^[\w.-]{10,200}$/.test(apiKey)) return NextResponse.json({ error: "That doesn't look like a Gemini API key." }, { status: 400 });
   if (!API_KEY_ROLES.includes(role)) return NextResponse.json({ error: "Pick what the key is for." }, { status: 400 });
   if (dailyLimit !== null && !(Number.isInteger(dailyLimit) && dailyLimit > 0)) {
     return NextResponse.json({ error: "Daily limit must be a whole number above 0, or blank." }, { status: 400 });

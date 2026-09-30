@@ -13,9 +13,10 @@
 -- long it took — what the page's daily counts, success rates and response
 -- times are built from. Pruned after 30 days when the page is opened.
 --
--- Apply via the Supabase SQL Editor (same as the earlier migrations).
+-- Apply via the Supabase SQL Editor (same as the earlier migrations). Safe to
+-- run more than once.
 
-create table api_keys (
+create table if not exists api_keys (
   id uuid primary key default gen_random_uuid(),
   label text not null check (char_length(label) between 1 and 60),
   role text not null check (role in ('reader', 'image', 'search', 'assistant', 'shared', 'backup')),
@@ -27,7 +28,7 @@ create table api_keys (
   check ((env_name is null) <> (api_key is null))
 );
 
-create table api_calls (
+create table if not exists api_calls (
   id bigint generated always as identity primary key,
   key_id uuid references api_keys(id) on delete set null,
   feature text not null check (char_length(feature) between 1 and 40),
@@ -38,13 +39,14 @@ create table api_calls (
   created_at timestamptz not null default now()
 );
 
-create index api_calls_created_at_idx on api_calls (created_at);
-create index api_calls_key_created_idx on api_calls (key_id, created_at);
+create index if not exists api_calls_created_at_idx on api_calls (created_at);
+create index if not exists api_calls_key_created_idx on api_calls (key_id, created_at);
 
 -- Written and read only by the server (service role, which bypasses RLS).
 -- api_keys holds secrets, so it has no policies at all: nobody reads it
 -- through the anon key, admin or not.
 alter table api_keys enable row level security;
 alter table api_calls enable row level security;
+drop policy if exists api_calls_admin_select on api_calls;
 create policy api_calls_admin_select on api_calls
   for select using (current_user_role() = 'admin');
