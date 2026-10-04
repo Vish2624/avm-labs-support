@@ -3,8 +3,14 @@ import { normalizeQuery } from "@/lib/search/matching/normalize-query";
 import { listOrder, loadPricedCatalog, type PricedCatalog } from "./priced-catalog";
 import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
-import { answerTestQuestionWithGemini, geminiConfigured, recommendWithGemini } from "./gemini-engine";
+import {
+  answerTestQuestionWithGemini,
+  fastingPerTestWithGemini,
+  geminiConfigured,
+  recommendWithGemini,
+} from "./gemini-engine";
 import { answerAvailability } from "./availability-answer";
+import { asksForProfile, findProfilesFor, perTestFasting, perTestTat, resolveTestGroup } from "./test-group";
 import { recordAppEvent } from "@/lib/database/app-events";
 import {
   builtinAnswer,
@@ -121,8 +127,61 @@ async function answerTestQuestion(
       availability: "Availability question",
       details: "Test details",
       general: "Blood test question",
+      profile_match: "Profile for these tests",
     }[effectiveSubject],
   };
+}
+
+/**
+ * A question naming several tests at once — "which profile has CBC, TSH and
+ * Vit D?", "fasting for CBC, lipid profile, HbA1c?", "TAT for all these:
+ * …". Answered per test (or by the profile finder), never as one merged
+ * answer. Null when it isn't a list question.
+ */
+async function answerTestGroup(
+  rawQuestion: string,
+  question: string,
+  catalog: PricedCatalog
+): Promise<Pick<
+  AiAssistantResponse,
+  "kind" | "lookupQuery" | "answer" | "reply" | "results" | "engine" | "sources" | "topic" | "intent"
+> | null> {
+  const group = await resolveTestGroup(rawQuestion, catalog);
+  if (group.items.length === 0 || group.items.length + group.notFound.length < 2) return null;
+  const subject = detectSubject(question);
+  const base = { kind: "test_question" as const, lookupQuery: null, sources: [] };
+
+  if (subject !== "fasting" && subject !== "tat" && asksForProfile(question, group)) {
+    const found = findProfilesFor(group, catalog);
+    return { ...base, ...found, engine: "builtin", intent: "Profile for these tests" };
+  }
+  if (group.items.length < 2) return null;
+  const results = toDetailSuggestions(group.items);
+  const topic = results.map((item) => item.name).join(", ");
+
+  if (subject === "tat") {
+    return { ...base, ...perTestTat(results, group.notFound), results, topic, engine: "builtin", intent: "Report time for each test" };
+  }
+  if (subject === "fasting") {
+    let engine: AiAssistantResponse["engine"] = "builtin";
+    const unknown = results.filter((item) => !item.fasting);
+    if (unknown.length > 0 && (await geminiConfigured())) {
+      try {
+        const answers = await fastingPerTestWithGemini(unknown);
+        for (const item of unknown) item.fasting = answers.get(item.code.toUpperCase()) ?? null;
+        if (answers.size > 0) engine = "gemini";
+      } catch (error) {
+        recordAppEvent({
+          kind: "fallback",
+          feature: "assistant",
+          message: "Per-test fasting answered from the built-in guide only (Gemini's answer was unusable)",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return { ...base, ...perTestFasting(results, group.notFound), results, topic, engine, intent: "Fasting for each test" };
+  }
+  return null;
 }
 
 /**
@@ -146,6 +205,11 @@ export async function recommendTests(
   // The built-in rules read the spell-corrected question ("lipd profle" ->
   // "lipid profile"); Gemini gets the agent's own words and copes with typos.
   const question = await correctSpelling(rawQuestion, catalog);
+
+  // Several tests named at once: per-test fasting/report time, or the
+  // profile that covers them.
+  const testGroup = await answerTestGroup(rawQuestion, question, catalog);
+  if (testGroup) return { ...base, ...testGroup };
 
   // "Is X available?" — a yes with price/report time, or "not available"
   // plus the closest tests we do offer. Only from our records.

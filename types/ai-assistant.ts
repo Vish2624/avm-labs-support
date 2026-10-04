@@ -54,8 +54,17 @@ export interface AiSource {
 /**
  * "components" = which parameters/tests a test or package includes ("parameters in CBC").
  * "general" = any other blood-test question (normal range, what high/low means, sample, purpose…).
+ * "profile_match" = which profile/package covers a list of tests ("profile with cbc, tsh and vit d").
  */
-export type TestQuestionSubject = "fasting" | "components" | "price" | "tat" | "availability" | "details" | "general";
+export type TestQuestionSubject =
+  | "fasting"
+  | "components"
+  | "price"
+  | "tat"
+  | "availability"
+  | "details"
+  | "general"
+  | "profile_match";
 
 /** The assistant's direct reply to a question about named test(s): "Does TSH need fasting?" -> No. */
 export interface AiAnswer {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ImageIcon, LoaderCircleIcon, ReceiptTextIcon, SearchIcon, XIcon } from "lucide-react";
+import { ImageIcon, LoaderCircleIcon, ReceiptTextIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { ServiceTypeFilterSelector } from "./search/service-type-filter";
@@ -302,6 +302,17 @@ export function WorkspaceClient({
       if (previous) URL.revokeObjectURL(previous);
       return null;
     });
+  }
+  // The search column's own "Clear all": the search box, the pasted text,
+  // what was read from it and the attached image — the quote is untouched.
+  const hasSearchInput = Boolean(query || debouncedQuery || pasteText || submittedPasteText || imagePreview);
+  function clearSearch() {
+    setQuery("");
+    setDebouncedQuery("");
+    setPasteText("");
+    setSubmittedPasteText("");
+    clearImage();
+    if (tab === "search") searchInputRef.current?.focus();
   }
   // AI Test Assistant: its own question box and results, separate from the
   // search box and the pasted-message reader.
@@ -803,7 +814,21 @@ export function WorkspaceClient({
                   <span className="max-md:hidden">Support Assistant</span>
                 </button>
               </div>
-              <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
+              <div className="flex items-center gap-2 max-md:w-full max-md:justify-between">
+                <ServiceTypeFilterSelector value={serviceTypeFilter} onChange={setServiceTypeFilter} />
+                {tab !== "ai" && hasSearchInput ? (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    disabled={imageReading}
+                    title="Clear the search, pasted text and image (the quote stays)"
+                    className="flex h-[38px] shrink-0 items-center gap-2 rounded-[10px] border border-destructive/30 bg-destructive/[0.06] px-3.5 text-sm font-medium whitespace-nowrap text-destructive transition-colors hover:border-destructive/50 hover:bg-destructive/15 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 avm-check"
+                  >
+                    <Trash2Icon className="size-4" />
+                    Clear all
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {tab === "search" ? (

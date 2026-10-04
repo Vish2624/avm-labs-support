@@ -37,6 +37,11 @@ export function PackageContentsEditor({
   });
   const [profileQuery, setProfileQuery] = useState("");
   const [testQuery, setTestQuery] = useState("");
+  // Ticked profiles and tests are listed first. The order is taken when the
+  // editor opens and each time that list's search changes — not on every
+  // tick, so a row never jumps away from under the cursor.
+  const [pinnedProfiles, setPinnedProfiles] = useState<Set<string>>(() => new Set(profileIds));
+  const [pinnedTests, setPinnedTests] = useState<Set<string>>(() => new Set(initial.map((entry) => entry.testId)));
 
   const testById = useMemo(() => new Map(tests.map((t) => [t.id, t])), [tests]);
   const chosenProfiles = profiles.filter((p) => profileIds.has(p.id));
@@ -48,8 +53,14 @@ export function PackageContentsEditor({
   const dirty = allTestIds.slice().sort().join("|") !== initial.map((e) => e.testId).sort().join("|");
 
   const matches = (text: string, query: string) => text.toLowerCase().includes(query.trim().toLowerCase());
-  const shownProfiles = profiles.filter((p) => !profileQuery.trim() || matches(`${p.code} ${p.name}`, profileQuery));
-  const shownTests = tests.filter((t) => !testQuery.trim() || matches(`${t.code} ${t.officialName} ${t.shortName ?? ""}`, testQuery));
+  const pinnedFirst = (pinned: Set<string>) => (a: { id: string }, b: { id: string }) =>
+    Number(pinned.has(b.id)) - Number(pinned.has(a.id));
+  const shownProfiles = profiles
+    .filter((p) => !profileQuery.trim() || matches(`${p.code} ${p.name}`, profileQuery))
+    .sort(pinnedFirst(pinnedProfiles));
+  const shownTests = tests
+    .filter((t) => !testQuery.trim() || matches(`${t.code} ${t.officialName} ${t.shortName ?? ""}`, testQuery))
+    .sort(pinnedFirst(pinnedTests));
 
   const toggle = (set: Set<string>, id: string, on: boolean) => {
     const next = new Set(set);
@@ -78,7 +89,10 @@ export function PackageContentsEditor({
       <div className="grid gap-3 md:grid-cols-2">
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold">Profiles</p>
-          <Input placeholder="Search profiles…" value={profileQuery} onChange={(event) => setProfileQuery(event.target.value)} />
+          <Input placeholder="Search profiles…" value={profileQuery} onChange={(event) => {
+              setProfileQuery(event.target.value);
+              setPinnedProfiles(new Set(profileIds));
+            }} />
           <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-xl border border-border/50 p-1.5">
             {shownProfiles.length === 0 ? <li className="p-2 text-sm text-muted-foreground">No profiles.</li> : null}
             {shownProfiles.map((profile) => (
@@ -98,7 +112,10 @@ export function PackageContentsEditor({
 
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold">Extra tests</p>
-          <Input placeholder="Search tests…" value={testQuery} onChange={(event) => setTestQuery(event.target.value)} />
+          <Input placeholder="Search tests…" value={testQuery} onChange={(event) => {
+              setTestQuery(event.target.value);
+              setPinnedTests(new Set(allTestIds));
+            }} />
           <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-xl border border-border/50 p-1.5">
             {shownTests.map((test) => {
               const via = coveredBy.get(test.id);

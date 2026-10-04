@@ -28,12 +28,18 @@ export function ProfileTestsEditor({
     () => new Map(initial.map((entry) => [entry.testId, entry.required]))
   );
   const [query, setQuery] = useState("");
+  // Included tests are listed first. The order is taken when the editor
+  // opens and each time the search changes — not on every tick, so a row
+  // never jumps away from under the cursor.
+  const [pinned, setPinned] = useState<Set<string>>(() => new Set(initial.map((entry) => entry.testId)));
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return tests;
-    return tests.filter((test) => `${test.code} ${test.officialName}`.toLowerCase().includes(normalized));
-  }, [tests, query]);
+    const matching = normalized
+      ? tests.filter((test) => `${test.code} ${test.officialName}`.toLowerCase().includes(normalized))
+      : tests;
+    return [...matching].sort((a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id)));
+  }, [tests, query, pinned]);
 
   function toggleIncluded(testId: string, included: boolean) {
     setSelected((prev) => {
@@ -58,7 +64,14 @@ export function ProfileTestsEditor({
           {included.length > 0 ? included.map((test) => test.officialName).join(", ") : "nothing yet"}
         </span>
       </div>
-      <Input placeholder="Search tests…" value={query} onChange={(event) => setQuery(event.target.value)} />
+      <Input
+        placeholder="Search tests…"
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setPinned(new Set(selected.keys()));
+        }}
+      />
 
       <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-xl border border-border/50 p-2">
         {filtered.map((test) => {

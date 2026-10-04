@@ -3,7 +3,7 @@ import { findPriced, listOrder, suggestionKey, toSuggestion, type PricedCatalog 
 import { geminiGenerate, geminiReaderConfigured, READER_MODELS } from "@/lib/ai/gemini";
 import { CUSTOMER_LABELS, SHORT_NOTICE, customerName } from "./customer-labels";
 import { recordAppEvent } from "@/lib/database/app-events";
-import type { AiAnswer, AiSource, AiSuggestion, TestQuestionSubject } from "@/types/ai-assistant";
+import type { AiAnswer, AiSource, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
 /** Same fast models as the readers, with more time: the reply is a longer JSON object. */
 const ASSISTANT_MODELS = READER_MODELS.map((entry) => ({ ...entry, timeoutMs: entry.timeoutMs + 6_000 }));
@@ -178,6 +178,42 @@ export async function answerTestQuestionWithGemini(
       ? json.verdict
       : null;
   return { answer: { subject, verdict, text: answerText }, reply: recordsSafe(str(json.reply)), sources };
+}
+
+const FASTING_PER_TEST_INSTRUCTIONS = `You help the internal team of a diagnostic laboratory. For EACH lab test listed, give its standard patient fasting requirement, from reputable sources (major lab test directories, NHS, MedlinePlus, Lab Tests Online).
+
+Rules:
+- One entry per listed code, copied exactly.
+- "fasting": "yes" (fasting required), "preferred" (recommended, not strictly required) or "no".
+- "note": at most 10 plain words, e.g. "8-10 hours fasting, water allowed" or "No fasting needed".
+- Never mention prices, report times or availability.
+
+Reply with ONLY this JSON object, no markdown:
+{"tests":[{"code":string,"fasting":"yes"|"preferred"|"no","note":string}]}`;
+
+/**
+ * Per-test fasting for tests the built-in guide doesn't know, keyed by
+ * upper-cased code. Tests Gemini doesn't answer for are simply missing.
+ */
+export async function fastingPerTestWithGemini(items: AiSuggestion[]): Promise<Map<string, FastingInfo>> {
+  const listed = items
+    .map((item) =>
+      item.kind === "package"
+        ? `${item.code} | ${item.name} (package: ${item.tests.map((test) => test.officialName).join(", ")})`
+        : `${item.code} | ${item.name}`
+    )
+    .join("\n");
+  const { text } = await callGemini(FASTING_PER_TEST_INSTRUCTIONS, `Tests (code | name):\n${listed}`);
+  const json = parseJson(text) as { tests?: { code?: unknown; fasting?: unknown; note?: unknown }[] };
+  const wanted = new Set(items.map((item) => item.code.toUpperCase()));
+  const found = new Map<string, FastingInfo>();
+  for (const entry of Array.isArray(json.tests) ? json.tests : []) {
+    const code = str(entry.code)?.toUpperCase();
+    const note = recordsSafe(str(entry.note));
+    const required = entry.fasting === "yes" ? "yes" : entry.fasting === "preferred" ? "recommended" : entry.fasting === "no" ? "no" : null;
+    if (code && wanted.has(code) && note && required) found.set(code, { required, note });
+  }
+  return found;
 }
 
 /** Most tests named in a recommendation reply — the rest are still listed below it to tick. */

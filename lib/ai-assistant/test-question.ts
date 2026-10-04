@@ -95,7 +95,8 @@ const digitGroups = (text: string) => (text.match(/\d+/g) ?? []).join(" ");
 export async function resolveNamedItems(
   name: string,
   catalog: PricedCatalog,
-  allowTopic: boolean
+  allowTopic: boolean,
+  maxItems = MAX_ITEMS
 ): Promise<PricedItem[]> {
   if (!name) return [];
   const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
@@ -103,7 +104,7 @@ export async function resolveNamedItems(
 
   const found = new Map<string, PricedItem>();
   const add = (item: PricedItem | undefined) => {
-    if (item && found.size < MAX_ITEMS && !found.has(suggestionKey(item))) found.set(suggestionKey(item), item);
+    if (item && found.size < maxItems && !found.has(suggestionKey(item))) found.set(suggestionKey(item), item);
   };
 
   const packageName = name.replace(PACKAGE_WORDS, " ").replace(/\s+/g, " ").trim();
@@ -256,6 +257,7 @@ export function recordsReply(subject: TestQuestionSubject, items: AiSuggestion[]
         .join("\n\n");
     case "fasting":
     case "general":
+    case "profile_match":
       return `Hi! ${answer.text}`;
   }
 }
@@ -315,6 +317,7 @@ export function builtinAnswer(subject: TestQuestionSubject, items: AiSuggestion[
       };
     case "details":
     case "general":
+    case "profile_match":
       return { subject, verdict: null, text: "Here are the details from our test list." };
   }
 }

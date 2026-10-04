@@ -289,6 +289,7 @@ const VERDICT_HEADLINE: Record<TestQuestionSubject, Partial<Record<NonNullable<A
   tat: {},
   details: {},
   general: {},
+  profile_match: { yes: "A profile has all these tests", no: "No single profile has all these tests" },
 };
 
 /** The direct reply to a question about named tests: a Yes/No headline plus the per-test lines. */
@@ -558,9 +559,13 @@ export function AiAssistantResults({
           </div>
         </div>
 
+        {/* The profile finder's full breakdown for the agent: every option,
+            what each leaves out, and the individual prices. */}
+        {answer?.subject === "profile_match" ? <AnswerCard answer={{ ...answer, verdict: null }} /> : null}
+
         {results.length > 0 ? (
           <>
-            {renderGroup("Tests in our list", results)}
+            {renderGroup(answer?.subject === "profile_match" ? "Profiles and tests to quote" : "Tests in our list", results)}
             {actions}
           </>
         ) : null}
