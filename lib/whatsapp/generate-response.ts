@@ -34,6 +34,11 @@ export function customerTat(tatText: string): string {
   return `${days} day${days === 1 ? "" : "s"}`;
 }
 
+/** Saudi prices (SAR — Riyadh, Khobar) carry the 15% VAT note for non-citizens. */
+export function hasKsaVat(currency: string): boolean {
+  return currency === "SAR";
+}
+
 /**
  * - detailed: every test with its own price, then the total
  * - summary: the test names and one overall price, offering the breakup on request
@@ -71,6 +76,8 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
   }
 
   const { tier, discountAmount, discountedTotal } = applyDiscount(quotation.total);
+  // Riyadh and Khobar — the Saudi branches, priced in SAR.
+  const vatLines = hasKsaVat(quotation.total.currency) ? ["", ...WHATSAPP_TEMPLATES.ksaVat] : [];
 
   if (style === "summary") {
     // Names only; a TAT that can't be summarized (differing free-text
@@ -91,6 +98,7 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
       tier
         ? WHATSAPP_TEMPLATES.totalWithDiscount(formatCurrency(discountedTotal), tier.percent)
         : WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total)),
+      ...vatLines,
       "",
       WHATSAPP_TEMPLATES.breakupOffer,
       WHATSAPP_TEMPLATES.outro,
@@ -125,6 +133,7 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
     "",
     ...(sharedTat ? [WHATSAPP_TEMPLATES.tat(sharedTat), ""] : []),
     ...totalLines,
+    ...vatLines,
     "",
     WHATSAPP_TEMPLATES.outro,
   ].join("\n");

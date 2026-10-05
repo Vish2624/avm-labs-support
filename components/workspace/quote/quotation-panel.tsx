@@ -11,7 +11,8 @@ import { subtractMoney } from "@/lib/pricing/money";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import { lineItemKey, type Quotation, type QuotationLineItem } from "@/types/quotation";
-import type { ReplyStyle } from "@/lib/whatsapp/generate-response";
+import { hasKsaVat, type ReplyStyle } from "@/lib/whatsapp/generate-response";
+import { WHATSAPP_TEMPLATES } from "@/lib/whatsapp/templates";
 import { isPackage } from "@/lib/search/matching/is-package-name";
 
 function lineMeta(item: QuotationLineItem): string {
@@ -244,6 +245,11 @@ export function QuotationPanel({
               </span>
             </div>
           </div>
+          {hasKsaVat(quotation.total.currency) ? (
+            <p className="text-[12px] leading-snug text-muted-foreground">
+              {WHATSAPP_TEMPLATES.ksaVat.join(" ")}
+            </p>
+          ) : null}
           {progress ? (
             <div className="flex items-center gap-2.5">
               <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-border">

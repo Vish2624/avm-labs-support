@@ -35,6 +35,8 @@ export const WHATSAPP_TEMPLATES = {
   discount: (percent: number, amount: string) => `Discount (${percent}%): -${amount}`,
   total: (amount: string) => `Total: ${amount}`,
   totalWithDiscount: (amount: string, percent: number) => `Total: ${amount} (${percent}% discount included)`,
+  // Saudi branches (Riyadh, Khobar) only: VAT is mentioned, never added to the price.
+  ksaVat: ["VAT 15% is applicable to non-citizens.*", "If the patient is a citizen, no VAT will be applicable."],
   breakupOffer: "Would you like the price breakup for each test? Just let us know.",
   outro: "Please let us know if you'd like to proceed with booking.",
   empty: "No tests have been added to this quotation yet.",
