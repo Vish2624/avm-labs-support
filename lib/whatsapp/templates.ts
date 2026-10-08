@@ -6,8 +6,8 @@
 export const WHATSAPP_TEMPLATES = {
   intro: (customerName: string | null) =>
     customerName
-      ? `Hi ${customerName}! Here are the details for your requested tests:`
-      : "Hi! Here are the details for your requested tests:",
+      ? `Thank you for waiting, ${customerName}.\nHere are the details you asked for:`
+      : "Thank you for waiting, Sir/Ma’am.\nHere are the details you asked for:",
   // `tat` and `availability` are omitted (pass null) when that detail is
   // shown once for the whole quotation instead, or is the unremarkable
   // "Available" default not worth repeating to the customer. The test code

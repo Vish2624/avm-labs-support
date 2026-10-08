@@ -87,7 +87,7 @@ export function BrandPanel({ locations }: { locations: { name: string; currencyC
             className="max-w-[330px] self-start rounded-[4px_16px_16px_16px] bg-bubble px-4 py-3.5 text-[14px] leading-relaxed text-bubble-foreground shadow-elevated [@media(max-height:720px)]:hidden"
             style={{ animation: demoStep(4) }}
           >
-            Hi! Here are the details for your requested tests…
+            Thank you for waiting, Sir/Ma’am. Here are the details you asked for…
             <br />
             <strong className="font-semibold">Total and discount included</strong>
           </div>
