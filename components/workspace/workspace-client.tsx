@@ -243,7 +243,7 @@ export function WorkspaceClient({
 
   return (
     <div className="flex h-full flex-col">
-      <div ref={columnsRef} className="flex min-h-0 flex-1 items-stretch overflow-hidden avm-fade-up [animation-duration:.45s]">
+      <div ref={columnsRef} className="flex min-h-0 flex-1 items-stretch overflow-hidden">
         <section
           aria-label="Find tests"
           style={{ width: `${leftPercent}%` }}
@@ -255,8 +255,7 @@ export function WorkspaceClient({
           {/* Static: mode tabs, filters and the search/paste box never scroll —
               only the results below them do. */}
           <div
-            className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pt-4 pb-3.5 avm-fade-up md:gap-4 md:px-7 md:pt-[22px] md:pb-[18px]"
-            style={{ animationDelay: "50ms" }}
+            className="flex shrink-0 flex-col gap-3 border-b border-border px-4 pt-4 pb-3.5 md:gap-4 md:px-7 md:pt-[22px] md:pb-[18px]"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <WorkspaceModeTabs tab={tab} onChange={setTab} />
@@ -267,7 +266,7 @@ export function WorkspaceClient({
             </div>
 
             {tab === "search" ? (
-              <div key="search" className="avm-fade-up [animation-duration:.35s]">
+              <div key="search" className="avm-fade-up">
                 <TestSearch
                   value={query}
                   onChange={setQuery}
@@ -278,7 +277,7 @@ export function WorkspaceClient({
                 />
               </div>
             ) : tab === "ai" ? (
-              <div key="ai" className="avm-fade-up [animation-duration:.35s]">
+              <div key="ai" className="avm-fade-up">
                 <AiQuestionForm
                   value={aiQuestion}
                   onChange={setAiQuestion}
@@ -399,10 +398,9 @@ export function WorkspaceClient({
         <aside
           aria-label="Quotation"
           className={cn(
-            "h-full flex-1 overflow-hidden bg-card transition-colors duration-300 avm-fade-up md:min-w-[340px]",
+            "h-full flex-1 overflow-hidden bg-card transition-colors duration-300 md:min-w-[340px]",
             mobileView === "search" && "max-md:hidden"
           )}
-          style={{ animationDelay: "120ms" }}
         >
           <QuotationPanel
             quotation={quotation}

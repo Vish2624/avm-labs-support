@@ -1,7 +1,7 @@
 import { normalizeQuery } from "../matching/normalize-query";
 import { matchScore } from "../matching/fuzzy-match";
 import { FUZZY_THRESHOLD, buildSearchCandidates, type SearchableAlias, type SearchableTest } from "../matching/build-search-candidates";
-import { rankResults } from "../matching/rank-results";
+import { rankResults, type SearchCandidate } from "../matching/rank-results";
 import { queryVariants, VARIANT_SCORE_FACTOR } from "../matching/query-variants";
 import { dedupeProfilesByName } from "@/lib/profiles/dedupe-profiles";
 import type { CalculatedSearchResult, SearchTestResult } from "@/types/search";
@@ -107,6 +107,28 @@ const CONTAINED_TEST_MIN_SCORE = 80;
 /** How many of the query's best test matches are looked up inside profiles. */
 const MAX_CONTAINED_TESTS = 3;
 
+// Matching every test and alias is the expensive step of a search, and each
+// keystroke needs it twice (the tests list, and "profiles containing this
+// test") — so a catalog's candidates per query phrasing are kept for reuse.
+// Bounded per catalog; a refreshed catalog is a new object, so stale
+// entries go with the old one.
+const CANDIDATE_CACHE_LIMIT = 300;
+const candidateCache = new WeakMap<SearchableTest[], Map<string, SearchCandidate[]>>();
+
+function testCandidates(variant: string, catalog: SearchCatalog): SearchCandidate[] {
+  let byVariant = candidateCache.get(catalog.tests);
+  if (!byVariant) {
+    byVariant = new Map();
+    candidateCache.set(catalog.tests, byVariant);
+  }
+  const cached = byVariant.get(variant);
+  if (cached) return cached;
+  if (byVariant.size >= CANDIDATE_CACHE_LIMIT) byVariant.clear();
+  const found = buildSearchCandidates(variant, catalog.tests, catalog.aliases);
+  byVariant.set(variant, found);
+  return found;
+}
+
 /** Tests matching the query, best first — searchTests(), run on the loaded catalog. */
 export function searchCatalogTests(query: string, catalog: SearchCatalog): SearchTestResult[] {
   const variants = queryVariants(query);
@@ -114,7 +136,7 @@ export function searchCatalogTests(query: string, catalog: SearchCatalog): Searc
   const pricedById = new Map(catalog.priced.map((result) => [result.testId, result]));
 
   const candidates = variants.flatMap((variant, i) => {
-    const found = buildSearchCandidates(variant, catalog.tests, catalog.aliases);
+    const found = testCandidates(variant, catalog);
     return i === 0 ? found : found.map((candidate) => ({ ...candidate, score: candidate.score * VARIANT_SCORE_FACTOR }));
   });
 
@@ -164,7 +186,7 @@ export function searchCatalogProfiles(query: string, catalog: SearchCatalog): Pr
   // own name doesn't match it ("platelet count" -> the Hemogram).
   const testById = new Map(catalog.tests.map((test) => [test.id, test]));
   const containedTestIds = rankResults(
-    queryVariants(query).flatMap((variant) => buildSearchCandidates(variant, catalog.tests, catalog.aliases))
+    queryVariants(query).flatMap((variant) => testCandidates(variant, catalog))
   )
     .filter((candidate) => candidate.matchType === "exact" || candidate.exact || candidate.score >= CONTAINED_TEST_MIN_SCORE)
     .slice(0, MAX_CONTAINED_TESTS)

@@ -56,7 +56,7 @@ export function PasteForm({
         event.preventDefault();
         image.handleImage(dropped);
       }}
-      className="flex flex-col gap-2.5 avm-fade-up [animation-duration:.35s]"
+      className="flex flex-col gap-2.5 avm-fade-up"
     >
       <div className="relative">
         <textarea

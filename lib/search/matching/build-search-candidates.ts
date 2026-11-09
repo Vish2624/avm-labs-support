@@ -20,6 +20,21 @@ const PARAMETER_SCORE_FACTOR = 0.9;
 
 const compact = (value: string) => value.replace(/\s+/g, "");
 
+// A test's normalized code/name/short name (and their spaceless forms) are
+// the same on every keystroke, so they're worked out once per test object.
+const preparedCache = new WeakMap<SearchableTest, { fields: string[]; compacts: string[] }>();
+
+function preparedFields(test: SearchableTest) {
+  let prepared = preparedCache.get(test);
+  if (!prepared) {
+    const fields = [normalizeQuery(test.code), normalizeQuery(test.officialName)];
+    if (test.shortName) fields.push(normalizeQuery(test.shortName));
+    prepared = { fields, compacts: fields.map(compact) };
+    preparedCache.set(test, prepared);
+  }
+  return prepared;
+}
+
 /**
  * Generates ranked-search candidates for a (pre-normalized) query against
  * the test catalog and its aliases: exact code/name/short-name/alias match
@@ -38,10 +53,8 @@ export function buildSearchCandidates(
   const queryCompact = compact(normalizedQuery);
 
   for (const test of tests) {
-    const fields = [normalizeQuery(test.code), normalizeQuery(test.officialName)];
-    if (test.shortName) fields.push(normalizeQuery(test.shortName));
-
-    const exact = fields.some((field) => field && compact(field) === queryCompact);
+    const { fields, compacts } = preparedFields(test);
+    const exact = compacts.some((field) => field && field === queryCompact);
     const score = exact ? 100 : Math.max(...fields.map((field) => matchScore(normalizedQuery, field))) * 100;
 
     if (test.componentIds && test.componentIds.length > 0) {

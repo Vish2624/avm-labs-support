@@ -224,26 +224,13 @@
 /* ── Motion (AVM Support redesign) ─────────────────────────────────────
    Entrance and ambient animations from the design handoff. Everything is
    switched off for people who ask the OS for reduced motion. */
-@keyframes avm-fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-@keyframes avm-row-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
-@keyframes avm-item-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes avm-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes avm-row-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes avm-item-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 @keyframes avm-pop { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes avm-check { from { transform: scale(0.4) rotate(-20deg); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes avm-drift { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(50px, -40px, 0) scale(1.1); } }
-@keyframes avm-drift-sm { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(4px, -4px, 0); } }
-@keyframes avm-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-@keyframes avm-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 30%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
-@keyframes avm-float { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -8px, 0); } }
-@keyframes avm-typing { 0%, 8% { width: 0; } 45%, 80% { width: 19ch; } 95%, 100% { width: 0; } }
 @keyframes avm-caret { 50% { border-color: transparent; } }
-@keyframes avm-row-loop { 0%, 40% { opacity: 0; transform: translateY(8px); } 50%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; transform: translateY(-4px); } }
-@keyframes avm-bubble-loop { 0%, 58% { opacity: 0; transform: translateY(10px) scale(0.96); } 66%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
-@keyframes avm-shine { 0% { transform: translateX(-120%); } 60%, 100% { transform: translateX(300%); } }
-@keyframes avm-grid-pan { to { background-position: 44px 44px; } }
 @keyframes avm-shake { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
-@keyframes avm-rise { 0% { opacity: 0; transform: translateY(0); } 10% { opacity: 0.5; } 90% { opacity: 0.3; } 100% { opacity: 0; transform: translateY(-110vh); } }
-@keyframes avm-marquee { to { transform: translateX(-50%); } }
-@keyframes avm-word-cycle { 0%, 5% { opacity: 0.4; } 10%, 30% { opacity: 1; text-shadow: 0 0 24px rgb(255 255 255 / 0.5); } 38%, 100% { opacity: 0.4; text-shadow: none; } }
 @keyframes avm-word-in { from { opacity: 0; transform: translateY(60%) rotate(4deg); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 
 /* Sign-in brand panel's workflow preview: a 9s loop of type → rows added → reply.
@@ -264,36 +251,14 @@
 @utility avm-fade-in { animation: avm-fade-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility avm-item-out { animation: avm-item-out 0.26s cubic-bezier(0.4, 0, 1, 1) both; overflow: hidden; }
 @utility avm-flash { animation: avm-flash 0.9s ease-out; }
-@utility avm-fade-up { animation: avm-fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-@utility avm-row-in { animation: avm-row-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@utility avm-fade-up { animation: avm-fade-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@utility avm-row-in { animation: avm-row-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 /* Search/paste result rows: they change on every keystroke, so a quick fade
    that never makes the list feel slow to appear. */
 @utility avm-row-quick { animation: avm-fade-in 0.16s ease-out both; }
-@utility avm-item-in { animation: avm-item-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@utility avm-item-in { animation: avm-item-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility avm-pop { animation: avm-pop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility avm-check { animation: avm-check 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-@keyframes avm-pulse-red { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--destructive) 40%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
-@utility avm-pulse-red { animation: avm-pulse-red 2.4s ease-in-out infinite; }
-@keyframes avm-location-ring { 0% { opacity: 0.7; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.18, 1.45); } }
-@keyframes avm-location-shine { 0%, 55% { transform: translateX(-120%); } 85%, 100% { transform: translateX(360%); } }
-@utility avm-location-ring { animation: avm-location-ring 2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; }
-@utility avm-location-shine {
-  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--loc, var(--destructive)) 22%, transparent), transparent);
-  animation: avm-location-shine 3.6s ease-in-out infinite;
-}
-@utility avm-pulse { animation: avm-pulse 2.4s ease-in-out infinite; }
-@utility avm-shimmer-bg {
-  background-image: linear-gradient(90deg, color-mix(in oklch, var(--primary) 9%, var(--card)) 0%, var(--card) 50%, color-mix(in oklch, var(--primary) 9%, var(--card)) 100%);
-  background-size: 200% 100%;
-  animation: avm-shimmer 6s linear infinite;
-}
-@utility avm-shimmer-text {
-  background-image: linear-gradient(90deg, var(--primary), oklch(0.62 0.14 200), var(--primary));
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
