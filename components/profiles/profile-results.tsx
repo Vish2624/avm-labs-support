@@ -1,6 +1,8 @@
 "use client";
 
+import { PackageSearchIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/layout/empty-state";
 import { ProfileResultCard } from "./profile-result-card";
 import type { ProfileSearchResult, ProfileSuggestion } from "@/types/profile";
 
@@ -36,7 +38,7 @@ export function ProfileResults({
   }
 
   if (results.length === 0) {
-    return <p className="py-11 text-center text-[15px] text-muted-foreground">{emptyMessage}</p>;
+    return <EmptyState icon={PackageSearchIcon} title={emptyMessage} />;
   }
 
   return (

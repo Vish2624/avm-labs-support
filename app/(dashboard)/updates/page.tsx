@@ -1,3 +1,5 @@
+import { HistoryIcon } from "lucide-react";
+import { EmptyState } from "@/components/layout/empty-state";
 import { listRecentUpdates, type UpdateKind } from "@/lib/database/updates";
 import { formatDateTime } from "@/lib/utils/dates";
 
@@ -35,7 +37,11 @@ export default async function UpdatesPage() {
       </div>
 
       {updates.length === 0 ? (
-        <p className="py-11 text-center text-[15px] text-muted-foreground">No changes recorded yet.</p>
+        <EmptyState
+          icon={HistoryIcon}
+          title="No changes recorded yet"
+          description="Price list uploads, new tests and availability changes will show up here, newest first."
+        />
       ) : (
         updates.map((u, index) => (
           <div

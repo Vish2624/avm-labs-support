@@ -84,6 +84,15 @@ function allowedEdits(length: number): number {
   return 3;
 }
 
+/** `word` is `target` with exactly one letter removed (and its first letter kept). */
+function isOneLetterDropped(word: string, target: string): boolean {
+  if (word[0] !== target[0]) return false;
+  for (let i = 1; i < target.length; i++) {
+    if (target.slice(0, i) + target.slice(i + 1) === word) return true;
+  }
+  return false;
+}
+
 /** Best score for one query word against the candidate's words. */
 function scoreWord(word: string, candidateWords: string[]): number {
   let best = 0;
@@ -117,6 +126,11 @@ function scoreWord(word: string, candidateWords: string[]): number {
         const prefixDistance = damerauLevenshtein(word, target.slice(0, word.length), allowed);
         if (prefixDistance <= allowed) best = Math.max(best, 0.75 - 0.1 * prefixDistance);
       }
+    } else if (word.length === 3 && target.length === 4 && isOneLetterDropped(word, target)) {
+      // A 4-letter word typed with one letter left out: "acd" -> "acid",
+      // "irn" -> "iron". Still never two different 3-letter codes ("tsh" vs
+      // "ast"): those are the same length, so no letter was dropped.
+      best = Math.max(best, 0.8);
     }
   }
   return best;

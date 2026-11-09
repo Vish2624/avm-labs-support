@@ -20,7 +20,7 @@ more current than `README.md`, which describes an earlier phase.
 - `npm run start` — run the production build
 - `npm run lint` — ESLint (flat config, `eslint.config.mjs`)
 - `npx tsc --noEmit` — type-check without emitting
-- No test runner is configured (`package.json` has no `test` script). Verification so far has been build + lint + live manual smoke-testing against Supabase data.
+- `npm test` — unit tests in `tests/unit/` on Node's built-in runner (no extra dependency; `tests/support/` resolves the `@/` alias and `.ts` imports). Covers the pure search matching against a dummy catalog. Everything else is still verified by build + lint + live smoke-testing against Supabase data.
 
 `README.md` → **Structure** maps every folder and says where new files go; follow it.
 

@@ -33,6 +33,26 @@ export async function loadPricedCatalog(
   locationId: string,
   serviceTypes: readonly ServiceType[]
 ): Promise<PricedCatalog> {
+  // Every assistant question needs the whole priced catalog (several DB
+  // round trips); agents ask in bursts, so it's reused for a short while.
+  const key = `${locationId}|${serviceTypes.join(",")}`;
+  const cached = catalogCache.get(key);
+  if (cached && Date.now() - cached.at < CATALOG_CACHE_MS) return cached.catalog;
+  const catalog = loadPricedCatalogFresh(locationId, serviceTypes);
+  catalogCache.set(key, { at: Date.now(), catalog });
+  // A failed load isn't kept, so the next question tries again.
+  catalog.catch(() => catalogCache.delete(key));
+  return catalog;
+}
+
+/** How long a loaded catalog is reused. Short, so a price change shows up within a minute. */
+const CATALOG_CACHE_MS = 60_000;
+const catalogCache = new Map<string, { at: number; catalog: Promise<PricedCatalog> }>();
+
+async function loadPricedCatalogFresh(
+  locationId: string,
+  serviceTypes: readonly ServiceType[]
+): Promise<PricedCatalog> {
   const [tests, profiles] = await Promise.all([listActiveTests(), listActiveProfilesWithTests()]);
   const testIds = tests.map((test) => test.id);
   const profileIds = profiles.map(({ profile }) => profile.id);

@@ -15,6 +15,22 @@ export interface GeminiModelTry {
   model: string;
   /** Give up on this model after this long and try the next. */
   timeoutMs: number;
+  /**
+   * How much the model reasons before answering. Reading a list needs none
+   * ("minimal", the default: thinking only adds seconds); choosing which
+   * tests fit a symptom does ("low"/"medium").
+   */
+  thinkingLevel?: "minimal" | "low" | "medium" | "high";
+  /** Sampling temperature (default 0, for repeatable reads). */
+  temperature?: number;
+}
+
+/** Per-call request options. */
+export interface GeminiCallOptions {
+  /** Race the next key/model after this long (features an agent is waiting on). */
+  hedgeAfterMs?: number;
+  /** Ask for a JSON reply (responseMimeType application/json): no markdown fences, fewer parse failures. */
+  json?: boolean;
 }
 
 /**
@@ -105,12 +121,13 @@ export async function geminiGenerate(
   parts: GeminiPart[],
   models: readonly GeminiModelTry[] = READER_MODELS,
   role: GeminiKeyRole = "reader",
-  options: { hedgeAfterMs?: number } = {}
+  options: GeminiCallOptions = {}
 ): Promise<string | null> {
   const keys = await keysFor(role);
+  const request: GeminiRequest = { parts, json: options.json ?? false };
   const text = options.hedgeAfterMs
-    ? await generateHedged(keys, parts, models, FEATURE[role], options.hedgeAfterMs)
-    : await generateInTurn(keys, parts, models, FEATURE[role]);
+    ? await generateHedged(keys, request, models, FEATURE[role], options.hedgeAfterMs)
+    : await generateInTurn(keys, request, models, FEATURE[role]);
   if (text === null && keys.length > 0) {
     recordAppEvent({
       kind: "gemini_unavailable",
@@ -121,6 +138,9 @@ export async function geminiGenerate(
   }
   return text;
 }
+
+/** What is sent, whichever key/model ends up answering. */
+type GeminiRequest = { parts: GeminiPart[]; json: boolean };
 
 type KeyChoice = {
   /** api_keys id, for counting calls; null before the table exists. */
@@ -135,13 +155,13 @@ type KeyChoice = {
 /** Each key in turn, each model in turn — one request at a time. */
 async function generateInTurn(
   keys: KeyChoice[],
-  parts: GeminiPart[],
+  request: GeminiRequest,
   models: readonly GeminiModelTry[],
   feature: string
 ): Promise<string | null> {
   for (const key of keys) {
-    for (const { model, timeoutMs } of models) {
-      const text = await attempt(key, model, timeoutMs, parts, feature);
+    for (const model of models) {
+      const text = await attempt(key, model, request, feature);
       if (text !== null) return text;
     }
   }
@@ -162,14 +182,14 @@ const MAX_HEDGED_IN_FLIGHT = 4;
  */
 function generateHedged(
   keys: KeyChoice[],
-  parts: GeminiPart[],
+  request: GeminiRequest,
   models: readonly GeminiModelTry[],
   feature: string,
   hedgeAfterMs: number
 ): Promise<string | null> {
   // Every key × model, ordered so consecutive attempts use a different key
   // and alternate models: k1·m1, k2·m2, k3·m1, k4·m2, then the other pairs.
-  const queue: (KeyChoice & GeminiModelTry)[] = [];
+  const queue: { key: KeyChoice; model: GeminiModelTry }[] = [];
   const queued = new Set<string>();
   for (let pass = 0; pass < models.length; pass++) {
     keys.forEach((key, i) => {
@@ -177,7 +197,7 @@ function generateHedged(
       const id = `${key.apiKey}|${model.model}`;
       if (queued.has(id)) return;
       queued.add(id);
-      queue.push({ ...key, ...model });
+      queue.push({ key, model });
     });
   }
   if (queue.length === 0) return Promise.resolve(null);
@@ -200,9 +220,9 @@ function generateHedged(
     const launch = () => {
       clearTimeout(hedgeTimer);
       if (done || next >= queue.length || inFlight >= MAX_HEDGED_IN_FLIGHT) return;
-      const { model, timeoutMs, ...key } = queue[next++];
+      const { key, model } = queue[next++];
       inFlight++;
-      attempt(key, model, timeoutMs, parts, feature, cancel.signal).then((text) => {
+      attempt(key, model, request, feature, cancel.signal).then((text) => {
         inFlight--;
         if (text !== null) return finish(text);
         // Failed: try the next key straight away; out of options: give up.
@@ -220,9 +240,8 @@ function generateHedged(
 /** One request to one model on one key: its reply text, or null (every failure is logged). */
 async function attempt(
   { id, apiKey, keyRole, label, own }: KeyChoice,
-  model: string,
-  timeoutMs: number,
-  parts: GeminiPart[],
+  { model, timeoutMs, thinkingLevel = "minimal", temperature = 0 }: GeminiModelTry,
+  { parts, json }: GeminiRequest,
   feature: string,
   cancelled?: AbortSignal
 ): Promise<string | null> {
@@ -240,8 +259,11 @@ async function attempt(
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
-        // Reading a list needs no reasoning; thinking only adds seconds.
-        generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } },
+        generationConfig: {
+          temperature,
+          thinkingConfig: { thinkingLevel },
+          ...(json ? { responseMimeType: "application/json" } : {}),
+        },
       }),
       signal: cancelled ? AbortSignal.any([timeout, cancelled]) : timeout,
       cache: "no-store",

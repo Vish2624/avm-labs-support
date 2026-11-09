@@ -55,6 +55,7 @@ export function SearchResults({
   onAddPackage,
   onRemovePackage,
   onSuggestion,
+  catalogEmpty = false,
 }: {
   query: string;
   /** Empty query with one service type picked: its full priced list. */
@@ -78,7 +79,20 @@ export function SearchResults({
   onAddPackage: (result: ProfileSearchResult) => void;
   onRemovePackage: (profileId: string) => void;
   onSuggestion: (text: string) => void;
+  /** Nothing at all is priced here yet (e.g. the catalog is waiting for a price list). */
+  catalogEmpty?: boolean;
 }) {
+  if (catalogEmpty) {
+    return (
+      <div className="flex flex-col gap-1.5 px-4 py-14 text-center">
+        <p className="text-[15px] font-medium">No tests are priced{locationName ? ` at ${locationName}` : ""} yet</p>
+        <p className="text-[13px] text-muted-foreground">
+          Search starts working as soon as an admin uploads this location&apos;s price list.
+        </p>
+      </div>
+    );
+  }
+
   if (!query.trim() && !browsing) {
     return (
       <div className="flex flex-col gap-1.5 px-4 py-14 text-center">

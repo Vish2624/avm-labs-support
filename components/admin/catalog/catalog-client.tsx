@@ -3,7 +3,8 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { PlusIcon } from "lucide-react";
+import { PackageOpenIcon, PlusIcon, SearchXIcon } from "lucide-react";
+import { EmptyState } from "@/components/layout/empty-state";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -172,9 +173,28 @@ export function CatalogClient({ type, locations }: { type: CatalogType; location
               </TableRow>
             ))}
             {items && filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={locations.length + 4} className="py-8 text-center text-sm text-muted-foreground">
-                  Nothing matches.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={locations.length + 4} className="p-0 whitespace-normal">
+                  {items.length === 0 ? (
+                    <EmptyState
+                      icon={PackageOpenIcon}
+                      title={`No ${TYPE_LABELS[type].many.toLowerCase()} yet`}
+                      description={
+                        priced
+                          ? "Upload a price list to fill the catalog, or add one by hand with the New button."
+                          : "Add one with the New button."
+                      }
+                      action={priced ? { label: "Upload a price list", href: "/admin/upload" } : undefined}
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={SearchXIcon}
+                      title={onlyMissing && !normalized ? "Every item has a price" : "Nothing matches"}
+                      description={
+                        normalized ? `No ${TYPE_LABELS[type].one} matches “${query.trim()}”.` : undefined
+                      }
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             ) : null}

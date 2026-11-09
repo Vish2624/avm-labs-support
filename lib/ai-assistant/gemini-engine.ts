@@ -1,12 +1,25 @@
 import "server-only";
 import { findPriced, listOrder, suggestionKey, toSuggestion, type PricedCatalog } from "./priced-catalog";
-import { geminiGenerate, geminiReaderConfigured, READER_MODELS } from "@/lib/ai/gemini";
+import { geminiGenerate, geminiReaderConfigured, READER_MODELS, type GeminiModelTry } from "@/lib/ai/gemini";
 import { CUSTOMER_LABELS, SHORT_NOTICE, customerName } from "./customer-labels";
 import { recordAppEvent } from "@/lib/database/app-events";
 import type { AiAnswer, AiSource, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
-/** Same fast models as the readers, with more time: the reply is a longer JSON object. */
-const ASSISTANT_MODELS = READER_MODELS.map((entry) => ({ ...entry, timeoutMs: entry.timeoutMs + 6_000 }));
+/**
+ * Choosing which tests fit a symptom or condition needs real clinical
+ * reasoning, unlike reading a pasted list, so the assistant asks a full
+ * Flash model with a little thinking first. Timed on this key (Nov 9 2026,
+ * "hair fall and tiredness" against a catalog): 3.5 Flash with low thinking
+ * answered in ~3.5 s with better picks than 3.1 Flash Lite (~7 s with
+ * minimal thinking). 3.8 Flash is newer but was overloaded (503) that day,
+ * so it is the second try; the Flash Lite reader models are the last
+ * fallback, with more time since the reply is a longer JSON object.
+ */
+const ASSISTANT_MODELS: readonly GeminiModelTry[] = [
+  { model: "gemini-3.5-flash", timeoutMs: 14_000, thinkingLevel: "low", temperature: 0.2 },
+  { model: "gemini-3.8-flash", timeoutMs: 14_000, thinkingLevel: "low", temperature: 0.2 },
+  ...READER_MODELS.map((entry) => ({ ...entry, timeoutMs: entry.timeoutMs + 6_000 })),
+];
 /** Below this 0-1 relevance a pick isn't shown at all; at or above HIGH it's "Highly relevant". */
 const MIN_SCORE = 0.5;
 const HIGH_SCORE = 0.75;
@@ -44,6 +57,12 @@ interface GeminiJson {
 const INSTRUCTIONS = `You help the internal quotation team of a diagnostic laboratory. A team member pastes a customer's question; you identify which tests FROM THE LAB'S CATALOG BELOW are medically relevant to it.
 
 Base your picks on current, reputable clinical guidance (e.g. NHS, CDC, Mayo Clinic, endocrine/diabetes societies) for which laboratory tests are commonly considered for the topic.
+
+How to think (silently, before answering):
+1. What is really being asked: a symptom, a condition, a purpose (checkup, gym, pregnancy, travel, before surgery), named tests, or something else? Note any age/sex cues ("my wife", "my son", "65 year old", "after delivery").
+2. For a symptom or condition, list the usual causes a doctor would first rule out with blood/urine tests, e.g. hair fall + tiredness -> anemia/iron deficiency, thyroid, vitamin D, vitamin B12; frequent urination + thirst -> diabetes, kidney function; joint pain -> uric acid, inflammation, vitamin D, rheumatoid factor.
+3. Map each cause to the most specific catalog test that checks it. Read the whole catalog: codes and names vary (e.g. a CBC may be listed as "Hemogram"; Ferritin may sit inside an iron profile).
+4. Drop near-duplicates: never list a profile AND the tests it already contains; never list two tests that measure the same thing.
 
 Rules:
 - Only return codes that appear in the catalog below, copied exactly. Never invent a test, code or price.
@@ -132,7 +151,10 @@ const RECORDS_FALLBACK_REPLY =
  * over to the built-in guide. So `sources` is always empty.
  */
 async function callGemini(system: string, user: string): Promise<{ text: string; sources: AiSource[] }> {
-  const text = await geminiGenerate([{ text: `${system}\n\n${user}` }], ASSISTANT_MODELS, "assistant");
+  // Models in turn, not hedged: a hedged call starts one request per model
+  // at once (four here), which would spend the free quota four times as
+  // fast. An overloaded model answers 503 within a second or two anyway.
+  const text = await geminiGenerate([{ text: `${system}\n\n${user}` }], ASSISTANT_MODELS, "assistant", { json: true });
   if (text === null) throw new Error("Gemini did not answer");
   return { text, sources: [] };
 }
