@@ -8,7 +8,7 @@ This is a greenfield project (empty directory, no existing code to reuse), so th
 
 **Confirmed decisions (from user):**
 - One master test catalog: test code/name is global; each location supplies its own price/TAT/in-house-or-outsourced/availability.
-- Auth (revised after the detailed spec introduced explicit support/admin roles): both get real Supabase Auth logins. Admin = `admin@avmlabs.com`. Support = one shared `support@avmlabs.com` account used by all 5 agents (not individual accounts, not a bare link).
+- Auth (revised after the detailed spec introduced explicit support/admin roles): both get real Supabase Auth logins. Admin = `admin@avmlabs.com`. Support = one shared agent account used by all 5 agents — `b2c@avmlabs.com` since Sep 30 2026 (renamed from `support@avmlabs.com`; same account, role `support`) (not individual accounts, not a bare link).
 - No existing Excel template — schema proposed below, for sign-off before it becomes the import contract.
 - Profile/package price is a fixed bundle price per location (not computed from component tests).
 
