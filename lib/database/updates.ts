@@ -15,7 +15,8 @@ export type UpdateKind =
   | "price_list_activated"
   | "availability_changed"
   | "profile_price_changed"
-  | "test_added";
+  | "test_added"
+  | "website_push";
 
 export interface UpdateEntry {
   id: string;
@@ -25,7 +26,8 @@ export interface UpdateEntry {
   detail: string | null;
 }
 
-const AUDIT_ACTIONS = ["set_availability", "set_profile_price", "create_test"] as const;
+// website_push: the website's "Push to support" (apply_website_catalog).
+const AUDIT_ACTIONS = ["set_availability", "set_profile_price", "create_test", "website_push"] as const;
 
 interface VersionFeedRow {
   id: string;
@@ -117,6 +119,15 @@ export async function listRecentUpdates(limit = 40): Promise<UpdateEntry[]> {
         kind: "availability_changed",
         title: `${label} marked ${status ? AVAILABILITY_LABELS[status] : "changed"}`,
         detail: null,
+      });
+    } else if (row.action === "website_push") {
+      const n = (key: string) => (typeof nv[key] === "number" ? (nv[key] as number) : 0);
+      entries.push({
+        id: `audit:${row.id}`,
+        at: row.created_at,
+        kind: "website_push",
+        title: `Catalog updated from the website (version ${n("version")})`,
+        detail: `${n("tests")} tests · ${n("profiles")} profiles · ${n("specials")} special profiles`,
       });
     } else if (row.action === "set_profile_price") {
       const label = profileLabels[row.entity_id ?? ""] ?? "A profile";

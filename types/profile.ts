@@ -71,6 +71,20 @@ export interface ProfileSuggestion {
   tatText: string;
   availability: AvailabilityStatus;
   serviceType: ServiceType;
+  /**
+   * Set on the Quote's suggestions, which follow the website's rules
+   * (lib/profiles/website-suggestions.ts): what the profile replaces on the
+   * quote and what switching costs. extra.amount is negative when it saves.
+   */
+  website?: {
+    replacesTestIds: string[];
+    replacesProfileIds: string[];
+    extraTestIds: string[];
+    extra: Money;
+    worth: Money;
+    freeHomeCollection: boolean;
+    recommended: boolean;
+  };
 }
 
 /**

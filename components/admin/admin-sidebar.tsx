@@ -5,12 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const ADMIN_NAV_ITEMS = [
-  { href: "/admin/tests", label: "Tests" },
-  { href: "/admin/components", label: "Components" },
-  { href: "/admin/calculated", label: "Calculated" },
-  { href: "/admin/profiles", label: "Profiles" },
-  { href: "/admin/packages", label: "Packages" },
-  { href: "/admin/upload", label: "Upload" },
+  { href: "/admin/website", label: "Website catalog" },
   { href: "/admin/aliases", label: "Aliases" },
   { href: "/admin/searches", label: "Missed searches" },
   { href: "/admin/health", label: "Health & API usage" },
@@ -27,7 +22,7 @@ export function AdminSidebar() {
         <p className="text-[11px] font-semibold tracking-[0.06em] text-primary uppercase">
           Admin panel · only admins can see this
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Price lists &amp; catalog</h1>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Aliases, searches &amp; health</h1>
       </div>
     <nav className="flex w-fit flex-wrap gap-0.5 rounded-[10px] bg-muted p-[3px]">
       {ADMIN_NAV_ITEMS.map(({ href, label }) => {

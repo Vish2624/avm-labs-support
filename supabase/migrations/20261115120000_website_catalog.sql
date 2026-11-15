@@ -68,8 +68,12 @@ create table if not exists website_sync (
   pushed_at timestamptz,
   fingerprints jsonb,
   snapshot jsonb,
-  counts jsonb
+  counts jsonb,
+  -- Each website country's minimum billing and free home collection limit, for the profile suggestions.
+  rules jsonb
 );
+
+alter table website_sync add column if not exists rules jsonb;
 
 alter table website_sync enable row level security;
 revoke all on website_sync from anon, authenticated;
@@ -394,7 +398,8 @@ begin
 
   update website_sync
   set version = version + 1, pushed_at = now(), fingerprints = apply_website_catalog.fingerprints,
-      snapshot = apply_website_catalog.snapshot, counts = v_counts
+      snapshot = apply_website_catalog.snapshot, counts = v_counts,
+      rules = apply_website_catalog.snapshot->'regions'
   where id = 1
   returning version into v_version;
 

@@ -13,6 +13,7 @@ const KIND_LABEL: Record<UpdateKind, string> = {
   availability_changed: "Availability",
   profile_price_changed: "Profile price",
   test_added: "New test",
+  website_push: "Website",
 };
 
 // Tag color per kind — same blue/amber/green palette the rest of the app
@@ -22,6 +23,7 @@ const KIND_TAG_CLASSNAME: Record<UpdateKind, string> = {
   availability_changed: "bg-warning/20 text-warning-foreground",
   profile_price_changed: "bg-success/15 text-success-foreground",
   test_added: "bg-success/15 text-success-foreground",
+  website_push: "bg-accent text-accent-foreground",
 };
 
 export default async function UpdatesPage() {
@@ -40,7 +42,7 @@ export default async function UpdatesPage() {
         <EmptyState
           icon={HistoryIcon}
           title="No changes recorded yet"
-          description="Price list uploads, new tests and availability changes will show up here, newest first."
+          description="Each push of the catalog from the website will show up here, newest first."
         />
       ) : (
         updates.map((u, index) => (

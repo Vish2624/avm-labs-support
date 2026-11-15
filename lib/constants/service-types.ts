@@ -6,9 +6,11 @@ export const SERVICE_TYPES = ["in_house", "outsource"] as const;
 
 export type ServiceType = (typeof SERVICE_TYPES)[number];
 
+// The website's CRL tests and special profiles arrive as "outsource"
+// (apply_website_catalog in supabase/migrations/20261115120000_website_catalog.sql).
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   in_house: "In-House",
-  outsource: "Outsourced",
+  outsource: "Special",
 };
 
 export function isServiceType(value: string): value is ServiceType {
