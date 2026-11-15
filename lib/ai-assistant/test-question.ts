@@ -1,5 +1,5 @@
 import "server-only";
-import { listActiveTests } from "@/lib/database/tests";
+import { getTestParameters, listActiveTests } from "@/lib/database/tests";
 import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
 import { listActiveAliases } from "@/lib/database/aliases";
@@ -21,7 +21,7 @@ const SUBJECT_PATTERNS: [TestQuestionSubject, RegExp][] = [
   ["fasting", /\b(fasting|fast|empty stomach|eat|eating|ate|food|breakfast|meal|drink|drinking|water|tea|coffee)\b/],
   [
     "components",
-    /\b(param\w*|components?|includes?|included|including|contains?|containing|consists?|covers?|covered|inside|breakdown|tests? (in|of|under|inside)|what s in)\b/,
+    /\b(param\w*|components?|includes?|included|including|contains?|containing|consists?|covers?|covered|inside|breakdown|tests? (in|of|under|inside)|what (s|is|are) (in|there in))\b/,
   ],
   ["tat", /\b(tat|how long|how many days|how many hours|report time|turnaround|result time|results? ready|report ready|when will|when can)\b/],
   ["price", /\b(price|prices|cost|costs|rate|rates|charge|charges|how much|fee|fees)\b/],
@@ -186,19 +186,30 @@ export function toDetailSuggestions(items: PricedItem[]): AiSuggestion[] {
   );
 }
 
-function componentLines(name: string, tests: ProfileTestSummary[]): string {
-  if (tests.length === 0) return `${name}: no parameter list in our records — please confirm with the lab team.`;
-  const list = tests.map((test, index) => `${index + 1}. ${test.officialName}`).join("\n");
-  return `${name} includes ${tests.length} parameter${tests.length === 1 ? "" : "s"}:\n${list}`;
+/** "usually includes" = Gemini's general guidance for a test whose list isn't in our records. */
+function componentLines(name: string, parameters: string[], typical = false): string {
+  if (parameters.length === 0) return `${name}: no parameter list in our records — please confirm with the lab team.`;
+  if (typical) {
+    const list = parameters.map((parameter, index) => `${index + 1}. ${parameter}`).join("\n");
+    return `${name} usually includes (general guidance, not from our records — confirm the exact list with the lab team if needed):\n${list}`;
+  }
+  if (parameters.length === 1 && normalizeQuery(parameters[0]) === normalizeQuery(name)) return `${name} is a single test, not a panel.`;
+  const list = parameters.map((parameter, index) => `${index + 1}. ${parameter}`).join("\n");
+  return `${name} includes ${parameters.length} parameter${parameters.length === 1 ? "" : "s"}:\n${list}`;
 }
 
+const testNames = (tests: ProfileTestSummary[]) => tests.map((test) => test.officialName);
+
 /**
- * "What parameters are in CBC?" — a package lists its own tests; a single
- * test uses the package stored under the same code or name (the parameter
- * roster lives in profile_tests). Only stored data, never a guessed list.
+ * Each item's parameter list from our own records: a package's tests; a
+ * single test's list as the website sent it (details.parameters), else the
+ * package stored under the same code or name. Items with no list are left out.
  */
-export async function componentsAnswer(items: AiSuggestion[]): Promise<AiAnswer> {
-  const profiles = await listActiveProfilesWithTests();
+export async function recordedComponents(items: AiSuggestion[]): Promise<Map<AiSuggestion, string[]>> {
+  const [profiles, parameters] = await Promise.all([
+    listActiveProfilesWithTests(),
+    getTestParameters(items.flatMap((item) => (item.kind === "test" ? [item.testId] : []))),
+  ]);
   const matchFor = (item: AiSuggestion) =>
     profiles.find(
       ({ profile, testIds }) =>
@@ -206,7 +217,7 @@ export async function componentsAnswer(items: AiSuggestion[]): Promise<AiAnswer>
         (normalizeQuery(profile.code) === normalizeQuery(item.code) ||
           normalizeQuery(profile.name) === normalizeQuery(item.name))
     );
-  const testItems = items.filter((item) => item.kind === "test");
+  const testItems = items.filter((item) => item.kind === "test" && !parameters.has(item.testId));
   const rosters = await hydrateProfileTests(
     new Map(
       testItems.flatMap((item) => {
@@ -215,14 +226,56 @@ export async function componentsAnswer(items: AiSuggestion[]): Promise<AiAnswer>
       })
     )
   );
+  return new Map(
+    items.flatMap((item) => {
+      const match = item.kind === "test" ? matchFor(item) : undefined;
+      const names =
+        item.kind === "package"
+          ? testNames(item.tests)
+          : (parameters.get(item.testId) ?? testNames(match ? (rosters.get(match.profile.id) ?? []) : []));
+      return names.length > 0 ? [[item, names] as const] : [];
+    })
+  );
+}
+
+/**
+ * "What parameters are in CBC?" — from our records where we have the list,
+ * else Gemini's usual parameters (`typical`, keyed by upper-cased code),
+ * clearly marked as general guidance.
+ */
+export function componentsAnswer(
+  items: AiSuggestion[],
+  recorded: Map<AiSuggestion, string[]>,
+  typical: Map<string, string[]> = new Map()
+): AiAnswer {
   const text = items
     .map((item) => {
-      if (item.kind === "package") return componentLines(item.name, item.tests);
-      const match = matchFor(item);
-      return componentLines(item.name, match ? (rosters.get(match.profile.id) ?? []) : []);
+      const own = recorded.get(item);
+      if (own) return componentLines(item.name, own);
+      return componentLines(item.name, typical.get(item.code.toUpperCase()) ?? [], true);
     })
     .join("\n\n");
   return { subject: "components", verdict: null, text };
+}
+
+/** The customer's WhatsApp reply to a parameters question, from the same lists as componentsAnswer(). */
+export function componentsReply(
+  items: AiSuggestion[],
+  recorded: Map<AiSuggestion, string[]>,
+  typical: Map<string, string[]>
+): string {
+  const bullets = (names: string[]) => names.map((name) => `• ${friendlyName(name)}`).join("\n");
+  const parts = items.map((item) => {
+    const name = customerName(item);
+    const own = recorded.get(item);
+    if (own?.length === 1) return `${name} measures ${friendlyName(own[0])}.`;
+    if (own) return `${name} includes:\n${bullets(own)}`;
+    const usual = typical.get(item.code.toUpperCase());
+    if (usual?.length === 1) return `${name} measures ${usual[0]}.`;
+    if (usual) return `${name} usually includes:\n${bullets(usual)}`;
+    return `${name}: let me confirm the exact parameters with our lab team and get back to you.`;
+  });
+  return `Hi! ${parts.join("\n\n")}`;
 }
 
 /**
@@ -295,7 +348,7 @@ export function builtinAnswer(subject: TestQuestionSubject, items: AiSuggestion[
         subject,
         verdict: null,
         text: items
-          .map((item) => componentLines(item.name, item.kind === "package" ? item.tests : []))
+          .map((item) => componentLines(item.name, item.kind === "package" ? testNames(item.tests) : []))
           .join("\n\n"),
       };
     case "price":

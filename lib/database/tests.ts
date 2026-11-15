@@ -123,6 +123,32 @@ export async function getTestsByIds(ids: string[]): Promise<Test[]> {
   return ((data ?? []) as TestRow[]).map(mapTest);
 }
 
+interface TestParametersRow {
+  id: string;
+  parameters: unknown;
+}
+
+/**
+ * Each test's parameter list as the website sends it (details.parameters,
+ * e.g. CBC's 21 parameters), keyed by test id. Tests without one are left out.
+ */
+export async function getTestParameters(ids: string[]): Promise<Map<string, string[]>> {
+  if (ids.length === 0) return new Map();
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("tests").select("id, parameters:details->parameters").in("id", ids);
+
+  if (error) throw error;
+  return new Map(
+    ((data ?? []) as TestParametersRow[]).flatMap((row) => {
+      const names = Array.isArray(row.parameters)
+        ? row.parameters.filter((name): name is string => typeof name === "string" && name.trim() !== "")
+        : [];
+      return names.length > 0 ? [[row.id, names] as const] : [];
+    })
+  );
+}
+
 /** Every test, active or not, with its links — the Admin Tests catalog table. */
 export async function listAllTests(): Promise<Test[]> {
   const supabase = createAdminClient();

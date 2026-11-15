@@ -5,6 +5,7 @@ import { correctSpelling } from "./spell-correct";
 import { asksBeforeTreatment, matchTopics, recommendFromGuide } from "./builtin-engine";
 import {
   answerTestQuestionWithGemini,
+  componentsPerTestWithGemini,
   fastingPerTestWithGemini,
   geminiConfigured,
   recommendWithGemini,
@@ -15,8 +16,10 @@ import { recordAppEvent } from "@/lib/database/app-events";
 import {
   builtinAnswer,
   componentsAnswer,
+  componentsReply,
   detectSubject,
   namesPackageExactly,
+  recordedComponents,
   recordsReply,
   resolveNamedItems,
   testNameIn,
@@ -49,12 +52,13 @@ function unavailableNote(names: string[]): string | null {
 async function answerTestQuestion(
   question: string,
   catalog: PricedCatalog,
-  forcedName: string | null
+  forcedName: string | null,
+  forcedSubject: TestQuestionSubject | null = null
 ): Promise<Pick<
   AiAssistantResponse,
   "kind" | "lookupQuery" | "answer" | "reply" | "results" | "engine" | "sources" | "topic" | "intent"
 > | null> {
-  let subject: TestQuestionSubject | null = forcedName ? "details" : detectSubject(question);
+  let subject: TestQuestionSubject | null = forcedName ? (forcedSubject ?? "details") : detectSubject(question);
   const name = forcedName ? normalizeQuery(forcedName) : testNameIn(question);
   if (!name) return null;
 
@@ -86,10 +90,34 @@ async function answerTestQuestion(
   const effectiveSubject = subject ?? "details";
   // Parameters come only from our own records: a package's tests, or the
   // package stored under the same code/name as a test (CBC -> Hemogram).
-  let answer = effectiveSubject === "components" ? await componentsAnswer(results) : builtinAnswer(effectiveSubject, results);
+  let answer = builtinAnswer(effectiveSubject, results);
   let engine: AiAssistantResponse["engine"] = "builtin";
   let sources: AiSource[] = [];
   let reply: string | null = null;
+
+  // Parameters come from our records where we have the list (a package's
+  // tests, the website's list for a test such as CBC); for the rest, Gemini
+  // gives the parameters the test usually reports, marked as general guidance.
+  if (effectiveSubject === "components") {
+    const recorded = await recordedComponents(results);
+    const missing = results.filter((item) => !recorded.has(item));
+    let typical = new Map<string, string[]>();
+    if (missing.length > 0 && (await geminiConfigured())) {
+      try {
+        typical = await componentsPerTestWithGemini(missing);
+        if (typical.size > 0) engine = "gemini";
+      } catch (error) {
+        recordAppEvent({
+          kind: "fallback",
+          feature: "assistant",
+          message: "Parameters answered from our records only (Gemini's answer was unusable)",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    answer = componentsAnswer(results, recorded, typical);
+    reply = componentsReply(results, recorded, typical);
+  }
 
   // Fasting/what-is questions can use Gemini + Google Search; price, TAT and
   // availability always come straight from our own records.
@@ -223,7 +251,7 @@ export async function recommendTests(
     try {
       const gemini = await recommendWithGemini(rawQuestion, catalog);
       if (gemini.requestType === "direct_lookup" && gemini.lookupQuery) {
-        const lookup = await answerTestQuestion(question, catalog, gemini.lookupQuery);
+        const lookup = await answerTestQuestion(question, catalog, gemini.lookupQuery, gemini.lookupSubject);
         if (lookup) return { ...base, ...lookup, engine: "gemini" };
       }
       if (gemini.requestType === "general_question" && gemini.answer) {

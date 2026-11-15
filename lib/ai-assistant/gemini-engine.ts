@@ -32,6 +32,8 @@ export function geminiConfigured(): Promise<boolean> {
 export interface GeminiResult {
   requestType: "recommendation" | "direct_lookup" | "general_question" | "not_a_test_request";
   lookupQuery: string | null;
+  /** "components" when a direct lookup asks what the item includes. */
+  lookupSubject: "components" | null;
   /** The written reply to a general_question. */
   answer: string | null;
   /** The ready-to-send customer reply (null for a direct lookup). */
@@ -46,6 +48,7 @@ export interface GeminiResult {
 interface GeminiJson {
   request_type?: unknown;
   lookup_query?: unknown;
+  lookup_subject?: unknown;
   answer?: unknown;
   reply?: unknown;
   topic?: unknown;
@@ -72,6 +75,7 @@ Rules:
 - relevance_score: 0.75-1 = highly relevant, 0.5-0.74 = may be relevant. Omit anything weaker. Return at most 12, best first.
 - reason: what the test checks, in 2-5 plain lowercase words a customer understands, e.g. "iron stores", "thyroid function", "3-month average blood sugar". No diagnosis, no medicine advice, no "you need".
 - If the question simply names one specific test or asks its price/TAT/availability (e.g. "price of HbA1c"), set request_type "direct_lookup" and lookup_query to that test name, with no results.
+- If it asks what a specific test, profile or package includes — its parameters, components or list of tests, in any wording ("what all comes in CBC", "tests in hemogram", "thyroid profile list", "what is checked in LFT") — set request_type "direct_lookup", lookup_subject "components", and lookup_query to that item's name exactly as it appears in the catalog (e.g. "hemogram" -> the catalog's CBC name), with no results. Otherwise lookup_subject is null.
 - Any request for which tests to do — for a symptom, condition, checkup or purpose ("which tests for hair fall?", "diabetes checkup", "tests before starting gym") — is request_type "recommendation", never "general_question".
 - If it is any other question about blood/lab tests, results or sample collection — what a test is or why it is done, normal/reference ranges, what a high or low value can mean, sample type, preparation, how often to test, the difference between tests, which test to choose, in any wording or language — set request_type "general_question": write "answer" and put the catalog tests it is about (or that fit it) in "results".
 - "answer" (general_question only): a clear, plain reply for a support agent to pass on — 2-6 short sentences, or short "- " lines for lists. Reference ranges vary by lab, age and sex: say they are typical. No diagnosis, no prescription or medicine advice; for interpreting a patient's own result, advise consulting their doctor. Do not mention prices, report times or availability.
@@ -85,7 +89,7 @@ Rules:
   Never mention prices, report times or availability in "reply".
 
 Reply with ONLY this JSON object, no markdown:
-{"request_type":"recommendation"|"direct_lookup"|"general_question"|"not_a_test_request","lookup_query":string|null,"answer":string|null,"reply":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
+{"request_type":"recommendation"|"direct_lookup"|"general_question"|"not_a_test_request","lookup_query":string|null,"lookup_subject":"components"|null,"answer":string|null,"reply":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
 "topic" is a short label (e.g. "Weight management"); "intent" is the purpose (e.g. "Checks before starting medication").`;
 
 /** Every test, profile and package Gemini may recommend from. */
@@ -238,6 +242,41 @@ export async function fastingPerTestWithGemini(items: AiSuggestion[]): Promise<M
   return found;
 }
 
+const COMPONENTS_PER_TEST_INSTRUCTIONS = `You help the internal team of a diagnostic laboratory. For EACH lab test listed, give the parameters (measurements) it standardly reports, from reputable sources (major lab test directories, MedlinePlus, Lab Tests Online).
+
+Rules:
+- One entry per listed code, copied exactly.
+- "parameters": the usual parameter names in plain clinical wording, e.g. a thyroid profile -> ["Total T3", "Total T4", "TSH"]. A single measurement lists just that one. At most 30.
+- Only standard, widely reported parameters; if the test name is too vague to say, return an empty list.
+- Never mention prices, report times or availability.
+
+Reply with ONLY this JSON object, no markdown:
+{"tests":[{"code":string,"parameters":[string]}]}`;
+
+const MAX_PARAMETERS = 30;
+
+/**
+ * The parameters a test usually reports, for tests whose list isn't in our
+ * records — general guidance, keyed by upper-cased code. Tests Gemini
+ * doesn't answer for are simply missing.
+ */
+export async function componentsPerTestWithGemini(items: AiSuggestion[]): Promise<Map<string, string[]>> {
+  const listed = items.map((item) => `${item.code} | ${item.name}`).join("\n");
+  const { text } = await callGemini(COMPONENTS_PER_TEST_INSTRUCTIONS, `Tests (code | name):\n${listed}`);
+  const json = parseJson(text) as { tests?: { code?: unknown; parameters?: unknown }[] };
+  const wanted = new Set(items.map((item) => item.code.toUpperCase()));
+  const found = new Map<string, string[]>();
+  for (const entry of Array.isArray(json.tests) ? json.tests : []) {
+    const code = str(entry.code)?.toUpperCase();
+    const parameters = (Array.isArray(entry.parameters) ? entry.parameters : [])
+      .map((parameter) => recordsSafe(str(parameter)))
+      .filter((parameter): parameter is string => parameter !== null)
+      .slice(0, MAX_PARAMETERS);
+    if (code && wanted.has(code) && parameters.length > 0) found.set(code, parameters);
+  }
+  return found;
+}
+
 /** Most tests named in a recommendation reply — the rest are still listed below it to tick. */
 const MAX_REPLY_TESTS = 6;
 
@@ -303,6 +342,7 @@ export async function recommendWithGemini(question: string, catalog: PricedCatal
   return {
     requestType,
     lookupQuery: str(json.lookup_query),
+    lookupSubject: requestType === "direct_lookup" && json.lookup_subject === "components" ? "components" : null,
     answer: requestType === "general_question" ? recordsSafe(str(json.answer)) : null,
     // The recommendation reply is built from DB records; any reply Gemini
     // wrote itself is dropped if it states a price/availability/report time.
