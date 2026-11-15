@@ -11,13 +11,16 @@ import type { AiAnswer, AiSource, AiSuggestion, FastingInfo, TestQuestionSubject
  * Flash model with a little thinking first. Timed on this key (Nov 9 2026,
  * "hair fall and tiredness" against a catalog): 3.5 Flash with low thinking
  * answered in ~3.5 s with better picks than 3.1 Flash Lite (~7 s with
- * minimal thinking). 3.8 Flash is newer but was overloaded (503) that day,
- * so it is the second try; the Flash Lite reader models are the last
- * fallback, with more time since the reply is a longer JSON object.
+ * minimal thinking). The Flash Lite reader models are the fallback, with
+ * more time since the reply is a longer JSON object.
+ *
+ * Nov 15 2026, 14 days of Admin > API usage: 3.5 Flash answered in a median
+ * 3.3 s (slowest 7.3 s), so it gets 8 s, not 14; 3.8 Flash never answered
+ * once (timeouts at 14 s, errors at ~13 s), so it was dropped — it only made
+ * a slow 3.5 Flash cost another 14 s before the 1.5 s Flash Lite answer.
  */
 const ASSISTANT_MODELS: readonly GeminiModelTry[] = [
-  { model: "gemini-3.5-flash", timeoutMs: 14_000, thinkingLevel: "low", temperature: 0.2 },
-  { model: "gemini-3.8-flash", timeoutMs: 14_000, thinkingLevel: "low", temperature: 0.2 },
+  { model: "gemini-3.5-flash", timeoutMs: 8_000, thinkingLevel: "low", temperature: 0.2 },
   ...READER_MODELS.map((entry) => ({ ...entry, timeoutMs: entry.timeoutMs + 6_000 })),
 ];
 /** Below this 0-1 relevance a pick isn't shown at all; at or above HIGH it's "Highly relevant". */
