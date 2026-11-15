@@ -10,8 +10,8 @@ import { formatTat } from "@/lib/utils/format-tat";
 import type { ProfileSuggestion } from "@/types/profile";
 import type { QuotationLineItem } from "@/types/quotation";
 
-// Up to four on the screen, the rest behind "Show all" (as on the website).
-const SHOWN = 4;
+// Only the best one on the screen, the rest behind "See all profiles".
+const SHOWN = 1;
 
 const listOf = (names: string[]) =>
   names.length <= 2 ? names.join(" & ") : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
@@ -125,7 +125,7 @@ export function PackageSuggestions({
             onClick={() => setShowAll(true)}
             className="flex h-[34px] items-center justify-between rounded-[9px] px-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <span>{suggestions.length > SHOWN ? `Show all ${suggestions.length}` : "Why, and the tests in each"}</span>
+            <span>{suggestions.length > SHOWN ? `See all profiles (${suggestions.length})` : "Why, and the tests in it"}</span>
             <ChevronRightIcon className="size-3.5" />
           </button>
         </>
