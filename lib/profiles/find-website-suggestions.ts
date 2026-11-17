@@ -62,6 +62,7 @@ export async function findWebsiteSuggestions(
           worth: money(s.worth),
           freeHomeCollection: s.freeHomeCollection,
           recommended: s.recommended,
+          pick: s.pick,
         },
       },
     ];

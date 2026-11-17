@@ -9,6 +9,13 @@
  * smaller profile it wholly contains) and either costs less, or adds tests
  * worth more than the difference, for a difference in scale with the quote.
  * Worked out from prices and tests only, never a health judgement.
+ *
+ * Two additions to the website's rules, so agents can always see where the
+ * quoted tests are sold together:
+ * - a profile that has every test on the quote and costs the same is a pick
+ *   too (one line instead of several; the website skips it as no gain);
+ * - every other profile that contains quoted tests follows the picks, with
+ *   `pick: false`, those covering the most of the quote first, then cheapest.
  */
 
 // Profile categories for one purpose (school, hair fall, screening): only
@@ -65,6 +72,8 @@ export interface WebsiteSuggestion {
   /** The quote reaches the free home collection limit with this profile. */
   freeHomeCollection: boolean;
   recommended: boolean;
+  /** Passes the website's rules (or is the same price for every quoted test); false: only contains quoted tests. */
+  pick: boolean;
 }
 
 /** profile `a` has every test of profile `b`. */
@@ -106,6 +115,7 @@ export function websiteSuggestions({
         : 0.25;
 
   const out: { suggestion: WebsiteSuggestion; rank: number; value: number }[] = [];
+  const rest: { suggestion: WebsiteSuggestion; covered: number }[] = [];
   for (const p of profiles) {
     if (!(p.price > 0) || inQuote.includes(p) || coveredByQuote(p)) continue;
     const ovT = quoteTestIds.filter((id) => p.testIds.includes(id));
@@ -119,22 +129,30 @@ export function websiteSuggestions({
     const after = total - replaced + p.price;
     const extra = billed(after) - billed(total);
     const worth = sum(others);
-    if (extra >= 0 && PURPOSE_CATEGORIES.includes(p.category)) continue;
-    if (extra > 0 && (worth <= extra || extra > stretch)) continue;
-    if (extra === 0 && !others.length) continue;
+    const wholeQuote = ovT.length === quoteTestIds.length && ovP.length === inQuote.length;
+    const pick =
+      !(extra >= 0 && PURPOSE_CATEGORIES.includes(p.category)) &&
+      !(extra > 0 && (worth <= extra || extra > stretch)) &&
+      !(extra === 0 && !others.length && !wholeQuote);
+    const suggestion: WebsiteSuggestion = {
+      profileId: p.id,
+      replacesTestIds: ovT,
+      replacesProfileIds: ovP.map((q) => q.id),
+      extraTestIds: others,
+      extra,
+      worth,
+      freeHomeCollection: total < rules.homeCollectionFreeFrom && after >= rules.homeCollectionFreeFrom,
+      recommended: p.recommended,
+      pick,
+    };
+    if (!pick) {
+      rest.push({ suggestion, covered: ovT.length + ovP.length });
+      continue;
+    }
     const covered = [...ovT, ...ovP.flatMap((q) => q.testIds)].flatMap((id) => testById.get(id) ?? []);
     const fit = covered.length / p.testIds.length;
     out.push({
-      suggestion: {
-        profileId: p.id,
-        replacesTestIds: ovT,
-        replacesProfileIds: ovP.map((q) => q.id),
-        extraTestIds: others,
-        extra,
-        worth,
-        freeHomeCollection: total < rules.homeCollectionFreeFrom && after >= rules.homeCollectionFreeFrom,
-        recommended: p.recommended,
-      },
+      suggestion,
       rank: extra < 0 ? 0 : extra === 0 ? 1 : 2,
       value: extra > 0 ? (worth / extra) * (0.5 + fit) * (0.5 + theme(p, covered)) : worth - extra,
     });
@@ -146,5 +164,6 @@ export function websiteSuggestions({
       b.value - a.value ||
       a.suggestion.extra - b.suggestion.extra
   );
-  return out.map((entry) => entry.suggestion);
+  rest.sort((a, b) => b.covered - a.covered || a.suggestion.extra - b.suggestion.extra);
+  return [...out, ...rest].map((entry) => entry.suggestion);
 }

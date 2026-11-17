@@ -75,6 +75,7 @@ export interface ProfileSuggestion {
    * Set on the Quote's suggestions, which follow the website's rules
    * (lib/profiles/website-suggestions.ts): what the profile replaces on the
    * quote and what switching costs. extra.amount is negative when it saves.
+   * pick: false when it only contains quoted tests without being a better deal.
    */
   website?: {
     replacesTestIds: string[];
@@ -84,6 +85,7 @@ export interface ProfileSuggestion {
     worth: Money;
     freeHomeCollection: boolean;
     recommended: boolean;
+    pick: boolean;
   };
 }
 

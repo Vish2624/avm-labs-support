@@ -15,7 +15,9 @@ const EMPTY_PROFILE_SUGGESTIONS: ProfileSuggestion[] = [];
  * for it — the same ones, in the same order, the website suggests for the
  * same cart (lib/profiles/website-suggestions.ts): ones that replace
  * something on the quote and either cost less or add tests worth more than
- * the difference. A profile already on the quote isn't suggested again.
+ * the difference (or have every quoted test at the same price), then every
+ * other profile containing quoted tests (`website.pick` false). A profile
+ * already on the quote isn't suggested again.
  */
 export function useProfileSuggestions(lineItems: QuotationLineItem[], locationId: string) {
   const addedTestIds = useMemo(

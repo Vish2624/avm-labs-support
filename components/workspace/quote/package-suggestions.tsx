@@ -10,7 +10,8 @@ import { formatTat } from "@/lib/utils/format-tat";
 import type { ProfileSuggestion } from "@/types/profile";
 import type { QuotationLineItem } from "@/types/quotation";
 
-// Only the best one on the screen, the rest behind "See all profiles".
+// Only the best one on the screen (a pick, else the cheapest profile with the
+// quoted tests), the rest behind "See all profiles".
 const SHOWN = 1;
 
 const listOf = (names: string[]) =>
@@ -33,8 +34,14 @@ function pitchOf(suggestion: ProfileSuggestion, lineItems: QuotationLineItem[]) 
   const free = w.extra.amount === 0;
   const amount = formatCurrency({ ...w.extra, amount: Math.abs(w.extra.amount) });
   return {
-    label: w.recommended ? "Featured" : save ? "Saving" : "Profile match",
-    headline: save ? `Switch & save ${amount}` : free ? `Get ${testsWord(n)} at no extra cost` : `Get ${testsWord(n)} for ${amount} more`,
+    label: !w.pick ? "Has your tests" : w.recommended ? "Featured" : save ? "Saving" : "Profile match",
+    headline: save
+      ? `Switch & save ${amount}`
+      : free
+        ? n
+          ? `Get ${testsWord(n)} at no extra cost`
+          : "Same price, as one profile"
+        : `Get ${testsWord(n)} for ${amount} more`,
     detail:
       (save || free
         ? `${suggestion.name} covers ${replaced}${n ? ` — plus ${testsWord(n)}.` : "."}`
@@ -60,7 +67,8 @@ function Pill({ text, save }: { text: string; save: boolean }) {
 // the "Find tests" column, best first, by the website's rules (see
 // use-profile-suggestions.ts). Each has a one-click "Use" (swaps what it
 // replaces for the profile at its bundle price), and the dialog lists every
-// suggestion with why and its full test list.
+// suggestion with why and its full test list, then every other profile
+// that contains quoted tests.
 export function PackageSuggestions({
   suggestions,
   loading,
@@ -81,6 +89,12 @@ export function PackageSuggestions({
 
   if (!hasSelection || (!loading && suggestions.length === 0)) return null;
 
+  const picks = suggestions.filter((suggestion) => suggestion.website?.pick !== false);
+  const others = suggestions.filter((suggestion) => suggestion.website?.pick === false);
+  const single = lineItems.length === 1;
+  const title = picks.length > 0 || loading ? "Better as a profile" : `Profiles with ${single ? "this test" : "these tests"}`;
+  const shown = (picks.length > 0 ? picks : others).slice(0, SHOWN);
+
   function handleUse(suggestion: ProfileSuggestion) {
     setShowAll(false);
     onUse(suggestion);
@@ -88,13 +102,13 @@ export function PackageSuggestions({
 
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-7 pt-3 pb-4">
-      <p className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">Better as a profile</p>
+      <p className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">{title}</p>
 
       {loading || suggestions.length === 0 ? (
         <Skeleton className="h-[66px] w-full rounded-2xl" />
       ) : (
         <>
-          {suggestions.slice(0, SHOWN).map((suggestion) => {
+          {shown.map((suggestion) => {
             const pitch = pitchOf(suggestion, lineItems);
             return (
               <div
@@ -125,7 +139,11 @@ export function PackageSuggestions({
             onClick={() => setShowAll(true)}
             className="flex h-[34px] items-center justify-between rounded-[9px] px-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <span>{suggestions.length > SHOWN ? `See all profiles (${suggestions.length})` : "Why, and the tests in it"}</span>
+            <span>
+              {suggestions.length > SHOWN
+                  ? `See all profiles (${suggestions.length})`
+                  : "Why, and the tests in it"}
+            </span>
             <ChevronRightIcon className="size-3.5" />
           </button>
         </>
@@ -134,16 +152,24 @@ export function PackageSuggestions({
       <Dialog open={showAll} onOpenChange={setShowAll}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>Better as a profile</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogDescription>
-              The profiles the website suggests for this quote, best first{locationName ? ` · ${locationName}` : ""}
+              {picks.length > 0
+                ? "The profiles the website suggests for this quote, best first"
+                : `Every profile with ${single ? "this test" : "tests on this quote"}, cheapest first`}
+              {locationName ? ` · ${locationName}` : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="-mx-1 flex max-h-[65vh] flex-col divide-y divide-border/70 overflow-y-auto px-1">
-            {suggestions.map((suggestion) => {
+            {suggestions.map((suggestion, index) => {
               const pitch = pitchOf(suggestion, lineItems);
               return (
                 <div key={suggestion.profileId} className="flex flex-col gap-2.5 py-4 first:pt-1">
+                  {picks.length > 0 && index === picks.length && (
+                    <p className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                      Also have tests on this quote
+                    </p>
+                  )}
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">

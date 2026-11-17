@@ -25,6 +25,7 @@ const profile = (
 const rules = { minBill: 1500, homeCollectionFreeFrom: 18000 };
 const run = (quoteTestIds: string[], profiles: SuggestionProfile[], quoteProfileIds: string[] = []) =>
   websiteSuggestions({ quoteTestIds, quoteProfileIds, tests: TESTS, profiles, rules });
+const picks = (...args: Parameters<typeof run>) => run(...args).filter((s) => s.pick);
 
 test("a profile that costs less than the tests it replaces is a saving, first", () => {
   const [first, second] = run(["a", "b"], [profile("more", 12000, ["a", "d"]), profile("save", 8000, ["a", "b", "c"])]);
@@ -38,13 +39,46 @@ test("a profile that costs less than the tests it replaces is a saving, first", 
   assert.equal(second.worth, 10000);
 });
 
-test("a dearer profile is left out when its extra tests aren't worth the difference", () => {
-  assert.deepEqual(run(["a"], [profile("p", 20000, ["a", "c"])]), []);
+test("a dearer profile isn't a pick when its extra tests aren't worth the difference", () => {
+  assert.deepEqual(picks(["a"], [profile("p", 20000, ["a", "c"])]), []);
 });
 
-test("single-purpose profiles are suggested only when they cost less", () => {
-  assert.deepEqual(run(["a", "b"], [profile("kids", 9000, ["a", "b", "c"], { category: "kids" })]), []);
-  assert.equal(run(["a", "b"], [profile("kids", 8000, ["a", "b", "c"], { category: "kids" })]).length, 1);
+test("single-purpose profiles are picked only when they cost less", () => {
+  assert.deepEqual(picks(["a", "b"], [profile("kids", 9000, ["a", "b", "c"], { category: "kids" })]), []);
+  assert.equal(picks(["a", "b"], [profile("kids", 8000, ["a", "b", "c"], { category: "kids" })]).length, 1);
+});
+
+test("a profile with exactly the quoted tests at the same price is a pick", () => {
+  const [s] = run(["a", "b"], [profile("same", 9000, ["a", "b"])]);
+  assert.equal(s.pick, true);
+  assert.equal(s.extra, 0);
+  assert.deepEqual(s.extraTestIds, []);
+});
+
+test("a same-price profile covering only some quoted tests isn't a pick", () => {
+  assert.deepEqual(picks(["a", "c"], [profile("part", 5000, ["a"])]), []);
+});
+
+test("every other profile containing quoted tests follows the picks, most of the quote first, then cheapest", () => {
+  const out = run(
+    ["a", "b"],
+    [
+      profile("one-dear", 30000, ["a", "d"]),
+      profile("save", 8000, ["a", "b", "c"]),
+      profile("both", 40000, ["a", "b", "d"]),
+      profile("one-cheap", 20000, ["a", "c"]),
+      profile("unrelated", 1000, ["d"]),
+    ]
+  );
+  assert.deepEqual(
+    out.map((s) => [s.profileId, s.pick]),
+    [
+      ["save", true],
+      ["both", false],
+      ["one-cheap", false],
+      ["one-dear", false],
+    ]
+  );
 });
 
 test("a profile sharing tests with one staying on the quote isn't suggested", () => {
