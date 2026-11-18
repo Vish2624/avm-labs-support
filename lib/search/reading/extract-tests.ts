@@ -1,6 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { loadWebsiteSearchExtras } from "@/lib/database/website-catalog";
 import { listActiveProfilesWithTests } from "@/lib/database/profiles";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { normalizeQuery } from "../matching/normalize-query";
@@ -87,12 +88,14 @@ export async function extractTests(
   const tokens = splitTestList(text).slice(0, MAX_TOKENS);
   if (tokens.length === 0) return { detected: [], packages: [], notOffered: [], unmatched: [] };
 
-  const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
+  const [tests, aliases, extras] = await Promise.all([listActiveTests(), listActiveAliases(), loadWebsiteSearchExtras()]);
   const testById = new Map(tests.map((test) => [test.id, test]));
+  // The website's parameters ("Platelet Count") match the test(s) they're part of.
+  const searchable = [...tests, ...extras.parameters];
 
   const rank = (query: string) => {
     const normalized = normalizeQuery(query);
-    return normalized ? rankResults(buildSearchCandidates(normalized, tests, aliases)) : [];
+    return normalized ? rankResults(buildSearchCandidates(normalized, searchable, aliases)) : [];
   };
   const isExact = (candidate: SearchCandidate) => candidate.matchType === "exact" || Boolean(candidate.exact);
 

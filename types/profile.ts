@@ -107,6 +107,8 @@ export interface ProfileSearchResult {
   serviceType: ServiceType;
   /** Set when the package matched because it contains the searched test/parameter, not by its name. */
   includedTest: ProfileTestSummary | null;
+  /** Set when the package matched because it includes the searched group of tests (Pancreatic Profile). */
+  includedGroup?: string | null;
   /** 0-100 strength of the package's own name/code match; null when it matched by containing the test. */
   nameScore: number | null;
 }

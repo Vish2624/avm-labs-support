@@ -1,6 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { loadWebsiteSearchExtras } from "@/lib/database/website-catalog";
 import { browseProfiles, browseTests } from "./browse-catalog";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { Test } from "@/types/test";
@@ -49,24 +50,30 @@ function toCatalogCalculated(tests: Test[]): CatalogCalculatedParameter[] {
  * cached catalog snapshot; prices are real current DB rows.
  */
 export async function loadSearchCatalog(locationId: string, serviceType: ServiceType): Promise<SearchCatalog> {
-  const [tests, aliases, priced, profiles] = await Promise.all([
+  const [tests, aliases, priced, profiles, extras] = await Promise.all([
     listActiveTests(),
     listActiveAliases(),
     browseTests(locationId, serviceType),
     browseProfiles(locationId, serviceType),
+    loadWebsiteSearchExtras(),
   ]);
   return {
     // Calculated parameters are matched separately (catalog.calculated); a
     // parameter keeps its componentIds so a match on it finds its component.
-    tests: tests
-      .filter((test) => test.testType !== "calculated")
-      .map(({ id, code, officialName, shortName, componentIds }) =>
-        componentIds.length > 0 ? { id, code, officialName, shortName, componentIds } : { id, code, officialName, shortName }
-      ),
+    // The website's parameters ("Platelet Count" in the CBC) work the same way.
+    tests: [
+      ...tests
+        .filter((test) => test.testType !== "calculated")
+        .map(({ id, code, officialName, shortName, componentIds }) =>
+          componentIds.length > 0 ? { id, code, officialName, shortName, componentIds } : { id, code, officialName, shortName }
+        ),
+      ...extras.parameters,
+    ],
     aliases: aliases.map(({ testId, alias, normalizedAlias, confidence }) => ({ testId, alias, normalizedAlias, confidence })),
     priced,
     profiles,
-    calculated: toCatalogCalculated(tests),
+    // Plus the website's groups inside profiles and the calculated items they report.
+    calculated: [...toCatalogCalculated(tests), ...extras.calculated],
   };
 }
 

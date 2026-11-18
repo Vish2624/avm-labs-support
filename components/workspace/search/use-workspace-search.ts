@@ -187,7 +187,13 @@ export function useWorkspaceSearch({
   const queryCompact = compact(trimmedQuery);
   const isExactTest = (result: SearchTestResult) =>
     result.matchType === "exact" || (result.matchedAlias !== null && compact(result.matchedAlias) === queryCompact);
-  const isExactProfile = (result: ProfileSearchResult) => (result.nameScore ?? 0) >= EXACT_PROFILE_SCORE;
+  // A group named exactly ("Pancreatic Profile") keeps the profiles that include it.
+  const exactGroups = new Set(
+    rawCalculated.filter((result) => result.exact && result.kind === "group").map((result) => compact(result.officialName))
+  );
+  const isExactProfile = (result: ProfileSearchResult) =>
+    (result.nameScore ?? 0) >= EXACT_PROFILE_SCORE ||
+    (Boolean(result.includedGroup) && exactGroups.has(compact(result.includedGroup!)));
   const rawGroups = activeServiceTypes.map((type) => groupDataByType[type]);
   const exactMatch =
     !browsing &&

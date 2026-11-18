@@ -51,6 +51,10 @@ export interface CalculatedSearchResult {
   viaProfileCode: string | null;
   /** That profile, priced here — null when it isn't offered at this location. */
   viaProfile: ProfileSearchResult | null;
+  /** "group": a set of tests inside profiles (Pancreatic Profile), added as its tests; else a calculated parameter. */
+  kind?: "calculated" | "group";
+  /** The profiles priced here that include it, by name. */
+  partOf?: string[];
 }
 
 /**

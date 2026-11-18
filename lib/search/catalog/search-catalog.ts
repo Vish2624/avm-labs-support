@@ -26,6 +26,14 @@ export interface CatalogCalculatedParameter {
   orderTestIds: string[];
   /** Only orderable within this profile (its code), e.g. eGFR -> KFT; null = add its own tests. */
   viaProfileCode: string | null;
+  /**
+   * "group": a set of tests inside profiles, not a profile of its own
+   * (Pancreatic Profile -> Amylase + Lipase), added as its tests. Absent or
+   * "calculated": a calculated parameter. See website-extras.ts.
+   */
+  kind?: "calculated" | "group";
+  /** The profiles (ids) that include it, from the website. */
+  profileIds?: string[];
 }
 
 /**
@@ -98,6 +106,8 @@ export function searchCatalogCalculated(
           viaProfile: calc.viaProfileCode
             ? (catalog.profiles.find((p) => p.code.toUpperCase() === calc.viaProfileCode!.toUpperCase()) ?? null)
             : null,
+          kind: calc.kind ?? "calculated",
+          partOf: (calc.profileIds ?? []).flatMap((id) => catalog.profiles.find((p) => p.profileId === id)?.name ?? []),
         },
       ];
     });
@@ -192,9 +202,18 @@ export function searchCatalogProfiles(query: string, catalog: SearchCatalog): Pr
     .slice(0, MAX_CONTAINED_TESTS)
     .map((candidate) => candidate.testId);
   const nameMatched = new Set(scored.map(({ result }) => result.profileId));
+  // Profiles including a group the query names ("pancreatic" -> every profile with the Pancreatic Profile group).
+  const groups = catalog.calculated.filter((calc) => calc.kind === "group");
+  const matchedGroups = groups.length
+    ? rankResults(queryVariants(query, { forPackages: true }).flatMap((variant) => buildSearchCandidates(variant, groups, [])))
+        .filter((candidate) => candidate.matchType === "exact" || candidate.score >= CONTAINED_TEST_MIN_SCORE)
+        .flatMap((candidate) => groups.find((group) => group.id === candidate.testId) ?? [])
+    : [];
   const containing = catalog.profiles
-    .flatMap((result) => {
+    .flatMap((result): ProfileSearchResult[] => {
       if (nameMatched.has(result.profileId)) return [];
+      const group = matchedGroups.find((g) => g.profileIds?.includes(result.profileId));
+      if (group) return [{ ...result, includedTest: null, includedGroup: group.officialName, nameScore: null }];
       const testId = containedTestIds.find((id) => result.tests.some((test) => test.testId === id));
       const test = testId ? testById.get(testId) : undefined;
       if (!test) return [];

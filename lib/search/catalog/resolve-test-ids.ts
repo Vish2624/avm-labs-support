@@ -1,6 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { loadWebsiteSearchExtras } from "@/lib/database/website-catalog";
 import { normalizeQuery } from "../matching/normalize-query";
 import { buildSearchCandidates } from "../matching/build-search-candidates";
 import { rankResults, type SearchMatchType } from "../matching/rank-results";
@@ -22,14 +23,16 @@ export interface ResolvedTestQuery {
  * Powers /profiles' "search by test names" chip mode.
  */
 export async function resolveTestIds(queries: string[]): Promise<ResolvedTestQuery[]> {
-  const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
+  const [tests, aliases, extras] = await Promise.all([listActiveTests(), listActiveAliases(), loadWebsiteSearchExtras()]);
   const testById = new Map(tests.map((test) => [test.id, test]));
+  // The website's parameters ("Platelet Count") resolve to the test(s) they're part of.
+  const searchable = [...tests, ...extras.parameters];
 
   return queries.map((query) => {
     const normalized = normalizeQuery(query);
     if (!normalized) return { query, test: null, matchType: null, matchedAlias: null };
 
-    const [best] = rankResults(buildSearchCandidates(normalized, tests, aliases));
+    const [best] = rankResults(buildSearchCandidates(normalized, searchable, aliases));
     const test = best ? testById.get(best.testId) : undefined;
     if (!best || !test) return { query, test: null, matchType: null, matchedAlias: null };
 

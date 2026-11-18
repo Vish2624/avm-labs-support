@@ -49,9 +49,12 @@ export function PackageResultRow({
             </span>
             {exact ? <ExactMatchTag /> : null}
           </div>
-          {result.includedTest ? (
+          {result.includedTest || result.includedGroup ? (
             <span className="text-[12.5px] text-muted-foreground">
-              Includes <span className="font-medium text-foreground">{result.includedTest.officialName}</span>
+              Includes{" "}
+              <span className="font-medium text-foreground">
+                {result.includedTest?.officialName ?? result.includedGroup}
+              </span>
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] text-muted-foreground">

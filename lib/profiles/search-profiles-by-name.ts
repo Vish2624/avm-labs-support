@@ -9,6 +9,7 @@ import { FUZZY_THRESHOLD, buildSearchCandidates } from "@/lib/search/matching/bu
 import { rankResults } from "@/lib/search/matching/rank-results";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { loadWebsiteSearchExtras } from "@/lib/database/website-catalog";
 import { queryVariants, VARIANT_SCORE_FACTOR } from "@/lib/search/matching/query-variants";
 import type { Profile } from "@/types/profile";
 import type { ServiceType } from "@/lib/constants/service-types";
@@ -43,13 +44,20 @@ export async function searchProfilesByName(
   const variants = queryVariants(query, { forPackages: true });
   if (variants.length === 0) return [];
 
-  const [profiles, tests, aliases] = await Promise.all([
+  const [profiles, tests, aliases, extras] = await Promise.all([
     listActiveProfilesWithTests(),
     listActiveTests(),
     listActiveAliases(),
+    loadWebsiteSearchExtras(),
   ]);
 
-  const scored: { profile: Profile; testIds: string[]; score: number; includedTest?: ProfileTestSummary }[] = [];
+  const scored: {
+    profile: Profile;
+    testIds: string[];
+    score: number;
+    includedTest?: ProfileTestSummary;
+    includedGroup?: string;
+  }[] = [];
   for (const { profile, testIds } of profiles) {
     const codeNorm = normalizeQuery(profile.code);
     const nameNorm = normalizeQuery(profile.name);
@@ -66,18 +74,26 @@ export async function searchProfilesByName(
   }
   scored.sort((a, b) => b.score - a.score);
 
-  // Packages that contain the test/parameter the query names, even when
-  // their own name doesn't match it.
+  // Packages that contain the test/parameter the query names (the website's
+  // parameters included), or a group of tests inside them ("pancreatic" ->
+  // the Pancreatic Profile group), even when their own name doesn't match it.
   const testById = new Map(tests.map((test) => [test.id, test]));
   const testVariants = queryVariants(query);
-  const containedTestIds = rankResults(testVariants.flatMap((variant) => buildSearchCandidates(variant, tests, aliases)))
+  const searchable = [...tests, ...extras.parameters];
+  const containedTestIds = rankResults(testVariants.flatMap((variant) => buildSearchCandidates(variant, searchable, aliases)))
     .filter((candidate) => candidate.matchType === "exact" || candidate.exact || candidate.score >= CONTAINED_TEST_MIN_SCORE)
     .slice(0, MAX_CONTAINED_TESTS)
     .map((candidate) => candidate.testId);
+  const groups = extras.calculated.filter((calc) => calc.kind === "group");
+  const matchedGroups = rankResults(variants.flatMap((variant) => buildSearchCandidates(variant, groups, [])))
+    .filter((candidate) => candidate.matchType === "exact" || candidate.score >= CONTAINED_TEST_MIN_SCORE)
+    .flatMap((candidate) => groups.find((group) => group.id === candidate.testId) ?? []);
   const nameMatchedIds = new Set(scored.map((entry) => entry.profile.id));
   const containing = profiles
-    .flatMap(({ profile, testIds }) => {
+    .flatMap(({ profile, testIds }): typeof scored => {
       if (nameMatchedIds.has(profile.id)) return [];
+      const group = matchedGroups.find((g) => g.profileIds?.includes(profile.id));
+      if (group) return [{ profile, testIds, score: 0, includedGroup: group.officialName }];
       const testId = containedTestIds.find((id) => testIds.includes(id));
       const test = testId ? testById.get(testId) : undefined;
       if (!test) return [];
@@ -99,7 +115,7 @@ export async function searchProfilesByName(
   ]);
 
   const results: ProfileSearchResult[] = [];
-  for (const { profile, includedTest, score } of ranked) {
+  for (const { profile, includedTest, includedGroup, score } of ranked) {
     const price = pricingByProfileId.get(profile.id);
     // A matched profile with no current price at this location/service
     // type isn't shown — never backfilled with placeholder data.
@@ -116,7 +132,8 @@ export async function searchProfilesByName(
       availability: price.availability,
       serviceType: price.serviceType,
       includedTest: includedTest ?? null,
-      nameScore: includedTest ? null : Math.round(score),
+      includedGroup: includedGroup ?? null,
+      nameScore: includedTest || includedGroup ? null : Math.round(score),
     });
   }
 

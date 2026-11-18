@@ -5,6 +5,11 @@ import { fetchAllRows } from "./fetch-all-rows";
 import { getLocationById } from "./locations";
 import type { LocationCode } from "@/lib/constants/locations";
 import type { SuggestionProfile, SuggestionRules, SuggestionTest } from "@/lib/profiles/website-suggestions";
+import {
+  buildWebsiteSearchExtras,
+  type WebsiteSearchExtras,
+  type WebsiteSearchProfile,
+} from "@/lib/search/catalog/website-extras";
 
 // Which website country each location takes its prices and rules from.
 // Same mapping as apply_website_catalog() (supabase/migrations/20261115120000_website_catalog.sql).
@@ -162,4 +167,83 @@ export async function getWebsiteSyncStatus(): Promise<WebsiteSyncStatus> {
       oldName: r.old_name,
     })),
   };
+}
+
+interface SearchTestRow {
+  id: string;
+  website_id: string;
+  official_name: string;
+  short_name: string | null;
+  /** details->parameters: the website's parameter names (a JSON array). */
+  parameters: unknown;
+}
+
+interface SearchProfileRow {
+  id: string;
+  code: string;
+  name: string;
+  /** details->subs: the website's "What's included" groups, with website test ids. */
+  subs: unknown;
+}
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
+
+/**
+ * What search finds beyond test names and aliases, from what the website
+ * pushed (see lib/search/catalog/website-extras.ts): its tests' parameters,
+ * the groups inside its profiles, and the calculated items they report.
+ * Live tests and profiles only. From the cached catalog.
+ */
+export function loadWebsiteSearchExtras(): Promise<WebsiteSearchExtras> {
+  return cachedCatalogRead("website-search-extras", async () => {
+    const supabase = createAdminClient();
+    const [testRows, profileRows] = await Promise.all([
+      fetchAllRows<SearchTestRow>((from, to) =>
+        supabase
+          .from("tests")
+          .select("id, website_id, official_name, short_name, parameters:details->parameters")
+          .eq("active", true)
+          .not("website_id", "is", null)
+          .order("id")
+          .range(from, to)
+      ),
+      fetchAllRows<SearchProfileRow>((from, to) =>
+        supabase
+          .from("profiles")
+          .select("id, code, name, subs:details->subs")
+          .eq("active", true)
+          .eq("website_kind", "profile")
+          .order("id")
+          .range(from, to)
+      ),
+    ]);
+
+    const idByWebsiteId = new Map(testRows.map((row) => [row.website_id, row.id]));
+    const profiles: WebsiteSearchProfile[] = profileRows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      subs: (Array.isArray(row.subs) ? row.subs : []).flatMap((sub) =>
+        sub && typeof sub === "object" && typeof sub.name === "string"
+          ? [
+              {
+                name: sub.name,
+                tests: strings(sub.tests).flatMap((wid) => idByWebsiteId.get(wid) ?? []),
+                calc: strings(sub.calc),
+              },
+            ]
+          : []
+      ),
+    }));
+    return buildWebsiteSearchExtras({
+      tests: testRows.map((row) => ({
+        id: row.id,
+        officialName: row.official_name,
+        shortName: row.short_name,
+        parameters: strings(row.parameters),
+      })),
+      profiles,
+    });
+  });
 }

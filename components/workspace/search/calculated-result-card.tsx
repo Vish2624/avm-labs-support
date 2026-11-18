@@ -16,7 +16,9 @@ export function calculatedIsOrderable(result: CalculatedSearchResult): boolean {
 // It has no price of its own: the card says what it's calculated from and
 // adds the tests to order — the ones not already on the quote — in one click.
 // One that's only done as part of a profile (eGFR -> Kidney Function Test)
-// offers that whole profile instead.
+// offers that whole profile instead. A group of tests inside profiles
+// (Pancreatic Profile) shows the same way: its tests to add, and the
+// profiles it's part of.
 export function CalculatedResultCard({
   result,
   addedTestIds,
@@ -34,6 +36,9 @@ export function CalculatedResultCard({
   exact?: boolean;
 }) {
   const profile = result.viaProfile;
+  // A group inside profiles (Pancreatic Profile): its tests, and the profiles that include it.
+  const group = result.kind === "group";
+  const partOf = result.partOf ?? [];
   const toAdd = result.sources.filter((source) => !addedTestIds.has(source.testId));
   const currency = result.sources[0]?.price.currency;
   const total = result.viaProfileCode
@@ -57,13 +62,21 @@ export function CalculatedResultCard({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-medium">{result.officialName}</span>
             <span className="rounded-[5px] bg-muted px-1.5 py-px text-[10.5px] font-semibold tracking-[0.03em] text-muted-foreground">
-              CALCULATED
+              {group ? "GROUP" : "CALCULATED"}
             </span>
             {exact ? <ExactMatchTag /> : null}
           </div>
-          <span className="text-[12.5px] text-muted-foreground">
-            Calculated from <span className="font-medium text-foreground">{result.sourceNames.join(" + ")}</span>
-          </span>
+          {result.sourceNames.length > 0 ? (
+            <span className="text-[12.5px] text-muted-foreground">
+              {group ? "Tests: " : "Calculated from "}
+              <span className="font-medium text-foreground">{result.sourceNames.join(" + ")}</span>
+            </span>
+          ) : null}
+          {group && partOf.length > 0 ? (
+            <span className="text-[12.5px] text-muted-foreground">
+              Part of <span className="font-medium text-foreground">{partOf.join(", ")}</span>
+            </span>
+          ) : null}
           {result.viaProfileCode ? (
             profile ? (
               <span className="text-[12.5px] text-muted-foreground">

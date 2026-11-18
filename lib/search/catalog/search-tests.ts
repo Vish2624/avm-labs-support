@@ -1,6 +1,7 @@
 import "server-only";
 import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
+import { loadWebsiteSearchExtras } from "@/lib/database/website-catalog";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { queryVariants, VARIANT_SCORE_FACTOR } from "../matching/query-variants";
 import { buildSearchCandidates } from "../matching/build-search-candidates";
@@ -35,13 +36,15 @@ export async function searchTests(
   const variants = queryVariants(query);
   if (variants.length === 0) return [];
 
-  const [tests, aliases] = await Promise.all([listActiveTests(), listActiveAliases()]);
+  const [tests, aliases, extras] = await Promise.all([listActiveTests(), listActiveAliases(), loadWebsiteSearchExtras()]);
+  // The website's parameters ("Platelet Count") match the test(s) they're part of.
+  const searchable = [...tests, ...extras.parameters];
 
   // The query as typed, plus its plain-words phrasings ("I need thyroid
   // test" -> "thyroid", "sugar" -> "glucose"); a match found only through a
   // rephrasing scores slightly below the same match on the original.
   const candidates = variants.flatMap((variant, i) => {
-    const found = buildSearchCandidates(variant, tests, aliases);
+    const found = buildSearchCandidates(variant, searchable, aliases);
     return i === 0 ? found : found.map((candidate) => ({ ...candidate, score: candidate.score * VARIANT_SCORE_FACTOR }));
   });
   const ranked = rankResults(candidates).slice(0, MAX_RESULTS);

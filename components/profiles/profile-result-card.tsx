@@ -65,9 +65,12 @@ export function ProfileResultCard({
             {match ? <Badge variant="secondary">covers {match.matchPercentage}%</Badge> : null}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-3.5 text-[13.5px] text-muted-foreground">
-            {"includedTest" in result && result.includedTest ? (
+            {"includedTest" in result && (result.includedTest || result.includedGroup) ? (
               <span>
-                Includes <span className="font-medium text-foreground">{result.includedTest.officialName}</span>
+                Includes{" "}
+                <span className="font-medium text-foreground">
+                  {result.includedTest?.officialName ?? result.includedGroup}
+                </span>
               </span>
             ) : null}
             <span>{result.tests.length} test{result.tests.length === 1 ? "" : "s"} included</span>
