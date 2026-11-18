@@ -94,3 +94,13 @@ export interface TestComponent {
   componentTestId: string;
   createdAt: string;
 }
+
+/** What the website sends about collecting a test (`tests.details`): its sample, tube and whether it needs fasting. */
+export interface TestCollection {
+  /** "Blood", "Urine"… — null when the website sent none. */
+  sample: string | null;
+  /** null when the website sent none. */
+  fasting: boolean | null;
+  /** Blood tube set in the website admin ("EDTA", "Serum"…) — null until it's set. */
+  tube: string | null;
+}

@@ -1,18 +1,22 @@
 import "server-only";
-import { listActiveTests } from "@/lib/database/tests";
-import { listActiveProfilesWithTests, getCurrentProfilePrices } from "@/lib/database/profiles";
+import { listActiveTests, listTestCollection } from "@/lib/database/tests";
+import { listActiveProfilesWithTests, getCurrentProfilePrices, listProfileFasting } from "@/lib/database/profiles";
 import { getCurrentPricesForSearch } from "@/lib/database/prices";
 import { hydrateProfileTests } from "@/lib/profiles/hydrate-profile-tests";
 import { dedupeProfilesByName } from "@/lib/profiles/dedupe-profiles";
-import { fastingForPackage, fastingForTest } from "./fasting-guide";
+import { fastingForPackage, fastingForTest, fastingFromRecord } from "./fasting-guide";
+import { mergeSamples, sampleForTest } from "./sample-guide";
 import { isPackage } from "@/lib/search/matching/is-package-name";
 import type { ServiceType } from "@/lib/constants/service-types";
 import type { AiRelevanceLevel, AiSuggestion } from "@/types/ai-assistant";
 
-/** A catalog test or package with its current price at the agent's location — everything but the AI's reason. */
+/**
+ * A catalog test or package with its current price at the agent's location,
+ * fasting and samples — everything but the AI's reason.
+ */
 export type PricedItem =
-  | Omit<Extract<AiSuggestion, { kind: "test" }>, "relevanceScore" | "relevanceLevel" | "reason" | "fasting">
-  | Omit<Extract<AiSuggestion, { kind: "package" }>, "relevanceScore" | "relevanceLevel" | "reason" | "fasting">;
+  | Omit<Extract<AiSuggestion, { kind: "test" }>, "relevanceScore" | "relevanceLevel" | "reason">
+  | Omit<Extract<AiSuggestion, { kind: "package" }>, "relevanceScore" | "relevanceLevel" | "reason">;
 
 export interface PricedCatalog {
   /** Every sellable item at this location, keyed by upper-cased code. Tests win over a package sharing their code. */
@@ -36,7 +40,12 @@ export async function loadPricedCatalog(
   locationId: string,
   serviceTypes: readonly ServiceType[]
 ): Promise<PricedCatalog> {
-  const [tests, profiles] = await Promise.all([listActiveTests(), listActiveProfilesWithTests()]);
+  const [tests, profiles, collection, profileFasting] = await Promise.all([
+    listActiveTests(),
+    listActiveProfilesWithTests(),
+    listTestCollection(),
+    listProfileFasting(),
+  ]);
   const testIds = tests.map((test) => test.id);
   const profileIds = profiles.map(({ profile }) => profile.id);
 
@@ -61,6 +70,10 @@ export async function loadPricedCatalog(
         tatText: price.tatText,
         availability: price.availability,
         serviceType: price.serviceType,
+        fasting: fastingFromRecord(collection.get(test.id)?.fasting, fastingForTest(test.code)),
+        samples: [sampleForTest(test.code, test.officialName, collection.get(test.id)?.sample ?? null, collection.get(test.id)?.tube)].filter(
+          (sample) => sample !== null
+        ),
       });
     }
   }
@@ -82,16 +95,28 @@ export async function loadPricedCatalog(
   );
   for (const { profileId, code, name, price } of keptProfiles) {
     if (byCode.has(codeKey(code))) continue;
+    const roster = rosters.get(profileId) ?? [];
     byCode.set(codeKey(code), {
       kind: "package",
       profileId,
       code,
       name,
-      tests: rosters.get(profileId) ?? [],
+      tests: roster,
       price: { amount: price.price, currency: price.currencyCode },
       tatText: price.tatText,
       availability: price.availability,
       serviceType: price.serviceType,
+      fasting: fastingFromRecord(
+        profileFasting.get(profileId),
+        fastingForPackage(
+          code,
+          roster.map((test) => test.code)
+        ),
+        roster.filter((test) => collection.get(test.testId)?.fasting).map((test) => test.officialName)
+      ),
+      samples: mergeSamples(
+        roster.flatMap((test) => sampleForTest(test.code, test.officialName, collection.get(test.testId)?.sample ?? null, collection.get(test.testId)?.tube) ?? [])
+      ),
     });
   }
 
@@ -115,14 +140,7 @@ export function toSuggestion(
   item: PricedItem,
   relevance: { score: number; level: AiRelevanceLevel; reason: string }
 ): AiSuggestion {
-  const fasting =
-    item.kind === "test"
-      ? fastingForTest(item.code)
-      : fastingForPackage(
-          item.code,
-          item.tests.map((test) => test.code)
-        );
-  return { ...item, relevanceScore: relevance.score, relevanceLevel: relevance.level, reason: relevance.reason, fasting };
+  return { ...item, relevanceScore: relevance.score, relevanceLevel: relevance.level, reason: relevance.reason };
 }
 
 /** Stable identity across tests and packages, for de-duplication. */

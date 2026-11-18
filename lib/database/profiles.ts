@@ -80,6 +80,25 @@ export function listActiveProfilesWithTests(): Promise<ProfileWithTestIds[]> {
   });
 }
 
+interface ProfileFastingRow {
+  id: string;
+  fasting: unknown;
+}
+
+/** Each active profile's fasting flag as the website sends it (details.fasting), keyed by profile id. */
+export function listProfileFasting(): Promise<Map<string, boolean>> {
+  return cachedCatalogRead("profiles:fasting", async () => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.from("profiles").select("id, fasting:details->fasting").eq("active", true);
+    if (error) throw error;
+    return new Map(
+      ((data ?? []) as ProfileFastingRow[]).flatMap((row) =>
+        typeof row.fasting === "boolean" ? [[row.id, row.fasting] as const] : []
+      )
+    );
+  });
+}
+
 const PROFILE_PRICE_COLUMNS =
   "id, profile_id, location_id, service_type, price, currency_code, tat_text, availability, effective_from, effective_to, version_id";
 

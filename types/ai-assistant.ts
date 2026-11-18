@@ -11,6 +11,19 @@ export interface FastingInfo {
   note: string;
 }
 
+/** Blood collection tubes: set per test on the website, else by general lab practice. */
+export type SampleTube = "EDTA" | "Serum" | "Fluoride" | "Citrate" | "Heparin";
+
+/** One sample a test or package needs, with the tests collected in it. */
+export interface SampleNeed {
+  /** "Blood", "Urine"… — from our records (the website). */
+  specimen: string;
+  /** For blood: the tube set on the website, else the usual one by lab practice; null otherwise. */
+  tube: SampleTube | null;
+  /** The tests collected in this sample (a test: itself; a package: its tests). */
+  tests: string[];
+}
+
 /**
  * One AI Test Assistant suggestion. The AI only ever supplies a catalog code
  * plus its reason/relevance; every other field (id, name, price, TAT,
@@ -28,8 +41,10 @@ interface AiSuggestionBase {
   relevanceScore: number;
   relevanceLevel: AiRelevanceLevel;
   reason: string;
-  /** Fasting guidance when known (null = not in the guide). */
+  /** Fasting — from our records when the website sent it, else the built-in guide (null = unknown). */
   fasting: FastingInfo | null;
+  /** The samples to collect, one per specimen/tube (empty = not in our records). */
+  samples: SampleNeed[];
 }
 
 export interface AiTestSuggestion extends AiSuggestionBase {
@@ -53,11 +68,14 @@ export interface AiSource {
 
 /**
  * "components" = which parameters/tests a test or package includes ("parameters in CBC").
- * "general" = any other blood-test question (normal range, what high/low means, sample, purpose…).
+ * "sample" = which sample/tube a test needs ("EDTA or serum for CBC?").
+ * "details" = everything we have on the tests (price, report time, sample, fasting).
+ * "general" = any other blood-test question (normal range, what high/low means, purpose…).
  * "profile_match" = which profile/package covers a list of tests ("profile with cbc, tsh and vit d").
  */
 export type TestQuestionSubject =
   | "fasting"
+  | "sample"
   | "components"
   | "price"
   | "tat"

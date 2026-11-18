@@ -12,6 +12,7 @@ import {
 } from "./gemini-engine";
 import { answerAvailability } from "./availability-answer";
 import { asksForProfile, findProfilesFor, perTestFasting, perTestTat, resolveTestGroup } from "./test-group";
+import { detailsAnswer, sampleAnswer } from "./collection-answer";
 import { recordAppEvent } from "@/lib/database/app-events";
 import {
   builtinAnswer,
@@ -37,6 +38,8 @@ const SHORT_QUESTION_WORDS = 4;
 
 /** Asking which tests to do ("which tests for…", "what test should", "suggest tests") — a recommendation request. */
 const RECOMMENDATION_ASK = /\b(which|what)\s+(tests?|checks?|checkups?|investigations?)\b|\btests?\s+(for|to (do|take|check))\b|\b(suggest|recommend)\w*/;
+/** "What is HbA1c?", "why is TSH done" — wants the test explained, not just our details. */
+const EXPLAIN_ASK = /\b(what|whats|why|explain|meaning|means?|purpose|used|use|about)\b/;
 
 function unavailableNote(names: string[]): string | null {
   if (names.length === 0) return null;
@@ -95,6 +98,13 @@ async function answerTestQuestion(
   let sources: AiSource[] = [];
   let reply: string | null = null;
 
+  // Sample / everything we have: from our records. Several packages for one
+  // name ("hair fall profile") are options, not a list to add up.
+  if (effectiveSubject === "sample" || effectiveSubject === "details") {
+    const alternatives = results.length > 1 && results.every((item) => item.kind === "package");
+    ({ answer, reply } = (effectiveSubject === "sample" ? sampleAnswer : detailsAnswer)(results, [], { alternatives }));
+  }
+
   // Parameters come from our records where we have the list (a package's
   // tests, the website's list for a test such as CBC); for the rest, Gemini
   // gives the parameters the test usually reports, marked as general guidance.
@@ -119,9 +129,11 @@ async function answerTestQuestion(
     reply = componentsReply(results, recorded, typical);
   }
 
-  // Fasting/what-is questions can use Gemini + Google Search; price, TAT and
-  // availability always come straight from our own records.
-  if ((effectiveSubject === "fasting" || (effectiveSubject === "details" && subject === null && !forcedName)) && (await geminiConfigured())) {
+  // Fasting and "what is X?" questions can use Gemini; price, TAT, sample,
+  // availability and a bare test name ("hba1c" -> everything we have on it)
+  // always come straight from our own records.
+  const explains = effectiveSubject === "details" && subject === null && !forcedName && EXPLAIN_ASK.test(normalizeQuery(question));
+  if ((effectiveSubject === "fasting" || explains) && (await geminiConfigured())) {
     try {
       const gemini = await answerTestQuestionWithGemini(question, effectiveSubject, results);
       answer = gemini.answer;
@@ -149,6 +161,7 @@ async function answerTestQuestion(
     topic: results.map((item) => item.name).join(", "),
     intent: {
       fasting: "Fasting / preparation question",
+      sample: "Sample type question",
       components: "Parameters included",
       price: "Price question",
       tat: "Report time question",
@@ -169,17 +182,19 @@ async function answerTestQuestion(
 async function answerTestGroup(
   rawQuestion: string,
   question: string,
-  catalog: PricedCatalog
+  catalog: PricedCatalog,
+  forcedSubject: TestQuestionSubject | null = null
 ): Promise<Pick<
   AiAssistantResponse,
   "kind" | "lookupQuery" | "answer" | "reply" | "results" | "engine" | "sources" | "topic" | "intent"
 > | null> {
   const group = await resolveTestGroup(rawQuestion, catalog);
-  if (group.items.length === 0 || group.items.length + group.notFound.length < 2) return null;
-  const subject = detectSubject(question);
+  if (group.alternatives || group.items.length === 0 || group.items.length + group.notFound.length < 2) return null;
+  const subject = forcedSubject ?? detectSubject(question);
   const base = { kind: "test_question" as const, lookupQuery: null, sources: [] };
 
-  if (subject !== "fasting" && subject !== "tat" && asksForProfile(question, group)) {
+  const perTest = subject === "fasting" || subject === "tat" || subject === "sample" || subject === "details";
+  if (!perTest && asksForProfile(question, group)) {
     const found = findProfilesFor(group, catalog);
     return { ...base, ...found, engine: "builtin", intent: "Profile for these tests" };
   }
@@ -189,6 +204,14 @@ async function answerTestGroup(
 
   if (subject === "tat") {
     return { ...base, ...perTestTat(results, group.notFound), results, topic, engine: "builtin", intent: "Report time for each test" };
+  }
+  if (subject === "sample") {
+    return { ...base, ...sampleAnswer(results, group.notFound), results, topic, engine: "builtin", intent: "Sample for each test" };
+  }
+  // Price (no profile asked for) or several facts at once: each test's price,
+  // report time, sample and fasting, then the totals.
+  if (subject === "details" || subject === "price") {
+    return { ...base, ...detailsAnswer(results, group.notFound), results, topic, engine: "builtin", intent: "Details for each test" };
   }
   if (subject === "fasting") {
     let engine: AiAssistantResponse["engine"] = "builtin";
@@ -251,6 +274,12 @@ export async function recommendTests(
     try {
       const gemini = await recommendWithGemini(rawQuestion, catalog);
       if (gemini.requestType === "direct_lookup" && gemini.lookupQuery) {
+        // Several items named ("CBC, Lipid Profile, TSH"): answered per item with the totals.
+        const several =
+          gemini.lookupQuery.includes(",") && gemini.lookupSubject && gemini.lookupSubject !== "components"
+            ? await answerTestGroup(gemini.lookupQuery, gemini.lookupQuery, catalog, gemini.lookupSubject)
+            : null;
+        if (several) return { ...base, ...several, engine: "gemini" };
         const lookup = await answerTestQuestion(question, catalog, gemini.lookupQuery, gemini.lookupSubject);
         if (lookup) return { ...base, ...lookup, engine: "gemini" };
       }

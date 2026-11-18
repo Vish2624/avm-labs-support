@@ -7,6 +7,7 @@ import { listActiveTests } from "@/lib/database/tests";
 import { listActiveAliases } from "@/lib/database/aliases";
 import { buildSearchCandidates } from "@/lib/search/matching/build-search-candidates";
 import { rankResults } from "@/lib/search/matching/rank-results";
+import { queryVariants } from "@/lib/search/matching/query-variants";
 import { correctSpelling } from "./spell-correct";
 import { resolveNamedItems, testNameIn } from "./test-question";
 import { findPriced, suggestionKey, toSuggestion, type PricedCatalog, type PricedItem } from "./priced-catalog";
@@ -55,6 +56,8 @@ export interface TestGroup {
   items: PricedItem[];
   /** Names that look like tests but aren't in our list at this location. */
   notFound: string[];
+  /** One name matched several packages ("hair fall profile"): options for it, not a list. */
+  alternatives: boolean;
 }
 
 /** The tests a list question names. Only meaningful when it names two or more. */
@@ -76,23 +79,32 @@ export async function resolveTestGroup(rawQuestion: string, catalog: PricedCatal
 
   const found = new Map<string, PricedItem>();
   const notFound: string[] = [];
+  const matched: PricedItem[][] = [];
   for (const piece of pieces) {
     const name = cleanName(testNameIn(await correctSpelling(piece, catalog)));
     if (!name) continue;
-    let items = await resolveNamedItems(name, catalog, false, MAX_GROUP_ITEMS);
-    if (items.length === 0) {
-      const loose = closest(name);
-      if (loose) items = [loose];
+    // As typed, then the everyday-shorthand phrasings ("vit d" -> "vitamin d", "fbc" -> "hemogram").
+    let items: PricedItem[] = [];
+    for (const variant of [name, ...queryVariants(name).filter((variant) => variant !== name)]) {
+      items = await resolveNamedItems(variant, catalog, false, MAX_GROUP_ITEMS);
+      if (items.length === 0) {
+        const loose = closest(variant);
+        if (loose) items = [loose];
+      }
+      if (items.length > 0) break;
     }
     if (items.length === 0) {
       if (name.split(" ").length <= MAX_NAME_WORDS) notFound.push(piece.replace(/\?+$/, "").trim());
       continue;
     }
+    matched.push(items);
     for (const item of items) {
       if (found.size < MAX_GROUP_ITEMS && !found.has(suggestionKey(item))) found.set(suggestionKey(item), item);
     }
   }
-  return { items: [...found.values()], notFound };
+  const alternatives =
+    matched.length === 1 && notFound.length === 0 && matched[0].length > 1 && matched[0].every((item) => item.kind === "package");
+  return { items: [...found.values()], notFound, alternatives };
 }
 
 /** Asking for a profile/package that holds the named tests. */

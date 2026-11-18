@@ -2,10 +2,11 @@ import type { FastingInfo } from "@/types/ai-assistant";
 
 /**
  * Built-in patient-preparation guide for common tests, keyed by catalog
- * code. The database has no fasting/preparation column, so this is the
- * assistant's answer to "does X need fasting?" when Gemini isn't available.
- * Standard general lab practice only — the UI always adds that the lab's or
- * doctor's own instructions take precedence.
+ * code. The website's own fasting flag (fastingFromRecord) wins; this guide
+ * only adds its wording ("a morning sample is common") where it agrees, and
+ * answers for items the website sent no flag for. Standard general lab
+ * practice only — the UI always adds that the lab's or doctor's own
+ * instructions take precedence.
  */
 const yes = (note: string): FastingInfo => ({ required: "yes", note });
 const recommended = (note: string): FastingInfo => ({ required: "recommended", note });
@@ -137,4 +138,22 @@ export function fastingForPackage(code: string, componentCodes: string[]): Fasti
     return recommended(`${preferred[0].info.note} — for ${preferred.map(({ component }) => component).join(", ")}`);
   }
   return no();
+}
+
+const FASTING_NOTE = "8–12 hours fasting (plain water is fine)";
+
+/**
+ * Fasting from our records (the website's yes/no), worded with the guide's
+ * note when the guide agrees. `fastingTests`: for a package, the tests in it
+ * that need fasting, named in the note. No record: the guide's answer.
+ */
+export function fastingFromRecord(
+  recorded: boolean | null | undefined,
+  guide: FastingInfo | null,
+  fastingTests: string[] = []
+): FastingInfo | null {
+  if (recorded === null || recorded === undefined) return guide;
+  if (!recorded) return guide?.required === "no" ? guide : no();
+  const note = guide?.required === "yes" ? guide.note.split(" — for ")[0] : FASTING_NOTE;
+  return yes(fastingTests.length > 0 ? `${note} — for ${fastingTests.join(", ")}` : note);
 }

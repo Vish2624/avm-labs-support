@@ -14,10 +14,18 @@ import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import { matchTopics } from "./builtin-engine";
 import { findPriced, suggestionKey, toSuggestion, type PricedCatalog, type PricedItem } from "./priced-catalog";
+import { detailsAnswer, sampleAnswer } from "./collection-answer";
 import type { AiAnswer, AiSuggestion, TestQuestionSubject } from "@/types/ai-assistant";
 import type { ProfileTestSummary } from "@/types/profile";
 
+/** "edta or serum", "blood or urine" — a sample question, and never part of a test name. */
+const SAMPLE_CHOICE = /\b(serum|plasma|blood|urine|edta|fluoride|citrate)\s+or\s+(serum|plasma|blood|urine|edta|fluoride|citrate)\b/g;
+
 const SUBJECT_PATTERNS: [TestQuestionSubject, RegExp][] = [
+  [
+    "sample",
+    /\b(samples?|specimens?|tubes?|vials?|vacutainers?|edta|containers?|bottles?|(which|what) colou?r)\b|\b(serum|plasma|blood|urine|edta|fluoride|citrate)\s+or\s+(serum|plasma|blood|urine|edta|fluoride|citrate)\b/,
+  ],
   ["fasting", /\b(fasting|fast|empty stomach|eat|eating|ate|food|breakfast|meal|drink|drinking|water|tea|coffee)\b/],
   [
     "components",
@@ -46,6 +54,9 @@ export const QUESTION_FILLER = new Set([
   "contains", "containing", "consist", "consists", "cover", "covers", "covered", "inside", "breakdown", "component",
   "components", "items", "things", "under", "part", "parts", "normal", "range", "ranges", "reference", "value",
   "values", "mean", "means", "meaning", "why", "high", "low", "purpose", "used", "use", "explain", "about", "s",
+  "samples", "specimen", "specimens", "tube", "tubes", "vial", "vials", "vacutainer", "vacutainers", "edta", "container",
+  "containers", "bottle", "bottles", "colour", "color", "collect", "collected", "collection", "or", "details", "detail",
+  "info", "information", "everything", "preparation", "prepare", "instructions", "instruction",
 ]);
 /** "parameters", and misspellings like "paramters" / "params". */
 const PARAMETER_WORD = /^param/;
@@ -55,14 +66,23 @@ const PACKAGE_WORDS = /\b(profile|package|panel|pack)\b/g;
 const PACKAGE_MATCH_SCORE = 88;
 const MAX_ITEMS = 5;
 
+/** Asking for everything about a test: "details of hba1c", "full info", "how to prepare for lipid profile". */
+const ALL_DETAILS = /\b(details?|info|information|everything|prepar\w*|instructions?)\b|\ball (the )?things\b/;
+/** Collection facts — asking two or more of these at once ("sample and fasting for cbc") wants the full details. */
+const COLLECTION_SUBJECTS = new Set<TestQuestionSubject>(["sample", "fasting", "tat", "price"]);
+
 export function detectSubject(question: string): TestQuestionSubject | null {
   const normalized = normalizeQuery(question);
-  return SUBJECT_PATTERNS.find(([, pattern]) => pattern.test(normalized))?.[0] ?? null;
+  const asked = SUBJECT_PATTERNS.filter(([, pattern]) => pattern.test(normalized)).map(([subject]) => subject);
+  if (asked.filter((subject) => COLLECTION_SUBJECTS.has(subject)).length >= 2) return "details";
+  if (ALL_DETAILS.test(normalized) && !asked.includes("components")) return "details";
+  return asked[0] ?? null;
 }
 
 /** The test name left in a question once the question words are stripped: "does thyroid test need fasting" -> "thyroid". */
 export function testNameIn(question: string): string {
   return normalizeQuery(question)
+    .replace(SAMPLE_CHOICE, " ")
     .split(" ")
     .filter((word) => word && !QUESTION_FILLER.has(word) && !PARAMETER_WORD.test(word))
     .join(" ");
@@ -155,7 +175,13 @@ export async function resolveNamedItems(
         (candidate) => candidate.matchType === "exact" || candidate.exact
       );
       const test = exact ? testById.get(exact.testId) : undefined;
-      return test ? findPriced(catalog, test.code) : findPriced(catalog, phrase);
+      // A package by its name without "profile" ("cbc tsh lipid" -> Lipid Profile).
+      const pack = catalog.items.find(
+        (item) =>
+          item.kind === "package" &&
+          normalizeQuery(item.name).replace(PACKAGE_WORDS, " ").replace(/\s+/g, " ").trim() === phrase
+      );
+      return test ? findPriced(catalog, test.code) : (findPriced(catalog, phrase) ?? pack);
     };
     for (let i = 0; i < words.length; ) {
       let length = Math.min(3, words.length - i);
@@ -294,8 +320,11 @@ export function recordsReply(subject: TestQuestionSubject, items: AiSuggestion[]
 
   switch (subject) {
     case "price":
-    case "details":
       return `Hi! ${bullets((item) => `${customerName(item)} – ${price(item)}, ${ready(item)}`)}`;
+    case "details":
+      return detailsAnswer(items, []).reply;
+    case "sample":
+      return sampleAnswer(items, []).reply;
     case "tat":
       return `Hi! ${bullets((item) => `${customerName(item)} – ${ready(item)}`)}`;
     case "availability":
@@ -343,6 +372,8 @@ export function builtinAnswer(subject: TestQuestionSubject, items: AiSuggestion[
         ),
       };
     }
+    case "sample":
+      return sampleAnswer(items, []).answer;
     case "components":
       return {
         subject,
@@ -369,6 +400,7 @@ export function builtinAnswer(subject: TestQuestionSubject, items: AiSuggestion[
         ),
       };
     case "details":
+      return detailsAnswer(items, []).answer;
     case "general":
     case "profile_match":
       return { subject, verdict: null, text: "Here are the details from our test list." };

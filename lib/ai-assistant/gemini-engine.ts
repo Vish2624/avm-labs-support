@@ -32,11 +32,14 @@ export function geminiConfigured(): Promise<boolean> {
   return geminiReaderConfigured("assistant");
 }
 
+const LOOKUP_SUBJECTS = ["components", "sample", "fasting", "details"] as const;
+type LookupSubject = (typeof LOOKUP_SUBJECTS)[number];
+
 export interface GeminiResult {
   requestType: "recommendation" | "direct_lookup" | "general_question" | "not_a_test_request";
   lookupQuery: string | null;
-  /** "components" when a direct lookup asks what the item includes. */
-  lookupSubject: "components" | null;
+  /** What a direct lookup asks: what the item includes, its sample, fasting, or everything we have on it. */
+  lookupSubject: LookupSubject | null;
   /** The written reply to a general_question. */
   answer: string | null;
   /** The ready-to-send customer reply (null for a direct lookup). */
@@ -78,9 +81,10 @@ Rules:
 - relevance_score: 0.75-1 = highly relevant, 0.5-0.74 = may be relevant. Omit anything weaker. Return at most 12, best first.
 - reason: what the test checks, in 2-5 plain lowercase words a customer understands, e.g. "iron stores", "thyroid function", "3-month average blood sugar". No diagnosis, no medicine advice, no "you need".
 - If the question simply names one specific test or asks its price/TAT/availability (e.g. "price of HbA1c"), set request_type "direct_lookup" and lookup_query to that test name, with no results.
-- If it asks what a specific test, profile or package includes — its parameters, components or list of tests, in any wording ("what all comes in CBC", "tests in hemogram", "thyroid profile list", "what is checked in LFT") — set request_type "direct_lookup", lookup_subject "components", and lookup_query to that item's name exactly as it appears in the catalog (e.g. "hemogram" -> the catalog's CBC name), with no results. Otherwise lookup_subject is null.
+- If it asks what a specific test, profile or package includes — its parameters, components or list of tests, in any wording ("what all comes in CBC", "tests in hemogram", "thyroid profile list", "what is checked in LFT") — set request_type "direct_lookup", lookup_subject "components", and lookup_query to that item's name exactly as it appears in the catalog (e.g. "hemogram" -> the catalog's CBC name), with no results.
+- If it asks about specific catalog test(s), profile(s) or package(s) in any wording, set request_type "direct_lookup", lookup_query to their catalog names (comma-separated when several), no results, and lookup_subject to: "sample" for the sample or tube ("EDTA or serum?", "blood or urine", "which tube", "what do they collect"); "fasting" for fasting or food/water before the test; "details" for several of these at once or everything about them (price, report time, sample, fasting, "full details", "how to prepare"). Otherwise lookup_subject is null.
 - Any request for which tests to do — for a symptom, condition, checkup or purpose ("which tests for hair fall?", "diabetes checkup", "tests before starting gym") — is request_type "recommendation", never "general_question".
-- If it is any other question about blood/lab tests, results or sample collection — what a test is or why it is done, normal/reference ranges, what a high or low value can mean, sample type, preparation, how often to test, the difference between tests, which test to choose, in any wording or language — set request_type "general_question": write "answer" and put the catalog tests it is about (or that fit it) in "results".
+- If it is any other question about blood/lab tests, results or sample collection — what a test is or why it is done, normal/reference ranges, what a high or low value can mean, sample types or preparation in general (no specific catalog test named), how often to test, the difference between tests, which test to choose, in any wording or language — set request_type "general_question": write "answer" and put the catalog tests it is about (or that fit it) in "results".
 - "answer" (general_question only): a clear, plain reply for a support agent to pass on — 2-6 short sentences, or short "- " lines for lists. Reference ranges vary by lab, age and sex: say they are typical. No diagnosis, no prescription or medicine advice; for interpreting a patient's own result, advise consulting their doctor. Do not mention prices, report times or availability.
 - If it is not about health or lab tests at all (including greetings, thanks and small talk), set request_type "not_a_test_request".
 - missing_relevant_tests: plain names of clearly relevant tests you could not find in the catalog (max 5).
@@ -92,7 +96,7 @@ Rules:
   Never mention prices, report times or availability in "reply".
 
 Reply with ONLY this JSON object, no markdown:
-{"request_type":"recommendation"|"direct_lookup"|"general_question"|"not_a_test_request","lookup_query":string|null,"lookup_subject":"components"|null,"answer":string|null,"reply":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
+{"request_type":"recommendation"|"direct_lookup"|"general_question"|"not_a_test_request","lookup_query":string|null,"lookup_subject":"components"|"sample"|"fasting"|"details"|null,"answer":string|null,"reply":string|null,"topic":string,"intent":string,"results":[{"code":string,"relevance_score":number,"reason":string}],"missing_relevant_tests":[string]}
 "topic" is a short label (e.g. "Weight management"); "intent" is the purpose (e.g. "Checks before starting medication").`;
 
 /** Every test, profile and package Gemini may recommend from. */
@@ -172,6 +176,7 @@ Base the answer on reputable sources (e.g. major lab test directories, NHS, Medl
 
 Rules:
 - Answer only about the tests listed. Never give a diagnosis, prescription or medicine advice.
+- A test line may end with "our lab: …" (fasting, sample). That is this lab's own rule: your verdict, answer and reply must agree with it, even where general guidance differs.
 - For yes/no questions set "verdict" to "yes", "no", "preferred" (fasting is recommended but not strictly required), or "depends" (different tests differ, or it depends on the doctor's instructions); otherwise null.
 - "answer": 1-3 short, plain sentences for a support agent, naming each test (e.g. "TSH: No fasting needed; a morning sample is common.").
 - Do not mention prices, report times or availability — those come from the lab's own records.
@@ -183,6 +188,17 @@ Rules:
 Reply with ONLY this JSON object, no markdown:
 {"verdict":"yes"|"no"|"preferred"|"depends"|null,"answer":string,"reply":string}`;
 
+const RECORD_FASTING = { yes: "fasting required", recommended: "fasting preferred", no: "no fasting needed" } as const;
+
+/** " — our lab: no fasting needed; sample: Blood" — so Gemini's answer agrees with what the website says. */
+function labRecords(item: AiSuggestion): string {
+  const facts = [
+    item.fasting ? RECORD_FASTING[item.fasting.required] : null,
+    item.samples.length > 0 ? `sample: ${[...new Set(item.samples.map((sample) => sample.specimen))].join(" and ")}` : null,
+  ].filter(Boolean);
+  return facts.length > 0 ? ` — our lab: ${facts.join("; ")}` : "";
+}
+
 /** Gemini's grounded reply to a question about named catalog tests (fasting, what it's for). */
 export async function answerTestQuestionWithGemini(
   question: string,
@@ -190,11 +206,13 @@ export async function answerTestQuestionWithGemini(
   items: AiSuggestion[]
 ): Promise<{ answer: AiAnswer; reply: string | null; sources: AiSource[] }> {
   const listed = items
-    .map((item) =>
-      item.kind === "package"
-        ? `${item.name} (package: ${item.tests.map((test) => test.officialName).join(", ")})`
-        : `${item.name} (${item.code})`
-    )
+    .map((item) => {
+      const name =
+        item.kind === "package"
+          ? `${item.name} (package: ${item.tests.map((test) => test.officialName).join(", ")})`
+          : `${item.name} (${item.code})`;
+      return `${name}${labRecords(item)}`;
+    })
     .join("\n");
   const { text, sources } = await callGemini(TEST_QUESTION_INSTRUCTIONS, `Tests:\n${listed}\n\nQuestion: ${question}`);
   const json = parseJson(text) as { verdict?: unknown; answer?: unknown; reply?: unknown };
@@ -345,7 +363,10 @@ export async function recommendWithGemini(question: string, catalog: PricedCatal
   return {
     requestType,
     lookupQuery: str(json.lookup_query),
-    lookupSubject: requestType === "direct_lookup" && json.lookup_subject === "components" ? "components" : null,
+    lookupSubject:
+      requestType === "direct_lookup" && LOOKUP_SUBJECTS.includes(json.lookup_subject as LookupSubject)
+        ? (json.lookup_subject as LookupSubject)
+        : null,
     answer: requestType === "general_question" ? recordsSafe(str(json.answer)) : null,
     // The recommendation reply is built from DB records; any reply Gemini
     // wrote itself is dropped if it states a price/availability/report time.

@@ -12,6 +12,7 @@ import { AvailabilityPill } from "../availability-pill";
 import { resultsTitleClassName } from "../search/search-results";
 import type { ServiceTypeFilter } from "@/lib/constants/service-types";
 import { isPackage } from "@/lib/search/matching/is-package-name";
+import { SAMPLE_SOURCE_NOTE, sampleLabel, sampleShortLabel } from "@/lib/ai-assistant/sample-guide";
 import type { AiAnswer, AiAssistantResponse, AiSuggestion, FastingInfo, TestQuestionSubject } from "@/types/ai-assistant";
 
 
@@ -276,6 +277,19 @@ function FastingPill({ fasting }: { fasting: FastingInfo }) {
   );
 }
 
+/** The sample(s) to collect: "EDTA", or "EDTA + Serum + Urine" for a package; the tests in each on hover. */
+function SamplePill({ item }: { item: AiSuggestion }) {
+  if (item.samples.length === 0) return null;
+  const title = item.samples
+    .map((sample) => (item.kind === "package" ? `${sampleLabel(sample)}: ${sample.tests.join(", ")}` : sampleLabel(sample)))
+    .join("\n");
+  return (
+    <span title={title} className="rounded-full bg-muted px-2 py-px text-[11.5px] font-medium whitespace-nowrap text-foreground/80">
+      {item.samples.map(sampleShortLabel).join(" + ")}
+    </span>
+  );
+}
+
 const VERDICT_HEADLINE: Record<TestQuestionSubject, Partial<Record<NonNullable<AiAnswer["verdict"]>, string>>> = {
   fasting: {
     yes: "Yes — fasting is needed",
@@ -284,6 +298,7 @@ const VERDICT_HEADLINE: Record<TestQuestionSubject, Partial<Record<NonNullable<A
     depends: "Depends on the test",
   },
   availability: { yes: "Yes — available", no: "Not available", depends: "Depends" },
+  sample: {},
   components: {},
   price: {},
   tat: {},
@@ -371,6 +386,7 @@ function SuggestionRow({
         <div className="flex flex-wrap items-center gap-2.5 text-[12.5px] text-muted-foreground">
           <span className="whitespace-nowrap">Ready in {formatTat(item.tatText)}</span>
           <AvailabilityPill status={item.availability} />
+          <SamplePill item={item} />
           {item.fasting ? <FastingPill fasting={item.fasting} /> : null}
         </div>
       </div>
@@ -562,6 +578,14 @@ export function AiAssistantResults({
         {/* The profile finder's full breakdown for the agent: every option,
             what each leaves out, and the individual prices. */}
         {answer?.subject === "profile_match" ? <AnswerCard answer={{ ...answer, verdict: null }} /> : null}
+
+        {/* Sample/details answers: what's from our records and what's general practice (the tube). */}
+        {answer?.subject === "sample" || answer?.subject === "details" ? (
+          <p className="flex gap-2 px-2.5 text-[12px] leading-relaxed text-muted-foreground">
+            <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
+            {SAMPLE_SOURCE_NOTE}
+          </p>
+        ) : null}
 
         {results.length > 0 ? (
           <>

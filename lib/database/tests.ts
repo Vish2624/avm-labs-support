@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "./fetch-all-rows";
-import { testTypeFromCategory, viaProfileFromCategory, type Test, type TestComponent } from "@/types/test";
+import { testTypeFromCategory, viaProfileFromCategory, type Test, type TestCollection, type TestComponent } from "@/types/test";
 import { cachedCatalogRead, invalidatesCatalog } from "@/lib/database/catalog-cache";
 
 const TEST_COLUMNS =
@@ -147,6 +147,41 @@ export async function getTestParameters(ids: string[]): Promise<Map<string, stri
       return names.length > 0 ? [[row.id, names] as const] : [];
     })
   );
+}
+
+interface TestCollectionRow {
+  id: string;
+  sample: string | null;
+  fasting: unknown;
+  tube: string | null;
+}
+
+/**
+ * Each active test's sample ("Blood", "Urine"), blood tube and fasting flag
+ * as the website sends them (details.sample/tube/fasting), keyed by test id.
+ */
+export function listTestCollection(): Promise<Map<string, TestCollection>> {
+  return cachedCatalogRead("tests:collection", async () => {
+    const supabase = createAdminClient();
+    const rows = await fetchAllRows<TestCollectionRow>((from, to) =>
+      supabase
+        .from("tests")
+        .select("id, sample:details->>sample, fasting:details->fasting, tube:details->>tube")
+        .eq("active", true)
+        .order("id")
+        .range(from, to)
+    );
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          sample: row.sample?.trim() || null,
+          fasting: typeof row.fasting === "boolean" ? row.fasting : null,
+          tube: row.tube?.trim() || null,
+        },
+      ])
+    );
+  });
 }
 
 /** Every test, active or not, with its links — the Admin Tests catalog table. */
