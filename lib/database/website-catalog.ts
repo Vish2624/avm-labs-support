@@ -14,6 +14,7 @@ const minorUnit = (currencyCode: string) => (currencyCode === "BHD" ? 1000 : 100
 
 interface TestRow {
   id: string;
+  website_id: string;
   /** details->categories: the website's test categories (a JSON array). */
   categories: unknown;
 }
@@ -56,7 +57,7 @@ export function loadWebsiteSuggestionData(locationId: string): Promise<WebsiteSu
       fetchAllRows<TestRow>((from, to) =>
         supabase
           .from("tests")
-          .select("id, categories:details->categories")
+          .select("id, website_id, categories:details->categories")
           .eq("active", true)
           .not("website_id", "is", null)
           .order("id")
@@ -89,6 +90,7 @@ export function loadWebsiteSuggestionData(locationId: string): Promise<WebsiteSu
     const priceByTest = new Map(priceRows.map((row) => [row.test_id, row.price]));
     const tests = testRows.map((row) => ({
       id: row.id,
+      websiteId: row.website_id,
       price: priceByTest.get(row.id) ?? 0,
       categories: Array.isArray(row.categories) ? row.categories.filter((c): c is string => typeof c === "string") : [],
     }));

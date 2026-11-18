@@ -35,8 +35,15 @@ const TEST_THEMES: Record<string, string[]> = {
   tumour: [],
 };
 
+// Tests that can't be booked together, by website id: a profile with one of
+// them isn't suggested while another stays on the quote. Must match EXCLUSIVE
+// in the website's src/logic/01-data.js.
+const EXCLUSIVE_TESTS = [["fbs", "rbs"]];
+
 export interface SuggestionTest {
   id: string;
+  /** The test's id on the website, for EXCLUSIVE_TESTS. */
+  websiteId?: string;
   /** Minor units; 0 when not offered at this location. */
   price: number;
   categories: string[];
@@ -104,6 +111,16 @@ export function websiteSuggestions({
   const have = new Set([...quoteTestIds, ...inQuote.flatMap((q) => q.testIds)]);
   const total = sum(quoteTestIds) + inQuote.reduce((t, q) => t + q.price, 0);
   const stretch = Math.max(total * 1.5, rules.homeCollectionFreeFrom);
+  // Which EXCLUSIVE_TESTS set each test is in, by its id here.
+  const exclusiveSet = new Map(
+    tests.flatMap((t) => {
+      const i = EXCLUSIVE_TESTS.findIndex((set) => t.websiteId !== undefined && set.includes(t.websiteId));
+      return i < 0 ? [] : [[t.id, i] as const];
+    })
+  );
+  // One of `ids` can't be booked with one of `staying`.
+  const clashes = (ids: string[], staying: string[]) =>
+    ids.some((a) => exclusiveSet.has(a) && staying.some((b) => b !== a && exclusiveSet.get(b) === exclusiveSet.get(a)));
   // A profile on the quote that already has every test of `p`.
   const coveredByQuote = (p: SuggestionProfile) => inQuote.some((q) => covers(q, p));
   // How close a profile is to some tests: about the same thing 1, a general check-up 0.5, anything else 0.25.
@@ -124,6 +141,9 @@ export function websiteSuggestions({
     if (!ovT.length && !ovP.length) continue;
     // Sharing tests with a profile that stays on the quote would charge for them twice.
     if (kept.some((q) => q.testIds.some((id) => p.testIds.includes(id)))) continue;
+    // Nor one with a test that can't be booked with what stays on the quote.
+    if (clashes(p.testIds, [...quoteTestIds.filter((id) => !ovT.includes(id)), ...kept.flatMap((q) => q.testIds)]))
+      continue;
     const others = p.testIds.filter((id) => !have.has(id));
     const replaced = sum(ovT) + ovP.reduce((t, q) => t + q.price, 0);
     const after = total - replaced + p.price;

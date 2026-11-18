@@ -86,6 +86,21 @@ test("a profile sharing tests with one staying on the quote isn't suggested", ()
   assert.deepEqual(run(["a"], [onQuote, profile("p", 4000, ["a", "b"])], ["q"]), []);
 });
 
+test("a profile with a test that can't be booked with one staying on the quote isn't suggested", () => {
+  const tests: SuggestionTest[] = [
+    ...TESTS,
+    { id: "fasting", websiteId: "fbs", price: 1000, categories: ["diabetes"] },
+    { id: "random", websiteId: "rbs", price: 1000, categories: ["diabetes"] },
+  ];
+  const profiles = [profile("sugar", 5000, ["a", "fasting"]), profile("plain", 5000, ["a", "c"])];
+  const suggest = (quoteTestIds: string[]) =>
+    websiteSuggestions({ quoteTestIds, quoteProfileIds: [], tests, profiles, rules }).map((s) => s.profileId);
+  assert.ok(suggest(["a"]).includes("sugar"));
+  assert.deepEqual(suggest(["a", "random"]), ["plain"]);
+  // Swapping fasting for fasting is fine.
+  assert.ok(suggest(["a", "fasting"]).includes("sugar"));
+});
+
 test("a profile wholly containing one on the quote replaces it", () => {
   const small = profile("small", 6000, ["a", "b"]);
   const [s] = run([], [small, profile("big", 7000, ["a", "b", "c"])], ["small"]);
