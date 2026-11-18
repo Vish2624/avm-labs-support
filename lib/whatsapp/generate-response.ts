@@ -42,8 +42,9 @@ export function hasKsaVat(currency: string): boolean {
 /**
  * - detailed: every test with its own price, then the total
  * - summary: the test names and one overall price, offering the breakup on request
+ * - woe: for the team, never the customer — each item's name and code, nothing else
  */
-export type ReplyStyle = "detailed" | "summary";
+export type ReplyStyle = "detailed" | "summary" | "woe";
 
 /**
  * Format a quotation's verified DB fields into a copy-ready WhatsApp
@@ -54,6 +55,10 @@ export type ReplyStyle = "detailed" | "summary";
 export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle = "detailed"): string {
   if (quotation.lineItems.length === 0) {
     return WHATSAPP_TEMPLATES.empty;
+  }
+
+  if (style === "woe") {
+    return quotation.lineItems.map((item, index) => WHATSAPP_TEMPLATES.woeLine(index + 1, item.name, item.code)).join("\n");
   }
 
   const tatTexts = quotation.lineItems.map((item) => formatTat(item.tatText));

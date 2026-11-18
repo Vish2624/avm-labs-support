@@ -83,7 +83,7 @@ export function QuotationPanel({
   onClear,
 }: {
   quotation: Quotation;
-  /** The reply in both styles — the agent picks which one to copy. */
+  /** The reply in every style — the agent picks which one to copy. */
   whatsappReplies: Record<ReplyStyle, string>;
   locationLabel: string | null;
   customerName: string;
@@ -94,9 +94,12 @@ export function QuotationPanel({
   const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const [replyStyle, setReplyStyle] = useState<ReplyStyle>("detailed");
   // A single item (test, component or profile) has nothing to summarize — its
-  // one price is the total — so the choice only appears from two items up.
+  // one price is the total — so Summary only appears from two items up.
   const canSummarize = quotation.lineItems.length > 1;
-  const whatsappMessage = whatsappReplies[canSummarize ? replyStyle : "detailed"];
+  const style = replyStyle === "summary" && !canSummarize ? "detailed" : replyStyle;
+  // WOE is the team's copy (name and code only) — never sent to the customer.
+  const woe = style === "woe";
+  const whatsappMessage = whatsappReplies[style];
   // Lines playing their slide-out before they're actually removed.
   const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
 
@@ -266,25 +269,27 @@ export function QuotationPanel({
         <div className="flex flex-col gap-2.5 px-7 pt-5 pb-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-              <h2 className="text-sm font-semibold whitespace-nowrap">Reply to send</h2>
-              {canSummarize ? (
+              <h2 className="text-sm font-semibold whitespace-nowrap">{woe ? "For the team" : "Reply to send"}</h2>
               <div role="radiogroup" aria-label="Reply style" className="flex rounded-[9px] bg-muted p-0.5">
                 {(
                   [
-                    { style: "detailed", label: "Detailed", hint: "Every test with its own price" },
-                    { style: "summary", label: "Summary", hint: "Test names and one overall price" },
+                    { value: "detailed", label: "Detailed", hint: "Every test with its own price" },
+                    ...(canSummarize
+                      ? ([{ value: "summary", label: "Summary", hint: "Test names and one overall price" }] as const)
+                      : []),
+                    { value: "woe", label: "WOE", hint: "For the team: each test's name and code — not for the customer" },
                   ] as const
-                ).map(({ style, label, hint }) => (
+                ).map(({ value, label, hint }) => (
                   <button
-                    key={style}
+                    key={value}
                     type="button"
                     role="radio"
-                    aria-checked={replyStyle === style}
+                    aria-checked={style === value}
                     title={hint}
-                    onClick={() => setReplyStyle(style)}
+                    onClick={() => setReplyStyle(value)}
                     className={cn(
                       "h-7 rounded-[7px] px-2.5 text-[12px] font-medium transition-colors duration-150",
-                      replyStyle === style
+                      style === value
                         ? "bg-card text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
                     )}
@@ -293,7 +298,6 @@ export function QuotationPanel({
                   </button>
                 ))}
               </div>
-              ) : null}
             </div>
             <input
               value={customerName}
@@ -303,9 +307,30 @@ export function QuotationPanel({
               className="h-8 w-[190px] max-w-full min-w-0 rounded-[9px] border border-input bg-card px-2.5 text-[12.5px] outline-none transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-[3px] focus:ring-primary/15"
             />
           </div>
-          <div className="rounded-[4px_16px_16px_16px] bg-bubble px-4 py-3.5 transition-colors duration-300 dark:ring-1 dark:ring-success/20 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
-            {whatsappMessage}
-          </div>
+          {woe ? (
+            // Shown as a list with each code highlighted; Copy WOE copies the
+            // same lines as text (code in WhatsApp bold).
+            <ol className="overflow-hidden rounded-[14px] border border-dashed border-primary/40 bg-primary/[0.04]">
+              {quotation.lineItems.map((item, index) => (
+                <li
+                  key={lineItemKey(item)}
+                  className="flex items-center gap-3 border-b border-primary/15 px-4 py-2.5 last:border-b-0"
+                >
+                  <span className="w-5 shrink-0 text-right text-[12px] font-medium text-muted-foreground tabular-nums">
+                    {index + 1}.
+                  </span>
+                  <span className="min-w-0 flex-1 text-[13.5px] leading-snug font-medium text-foreground">{item.name}</span>
+                  <span className="shrink-0 rounded-[7px] border border-primary/25 bg-primary/12 px-2 py-0.5 font-mono text-[12.5px] font-bold tracking-wide text-primary select-all">
+                    {item.code}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="rounded-[4px_16px_16px_16px] bg-bubble px-4 py-3.5 transition-colors duration-300 dark:ring-1 dark:ring-success/20 text-[13.5px] leading-relaxed whitespace-pre-wrap text-bubble-foreground">
+              {whatsappMessage}
+            </div>
+          )}
         </div>
       </div>
       <div className="shrink-0 border-t border-border px-7 pt-3.5 pb-5">
@@ -319,8 +344,10 @@ export function QuotationPanel({
         >
           {copied ? (
             <span key="copied" className="inline-flex items-center gap-2 avm-check">
-              ✓ Copied — paste it into WhatsApp
+              {woe ? "✓ Copied — for the team only" : "✓ Copied — paste it into WhatsApp"}
             </span>
+          ) : woe ? (
+            "Copy WOE"
           ) : (
             "Copy reply"
           )}

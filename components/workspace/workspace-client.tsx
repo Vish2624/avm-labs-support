@@ -236,6 +236,7 @@ export function WorkspaceClient({
     () => ({
       detailed: generateWhatsAppResponse(quotation, "detailed"),
       summary: generateWhatsAppResponse(quotation, "summary"),
+      woe: generateWhatsAppResponse(quotation, "woe"),
     }),
     [quotation]
   );

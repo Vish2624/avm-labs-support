@@ -30,6 +30,8 @@ export const WHATSAPP_TEMPLATES = {
   // Summary reply: names only, one overall price.
   summaryLine: (index: number, name: string, availability: string | null) =>
     availability ? `${index}. ${name} (${availability})` : `${index}. ${name}`,
+  // WOE (team only): name and code, the code in WhatsApp bold.
+  woeLine: (index: number, name: string, code: string) => `${index}. ${name} — *${code}*`,
   tat: (value: string) => `Reports will be released within ${value}.`,
   subtotal: (amount: string) => `Subtotal: ${amount}`,
   discount: (percent: number, amount: string) => `Discount (${percent}%): -${amount}`,
