@@ -1,7 +1,7 @@
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { parseTatHours } from "@/lib/utils/parse-tat-hours";
-import { applyDiscount } from "@/lib/pricing/discount";
+import { quoteDiscount } from "@/lib/pricing/discount";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { WHATSAPP_TEMPLATES } from "./templates";
 import type { Quotation, QuotationLineItem } from "@/types/quotation";
@@ -80,7 +80,8 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
     }
   }
 
-  const { tier, discountAmount, discountedTotal } = applyDiscount(quotation.total);
+  const { tier, discountAmount, discountedTotal } = quoteDiscount(quotation);
+  const homeCollectionLines = quotation.freeHomeCollection ? [WHATSAPP_TEMPLATES.freeHomeCollection] : [];
   // Riyadh and Khobar — the Saudi branches, priced in SAR.
   const vatLines = hasKsaVat(quotation.total.currency) ? ["", ...WHATSAPP_TEMPLATES.ksaVat] : [];
 
@@ -103,6 +104,7 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
       tier
         ? WHATSAPP_TEMPLATES.totalWithDiscount(formatCurrency(discountedTotal), tier.percent)
         : WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total)),
+      ...homeCollectionLines,
       ...vatLines,
       "",
       WHATSAPP_TEMPLATES.breakupOffer,
@@ -138,6 +140,7 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
     "",
     ...(sharedTat ? [WHATSAPP_TEMPLATES.tat(sharedTat), ""] : []),
     ...totalLines,
+    ...homeCollectionLines,
     ...vatLines,
     "",
     WHATSAPP_TEMPLATES.outro,

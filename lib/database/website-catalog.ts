@@ -52,6 +52,31 @@ export interface WebsiteSuggestionData {
  * country's minimum billing and free home collection limit. From the
  * cached catalog, so it costs nothing per keystroke.
  */
+/**
+ * Each location's free home collection limit from the website's rules, in
+ * the location currency's minor unit, keyed by location id. A profile priced
+ * at or above it comes with free home collection and no volume discount
+ * (lib/pricing/discount.ts). Locations without a pushed rule are left out.
+ */
+export function loadHomeCollectionLimits(
+  locations: { id: string; code: LocationCode; currencyCode: string }[]
+): Promise<Record<string, number>> {
+  return cachedCatalogRead(`home-collection-limits:${locations.map((l) => l.id).join(",")}`, async () => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.from("website_sync").select("rules").eq("id", 1).maybeSingle();
+    if (error) throw error;
+    const rules = data?.rules as Record<string, { hcFree?: number }> | null;
+    return Object.fromEntries(
+      locations.flatMap((location) => {
+        const hcFree = rules?.[WEBSITE_COUNTRY[location.code]]?.hcFree;
+        return typeof hcFree === "number" && hcFree > 0
+          ? [[location.id, Math.round(hcFree * minorUnit(location.currencyCode))] as const]
+          : [];
+      })
+    );
+  });
+}
+
 export function loadWebsiteSuggestionData(locationId: string): Promise<WebsiteSuggestionData> {
   return cachedCatalogRead(`website-suggestions:${locationId}`, async () => {
     const supabase = createAdminClient();

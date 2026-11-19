@@ -1,5 +1,6 @@
 import { DISCOUNT_TIERS, type DiscountTier } from "@/lib/constants/discount-tiers";
 import type { Money } from "./money";
+import type { Quotation } from "@/types/quotation";
 
 /** The tiers for a currency, ascending by threshold — [] if unsupported. */
 export function getDiscountTiers(currency: string): DiscountTier[] {
@@ -23,9 +24,18 @@ export interface DiscountResult {
   discountedTotal: Money;
 }
 
-/** Applies the best qualifying tier to `total`. Never mutates `total`. */
-export function applyDiscount(total: Money): DiscountResult {
-  const tier = getApplicableDiscountTier(total);
+/**
+ * A quote's volume discount: none when it has free home collection instead
+ * (a profile priced at or above the free home collection limit is on it —
+ * the business's rule, Nov 2026), else applyDiscount() on its total.
+ */
+export function quoteDiscount(quotation: Pick<Quotation, "total" | "freeHomeCollection">): DiscountResult {
+  return applyDiscount(quotation.total, quotation.freeHomeCollection === true);
+}
+
+/** Applies the best qualifying tier to `total` (none when `blocked`). Never mutates `total`. */
+export function applyDiscount(total: Money, blocked = false): DiscountResult {
+  const tier = blocked ? null : getApplicableDiscountTier(total);
   if (!tier) {
     return {
       tier: null,

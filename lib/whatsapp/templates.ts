@@ -36,6 +36,7 @@ export const WHATSAPP_TEMPLATES = {
   subtotal: (amount: string) => `Subtotal: ${amount}`,
   discount: (percent: number, amount: string) => `Discount (${percent}%): -${amount}`,
   total: (amount: string) => `Total: ${amount}`,
+  freeHomeCollection: "Home collection is free.",
   totalWithDiscount: (amount: string, percent: number) => `Total: ${amount} (${percent}% discount included)`,
   // Saudi branches (Riyadh, Khobar) only: VAT is mentioned, never added to the price.
   ksaVat: ["VAT 15% is applicable to non-citizens.*", "If the patient is a citizen, no VAT will be applicable."],

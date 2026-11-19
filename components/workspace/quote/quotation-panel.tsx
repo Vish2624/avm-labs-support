@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { applyDiscount, getDiscountTiers } from "@/lib/pricing/discount";
+import { getDiscountTiers, quoteDiscount } from "@/lib/pricing/discount";
 import { subtractMoney } from "@/lib/pricing/money";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
@@ -25,7 +25,9 @@ function lineMeta(item: QuotationLineItem): string {
 
 // Volume-discount progress: how far the total is towards the top tier, and
 // what the next tier needs. Returns null for a currency with no tiers.
+// None when the quote has free home collection instead of a discount.
 function tierProgress(quotation: Quotation) {
+  if (quotation.freeHomeCollection) return null;
   const tiers = getDiscountTiers(quotation.total.currency);
   if (tiers.length === 0) return null;
   const top = tiers[tiers.length - 1];
@@ -127,7 +129,7 @@ export function QuotationPanel({
   const copied = copiedMessage === whatsappMessage;
 
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
-  const { tier, discountedTotal } = applyDiscount(quotation.total);
+  const { tier, discountedTotal } = quoteDiscount(quotation);
   const progress = tierProgress(quotation);
   const finalTotal = tier ? discountedTotal : quotation.total;
   const shownTotal = useCountUp(finalTotal.amount);
@@ -251,6 +253,12 @@ export function QuotationPanel({
           {hasKsaVat(quotation.total.currency) ? (
             <p className="text-[12px] leading-snug text-muted-foreground">
               {WHATSAPP_TEMPLATES.ksaVat.join(" ")}
+            </p>
+          ) : null}
+          {quotation.freeHomeCollection ? (
+            <p className="flex items-center gap-2 text-[12.5px] leading-snug text-success-foreground avm-fade-up">
+              <span className="rounded-full bg-success/15 px-2 py-px text-[11.5px] font-semibold">Free home collection</span>
+              <span className="text-muted-foreground">No volume discount with this profile</span>
             </p>
           ) : null}
           {progress ? (

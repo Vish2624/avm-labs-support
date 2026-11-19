@@ -46,11 +46,14 @@ export function WorkspaceClient({
   initialTab = "search",
   initialServiceType = "all",
   initialCatalogs = {},
+  homeCollectionLimits = {},
 }: {
   initialTab?: WorkspaceTab;
   initialServiceType?: ServiceTypeFilter;
   /** Search catalogs rendered into the page, keyed by their /api/search/catalog URL. */
   initialCatalogs?: Record<string, SearchCatalog>;
+  /** Each location's free home collection limit (minor units), from the website's rules. */
+  homeCollectionLimits?: Record<string, number>;
 }) {
   const {
     locationId,
@@ -230,8 +233,14 @@ export function WorkspaceClient({
         lineItems.map((item) => item.price),
         selectedLocation?.currencyCode ?? lineItems[0]?.price.currency ?? "AED"
       ),
+      freeHomeCollection: lineItems.some(
+        (item) =>
+          item.kind === "package" &&
+          homeCollectionLimits[locationId] !== undefined &&
+          item.price.amount >= homeCollectionLimits[locationId]
+      ),
     }),
-    [locationId, lineItems, customerName, selectedLocation]
+    [locationId, lineItems, customerName, selectedLocation, homeCollectionLimits]
   );
   const whatsappReplies = useMemo(
     () => ({

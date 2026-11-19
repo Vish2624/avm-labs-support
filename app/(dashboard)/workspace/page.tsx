@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { listActiveLocations } from "@/lib/database/locations";
+import { loadHomeCollectionLimits } from "@/lib/database/website-catalog";
 import { NoLocations } from "@/components/layout/no-locations";
 import { WorkspaceClient, type WorkspaceTab } from "@/components/workspace/workspace-client";
 import { pickTab } from "@/lib/utils/url-tab";
@@ -27,20 +28,22 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Pr
   const saved = cookieStore.get(LOCATION_COOKIE)?.value;
   const locationId = locations.find((location) => location.id === saved)?.id ?? locations[0].id;
   const serviceTypes = initialServiceType === "all" ? SERVICE_TYPES : [initialServiceType];
-  const initialCatalogs: Record<string, SearchCatalog> = Object.fromEntries(
-    await Promise.all(
+  const [initialCatalogs, homeCollectionLimits] = await Promise.all([
+    Promise.all(
       serviceTypes.map(async (serviceType) => [
         searchCatalogUrl(locationId, serviceType),
         await loadSearchCatalog(locationId, serviceType),
       ])
-    )
-  );
+    ).then((entries): Record<string, SearchCatalog> => Object.fromEntries(entries)),
+    loadHomeCollectionLimits(locations),
+  ]);
 
   return (
     <WorkspaceClient
       initialTab={pickTab(tab, WORKSPACE_TABS, "search")}
       initialServiceType={initialServiceType}
       initialCatalogs={initialCatalogs}
+      homeCollectionLimits={homeCollectionLimits}
     />
   );
 }
