@@ -33,11 +33,8 @@ export const WHATSAPP_TEMPLATES = {
   // WOE (team only): name and code, the code in WhatsApp bold.
   woeLine: (index: number, name: string, code: string) => `${index}. ${name} — *${code}*`,
   tat: (value: string) => `Reports will be released within ${value}.`,
-  subtotal: (amount: string) => `Subtotal: ${amount}`,
-  discount: (percent: number, amount: string) => `Discount (${percent}%): -${amount}`,
   total: (amount: string) => `Total: ${amount}`,
   freeHomeCollection: "Home collection is free.",
-  totalWithDiscount: (amount: string, percent: number) => `Total: ${amount} (${percent}% discount included)`,
   // Saudi branches (Riyadh, Khobar) only: VAT is mentioned, never added to the price.
   ksaVat: ["VAT 15% is applicable to non-citizens.*", "If the patient is a citizen, no VAT will be applicable."],
   breakupOffer: "Would you like the price breakup for each test? Just let us know.",

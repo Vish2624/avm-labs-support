@@ -1,7 +1,6 @@
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { parseTatHours } from "@/lib/utils/parse-tat-hours";
-import { quoteDiscount } from "@/lib/pricing/discount";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { WHATSAPP_TEMPLATES } from "./templates";
 import type { Quotation, QuotationLineItem } from "@/types/quotation";
@@ -80,7 +79,6 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
     }
   }
 
-  const { tier, discountAmount, discountedTotal } = quoteDiscount(quotation);
   const homeCollectionLines = quotation.freeHomeCollection ? [WHATSAPP_TEMPLATES.freeHomeCollection] : [];
   // Riyadh and Khobar — the Saudi branches, priced in SAR.
   const vatLines = hasKsaVat(quotation.total.currency) ? ["", ...WHATSAPP_TEMPLATES.ksaVat] : [];
@@ -101,9 +99,7 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
       ...names,
       "",
       ...(sharedTat ? [WHATSAPP_TEMPLATES.tat(sharedTat)] : []),
-      tier
-        ? WHATSAPP_TEMPLATES.totalWithDiscount(formatCurrency(discountedTotal), tier.percent)
-        : WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total)),
+      WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total)),
       ...homeCollectionLines,
       ...vatLines,
       "",
@@ -125,21 +121,13 @@ export function generateWhatsAppResponse(quotation: Quotation, style: ReplyStyle
     )
   );
 
-  const totalLines = tier
-    ? [
-        WHATSAPP_TEMPLATES.subtotal(formatCurrency(quotation.total)),
-        WHATSAPP_TEMPLATES.discount(tier.percent, formatCurrency(discountAmount)),
-        WHATSAPP_TEMPLATES.total(formatCurrency(discountedTotal)),
-      ]
-    : [WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total))];
-
   return [
     WHATSAPP_TEMPLATES.intro(quotation.customerName?.trim() || null),
     "",
     ...lines,
     "",
     ...(sharedTat ? [WHATSAPP_TEMPLATES.tat(sharedTat), ""] : []),
-    ...totalLines,
+    WHATSAPP_TEMPLATES.total(formatCurrency(quotation.total)),
     ...homeCollectionLines,
     ...vatLines,
     "",

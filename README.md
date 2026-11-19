@@ -60,7 +60,7 @@ lib/                         # logic and data access, no React
   supabase/                  # Supabase clients (admin = data, server = auth, middleware = proxy)
   auth/                      # requireUser / requireAdmin
   profiles/                  # package matching and pricing
-  pricing/                   # integer money maths and discount tiers
+  pricing/                   # integer money maths
   excel/  imports/           # Excel upload pipeline: parse, validate, diff, commit, rollback
   whatsapp/                  # WhatsApp reply text
   validation/                # zod schemas for API input

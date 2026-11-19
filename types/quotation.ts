@@ -48,7 +48,7 @@ export interface Quotation {
   customerName?: string;
   /**
    * A profile on it is priced at or above the location's free home collection
-   * limit: the quote gets free home collection and no volume discount.
+   * limit: the quote gets free home collection.
    */
   freeHomeCollection?: boolean;
 }

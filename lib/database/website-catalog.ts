@@ -55,8 +55,8 @@ export interface WebsiteSuggestionData {
 /**
  * Each location's free home collection limit from the website's rules, in
  * the location currency's minor unit, keyed by location id. A profile priced
- * at or above it comes with free home collection and no volume discount
- * (lib/pricing/discount.ts). Locations without a pushed rule are left out.
+ * at or above it comes with free home collection. Locations without a
+ * pushed rule are left out.
  */
 export function loadHomeCollectionLimits(
   locations: { id: string; code: LocationCode; currencyCode: string }[]

@@ -6,8 +6,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
-import { getDiscountTiers, quoteDiscount } from "@/lib/pricing/discount";
-import { subtractMoney } from "@/lib/pricing/money";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { SERVICE_TYPE_LABELS } from "@/lib/constants/service-types";
 import { lineItemKey, type Quotation, type QuotationLineItem } from "@/types/quotation";
@@ -21,23 +19,6 @@ function lineMeta(item: QuotationLineItem): string {
     return `${item.tests.length} test${item.tests.length === 1 ? "" : "s"} · ready in ${formatTat(item.tatText)}${availability}`;
   }
   return `${item.code} · ${SERVICE_TYPE_LABELS[item.serviceType]} · ready in ${formatTat(item.tatText)}${availability}`;
-}
-
-// Volume-discount progress: how far the total is towards the top tier, and
-// what the next tier needs. Returns null for a currency with no tiers.
-// None when the quote has free home collection instead of a discount.
-function tierProgress(quotation: Quotation) {
-  if (quotation.freeHomeCollection) return null;
-  const tiers = getDiscountTiers(quotation.total.currency);
-  if (tiers.length === 0) return null;
-  const top = tiers[tiers.length - 1];
-  const next = tiers.find((tier) => quotation.total.amount < tier.thresholdMinor);
-  return {
-    percent: Math.min(100, (quotation.total.amount / top.thresholdMinor) * 100),
-    hint: next
-      ? `Add ${formatCurrency(subtractMoney({ amount: next.thresholdMinor, currency: quotation.total.currency }, quotation.total))} more to unlock ${next.percent}% off`
-      : `Maximum ${top.percent}% volume discount applied`,
-  };
 }
 
 /**
@@ -73,7 +54,7 @@ function useCountUp(target: number): number {
 /** Length of a line's slide-out (matches avm-item-out in globals.css). */
 const EXIT_MS = 260;
 
-// The in-progress quote: line items, total (with the volume discount), the
+// The in-progress quote: line items, total, the
 // generated WhatsApp reply and the Copy action.
 export function QuotationPanel({
   quotation,
@@ -129,10 +110,7 @@ export function QuotationPanel({
   const copied = copiedMessage === whatsappMessage;
 
   const flagged = quotation.lineItems.filter((item) => item.availability !== "available");
-  const { tier, discountedTotal } = quoteDiscount(quotation);
-  const progress = tierProgress(quotation);
-  const finalTotal = tier ? discountedTotal : quotation.total;
-  const shownTotal = useCountUp(finalTotal.amount);
+  const shownTotal = useCountUp(quotation.total.amount);
 
   async function handleCopy() {
     try {
@@ -176,7 +154,7 @@ export function QuotationPanel({
           </div>
           <p className="mt-2 text-base font-medium">Nothing added yet</p>
           <p className="max-w-[320px] text-[13.5px] leading-relaxed text-pretty text-muted-foreground">
-            Search or paste the customer&apos;s message, then add tests. Price, discount and the reply update as
+            Search or paste the customer&apos;s message, then add tests. Price and the reply update as
             you go.
           </p>
         </div>
@@ -235,18 +213,8 @@ export function QuotationPanel({
           <div className="flex items-center justify-between gap-2.5">
             <span className="text-[13.5px] font-medium">Total</span>
             <div className="flex items-baseline gap-2 tabular-nums">
-              {tier ? (
-                <>
-                  <span className="rounded-full bg-success/15 px-[7px] py-px text-[11.5px] font-semibold text-success-foreground avm-check">
-                    −{tier.percent}%
-                  </span>
-                  <span className="text-[12.5px] text-muted-foreground line-through">
-                    {formatCurrency(quotation.total)}
-                  </span>
-                </>
-              ) : null}
               <span className="text-[21px] font-semibold tracking-[-0.01em]">
-                {formatCurrency({ amount: shownTotal, currency: finalTotal.currency })}
+                {formatCurrency({ amount: shownTotal, currency: quotation.total.currency })}
               </span>
             </div>
           </div>
@@ -258,19 +226,7 @@ export function QuotationPanel({
           {quotation.freeHomeCollection ? (
             <p className="flex items-center gap-2 text-[12.5px] leading-snug text-success-foreground avm-fade-up">
               <span className="rounded-full bg-success/15 px-2 py-px text-[11.5px] font-semibold">Free home collection</span>
-              <span className="text-muted-foreground">No volume discount with this profile</span>
             </p>
-          ) : null}
-          {progress ? (
-            <div className="flex items-center gap-2.5">
-              <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-border">
-                <div
-                  className="h-full rounded-full bg-success transition-[width] duration-600 ease-[cubic-bezier(.2,.8,.2,1)]"
-                  style={{ width: `${progress.percent.toFixed(1)}%` }}
-                />
-              </div>
-              <span className="text-[11.5px] whitespace-nowrap text-muted-foreground">{progress.hint}</span>
-            </div>
           ) : null}
         </div>
 

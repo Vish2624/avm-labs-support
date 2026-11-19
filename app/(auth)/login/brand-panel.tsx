@@ -89,7 +89,7 @@ export function BrandPanel({ locations }: { locations: { name: string; currencyC
           >
             Thank you for waiting. Here are the details you asked for…
             <br />
-            <strong className="font-semibold">Total and discount included</strong>
+            <strong className="font-semibold">Total included</strong>
           </div>
 
           <div
