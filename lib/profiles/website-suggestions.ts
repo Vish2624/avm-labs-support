@@ -10,10 +10,16 @@
  * worth more than the difference, for a difference in scale with the quote.
  * Worked out from prices and tests only, never a health judgement.
  *
- * Two additions to the website's rules, so agents can always see where the
- * quoted tests are sold together:
+ * Additions to the website's rules (from the Nov 2026 app check against the
+ * website, where 7 of 26 profiles' own tests got another profile first):
  * - a profile that has every test on the quote and costs the same is a pick
  *   too (one line instead of several; the website skips it as no gain);
+ * - a profile with everything on the quote that saves (or costs the same)
+ *   comes first, the biggest saving first — ahead of one that saves by
+ *   replacing only part of the quote, or adds tests for a bit more;
+ * - a men's profile is never suggested for a woman's quote, or the reverse,
+ *   and one that would add tests for its sex only (PSA, AMH…) isn't
+ *   suggested while the quote doesn't show whose it is;
  * - every other profile that contains quoted tests follows the picks, with
  *   `pick: false`, those covering the most of the quote first, then cheapest.
  */
@@ -39,6 +45,14 @@ const TEST_THEMES: Record<string, string[]> = {
 // them isn't suggested while another stays on the quote. Must match EXCLUSIVE
 // in the website's src/logic/01-data.js.
 const EXCLUSIVE_TESTS = [["fbs", "rbs"]];
+
+// Tests done for one sex only, by website id, and the profile categories for
+// each sex. Not on the website — this app's own rule (see above).
+const SEX_SPECIFIC_TESTS: Record<string, string[]> = {
+  men: ["psa", "free-psa"],
+  women: ["amh", "progesterone", "ca125", "ca15-3"],
+};
+const SEX_CATEGORIES = Object.keys(SEX_SPECIFIC_TESTS);
 
 export interface SuggestionTest {
   id: string;
@@ -121,6 +135,22 @@ export function websiteSuggestions({
   // One of `ids` can't be booked with one of `staying`.
   const clashes = (ids: string[], staying: string[]) =>
     ids.some((a) => exclusiveSet.has(a) && staying.some((b) => b !== a && exclusiveSet.get(b) === exclusiveSet.get(a)));
+  // Which sex a test is only for, by its id here.
+  const sexOfTest = new Map(
+    tests.flatMap((t) => {
+      const sex = SEX_CATEGORIES.find((c) => t.websiteId !== undefined && SEX_SPECIFIC_TESTS[c].includes(t.websiteId));
+      return sex ? [[t.id, sex] as const] : [];
+    })
+  );
+  // Whose quote it is, as far as it shows: a men's/women's profile on it, or a test for one sex only.
+  const quoteSexes = new Set([
+    ...inQuote.flatMap((q) => (SEX_CATEGORIES.includes(q.category) ? [q.category] : [])),
+    ...[...have].flatMap((id) => sexOfTest.get(id) ?? []),
+  ]);
+  const wrongSex = (p: SuggestionProfile, others: string[]) =>
+    SEX_CATEGORIES.includes(p.category) &&
+    ([...quoteSexes].some((sex) => sex !== p.category) ||
+      (!quoteSexes.has(p.category) && others.some((id) => sexOfTest.get(id) === p.category)));
   // A profile on the quote that already has every test of `p`.
   const coveredByQuote = (p: SuggestionProfile) => inQuote.some((q) => covers(q, p));
   // How close a profile is to some tests: about the same thing 1, a general check-up 0.5, anything else 0.25.
@@ -145,6 +175,7 @@ export function websiteSuggestions({
     if (clashes(p.testIds, [...quoteTestIds.filter((id) => !ovT.includes(id)), ...kept.flatMap((q) => q.testIds)]))
       continue;
     const others = p.testIds.filter((id) => !have.has(id));
+    if (wrongSex(p, others)) continue;
     const replaced = sum(ovT) + ovP.reduce((t, q) => t + q.price, 0);
     const after = total - replaced + p.price;
     const extra = billed(after) - billed(total);
@@ -173,13 +204,15 @@ export function websiteSuggestions({
     const fit = covered.length / p.testIds.length;
     out.push({
       suggestion,
-      rank: extra < 0 ? 0 : extra === 0 ? 1 : 2,
+      // Everything on the quote for less (or the same) first, then saving on part of it, then the same price, then more tests for more.
+      rank: wholeQuote && extra <= 0 ? 0 : extra < 0 ? 1 : extra === 0 ? 2 : 3,
       value: extra > 0 ? (worth / extra) * (0.5 + fit) * (0.5 + theme(p, covered)) : worth - extra,
     });
   }
   out.sort(
     (a, b) =>
       a.rank - b.rank ||
+      (a.rank === 0 ? a.suggestion.extra - b.suggestion.extra : 0) ||
       Number(b.suggestion.recommended) - Number(a.suggestion.recommended) ||
       b.value - a.value ||
       a.suggestion.extra - b.suggestion.extra

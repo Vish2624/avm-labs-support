@@ -234,6 +234,15 @@ export function QuoteProvider({
   return <QuoteContext.Provider value={value}>{children}</QuoteContext.Provider>;
 }
 
+/** Tests a profile/package on the quote already includes — never offered to add on their own. */
+export function useTestsInQuotedProfiles(): Set<string> {
+  const { lineItems } = useQuote();
+  return useMemo(
+    () => new Set(lineItems.flatMap((line) => (line.kind === "package" ? line.tests.map((test) => test.testId) : []))),
+    [lineItems]
+  );
+}
+
 export function useQuote(): QuoteContextValue {
   const context = useContext(QuoteContext);
   if (!context) throw new Error("useQuote must be used inside <QuoteProvider>");

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/format-currency";
 import { sumMoney } from "@/lib/pricing/money";
 import { EXACT_MATCH_ROW_CLASS, ExactMatchTag } from "./test-result-card";
+import { useTestsInQuotedProfiles } from "../quote/quote-provider";
 import type { CalculatedSearchResult, SearchTestResult } from "@/types/search";
 import type { ProfileSearchResult } from "@/types/profile";
 
@@ -39,7 +40,8 @@ export function CalculatedResultCard({
   // A group inside profiles (Pancreatic Profile): its tests, and the profiles that include it.
   const group = result.kind === "group";
   const partOf = result.partOf ?? [];
-  const toAdd = result.sources.filter((source) => !addedTestIds.has(source.testId));
+  const inQuotedProfiles = useTestsInQuotedProfiles();
+  const toAdd = result.sources.filter((source) => !addedTestIds.has(source.testId) && !inQuotedProfiles.has(source.testId));
   const currency = result.sources[0]?.price.currency;
   const total = result.viaProfileCode
     ? (profile?.price ?? null)

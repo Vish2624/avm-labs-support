@@ -132,3 +132,40 @@ test("minimum billing is counted on both sides", () => {
   assert.equal(out[0].extra, 0);
   assert.deepEqual(out[0].extraTestIds, ["b"]);
 });
+
+test("a profile with everything on the quote that saves most comes before one adding tests", () => {
+  // a, b, c on the quote (12000). "own" has exactly them for 8000; "bigger" adds d (worth 10000) and saves less.
+  const [first, second] = run(["a", "b", "c"], [profile("bigger", 11000, ["a", "b", "c", "d"]), profile("own", 8000, ["a", "b", "c"])]);
+  assert.equal(first.profileId, "own");
+  assert.equal(second.profileId, "bigger");
+});
+
+test("a profile with everything on the quote comes before one saving more on only part of it", () => {
+  // "part" replaces a, b for 3000 (saves 6000, c stays); "whole" has a, b, c for 9000 (saves 3000).
+  const [first] = run(["a", "b", "c"], [profile("part", 3000, ["a", "b"], { recommended: true }), profile("whole", 9000, ["a", "b", "c"])]);
+  assert.equal(first.profileId, "whole");
+});
+
+const SEXED_TESTS: SuggestionTest[] = [
+  ...TESTS,
+  { id: "psa", websiteId: "psa", price: 6000, categories: ["tumour"] },
+  { id: "amh", websiteId: "amh", price: 9000, categories: ["hormones"] },
+];
+const runSexed = (quoteTestIds: string[], profiles: SuggestionProfile[], quoteProfileIds: string[] = []) =>
+  websiteSuggestions({ quoteTestIds, quoteProfileIds, tests: SEXED_TESTS, profiles, rules });
+
+test("a men's profile that would add PSA isn't suggested while the quote doesn't show whose it is", () => {
+  const men = profile("men", 8000, ["a", "b", "c", "psa"], { category: "men" });
+  assert.deepEqual(runSexed(["a", "b", "c"], [men]), []);
+  // The quote already has a men's-only test: fine.
+  assert.equal(runSexed(["a", "b", "psa"], [men])[0]?.profileId, "men");
+});
+
+test("a men's profile is never suggested for a women's quote, or the reverse", () => {
+  const men = profile("men", 4000, ["a", "b"], { category: "men" });
+  const women = profile("women", 4000, ["a", "b"], { category: "women" });
+  assert.deepEqual(runSexed(["a", "b", "amh"], [men]).map((s) => s.profileId), []);
+  assert.deepEqual(runSexed(["a", "b", "psa"], [women]).map((s) => s.profileId), []);
+  // No sign of whose quote it is, and nothing sex-specific added: both are fine.
+  assert.equal(runSexed(["a", "b"], [men, women]).length, 2);
+});

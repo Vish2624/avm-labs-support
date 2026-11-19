@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { SparklesIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TestResultCard } from "../search/test-result-card";
+import { useTestsInQuotedProfiles } from "../quote/quote-provider";
 import { PackageResultRow } from "../search/package-result-row";
 import { CalculatedResultCard, calculatedIsOrderable } from "../search/calculated-result-card";
 import type { MessageAiState } from "../search/use-semantic-search";
@@ -288,7 +289,8 @@ export function MessageExtractionResults({
   ).length;
   const available = detected.filter((result) => result.availability === "available");
   const unavailable = detected.filter((result) => result.availability !== "available");
-  const newAvailable = available.filter((result) => !addedTestIds.has(result.testId));
+  const inQuotedProfiles = useTestsInQuotedProfiles();
+  const newAvailable = available.filter((result) => !addedTestIds.has(result.testId) && !inQuotedProfiles.has(result.testId));
   const packageNames = groupPackages(packages);
   const availablePackages = packageNames.filter(({ results }) =>
     results.some((result) => result.availability === "available")

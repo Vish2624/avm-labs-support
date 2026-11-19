@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/permissions";
 import { extractTests } from "@/lib/search/reading/extract-tests";
 import { aiListRequestedTests } from "@/lib/search/reading/ai-read-message";
-import { extractFromAiList } from "@/lib/search/reading/extract-from-ai-list";
+import { extractFromAiList, withExactMisses } from "@/lib/search/reading/extract-from-ai-list";
 import { withCalculated } from "@/lib/search/reading/match-calculated";
 import { geminiReaderConfigured } from "@/lib/ai/gemini";
 import { isPackage } from "@/lib/search/matching/is-package-name";
@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     const aiList = await aiListRequestedTests(text, locationId, serviceTypes).catch(() => null);
     if (aiList && (aiList.codes || aiList.notListed.length > 0)) {
       const result = await withCalculated(await extractFromAiList(aiList, locationId, serviceTypes), locationId, serviceTypes);
-      return NextResponse.json({ ...result, readBy: "ai" });
+      // Anything named exactly that Gemini skipped is added back.
+      return NextResponse.json({ ...withExactMisses(result, rules), readBy: "ai" });
     }
   }
 

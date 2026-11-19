@@ -52,3 +52,18 @@ export async function extractFromAiList(
     unmatched: [...new Set([...fromCodes.unmatched, ...stillMissing])],
   };
 }
+
+/**
+ * Adds back the tests the rule-based reader found by their exact code or
+ * name that Gemini left out — it can skip an item in a long list (pasting a
+ * profile's 40 test names once lost Testosterone, silently). Not when a
+ * profile in Gemini's reading already has the test.
+ */
+export function withExactMisses<T extends ExtractTestsResult>(ai: T, rules: ExtractTestsResult): T {
+  const have = new Set([
+    ...ai.detected.map((result) => result.testId),
+    ...ai.packages.flatMap(({ result }) => result.tests.map((test) => test.testId)),
+  ]);
+  const missed = rules.detected.filter((result) => result.matchType === "exact" && !have.has(result.testId));
+  return missed.length === 0 ? ai : { ...ai, detected: [...ai.detected, ...missed] };
+}

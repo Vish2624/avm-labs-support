@@ -13,7 +13,7 @@ import { useImagePaste } from "./paste/use-image-paste";
 import { preloadImageReader } from "./paste/image-reader";
 import { QuotationPanel } from "./quote/quotation-panel";
 import { PackageSuggestions } from "./quote/package-suggestions";
-import { useQuote } from "./quote/quote-provider";
+import { useQuote, useTestsInQuotedProfiles } from "./quote/quote-provider";
 import { lineKey, toPackageLine, toTestLine } from "./quote/quote-lines";
 import { useProfileSuggestions } from "./quote/use-profile-suggestions";
 import { AiAssistantResults, AiQuestionForm, useAiAssistant } from "./assistant/ai-test-assistant";
@@ -156,6 +156,7 @@ export function WorkspaceClient({
   );
 
   const profiles = useProfileSuggestions(lineItems, locationId);
+  const inQuotedProfiles = useTestsInQuotedProfiles();
   const aiAssistant = useAiAssistant(locationId, serviceTypeFilter);
 
   // The search column's own "Clear all": the search box, the pasted text,
@@ -197,7 +198,7 @@ export function WorkspaceClient({
     const typed = query.trim();
     if (!typed) return;
     const { tests, profiles: matchedProfiles, stillSearching } = search.resultsFor(typed);
-    const next = tests.find((result) => !profiles.addedTestIds.has(result.testId));
+    const next = tests.find((result) => !profiles.addedTestIds.has(result.testId) && !inQuotedProfiles.has(result.testId));
     const nextProfile = matchedProfiles.find((result) => !profiles.addedProfileIds.has(result.profileId));
     if (nextProfile && (!next || (search.isExactProfile(nextProfile) && !search.isExactTest(next)))) {
       addPackage(nextProfile);

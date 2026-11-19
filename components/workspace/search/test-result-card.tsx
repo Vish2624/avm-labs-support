@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/utils/format-currency";
 import { formatTat } from "@/lib/utils/format-tat";
 import { AVAILABILITY_LABELS } from "@/lib/constants/availability";
 import { AvailabilityPill } from "../availability-pill";
+import { useQuote } from "../quote/quote-provider";
 import type { SearchTestResult } from "@/types/search";
 
 // Fixed-width Add / Added toggle shared by test and package result rows, so
@@ -54,6 +55,19 @@ export function ExactMatchTag() {
   );
 }
 
+// Stands in for "+ Add" on a test a profile on the quote already includes —
+// adding it again would charge for it twice.
+function IncludedTag({ profileName }: { profileName: string }) {
+  return (
+    <span
+      title={`Already included in ${profileName}`}
+      className="grid h-[34px] w-[84px] shrink-0 place-items-center rounded-[10px] bg-muted text-center text-[12px] leading-tight font-medium text-muted-foreground avm-fade-in"
+    >
+      In profile ✓
+    </span>
+  );
+}
+
 // Single test search result row (name, code, TAT, availability, price, add).
 export function TestResultCard({
   result,
@@ -74,6 +88,10 @@ export function TestResultCard({
     result.matchType === "alias" &&
     result.matchedAlias &&
     !result.officialName.toLowerCase().includes(result.matchedAlias.toLowerCase());
+  const { lineItems } = useQuote();
+  const inProfile = added
+    ? null
+    : lineItems.find((line) => line.kind === "package" && line.tests.some((test) => test.testId === result.testId));
 
   return (
     <div
@@ -102,6 +120,7 @@ export function TestResultCard({
           ) : showAlias ? (
             <span className="text-primary">matched &ldquo;{result.matchedAlias}&rdquo;</span>
           ) : null}
+          {inProfile ? <span className="text-success-foreground">included in {inProfile.name}</span> : null}
         </div>
       </div>
       <span
@@ -114,12 +133,16 @@ export function TestResultCard({
       >
         {formatCurrency(result.price)}
       </span>
-      <AddToggleButton
-        added={added}
-        label={result.officialName}
-        onAdd={() => onAdd(result)}
-        onRemove={() => onRemove(result.testId)}
-      />
+      {inProfile ? (
+        <IncludedTag profileName={inProfile.name} />
+      ) : (
+        <AddToggleButton
+          added={added}
+          label={result.officialName}
+          onAdd={() => onAdd(result)}
+          onRemove={() => onRemove(result.testId)}
+        />
+      )}
     </div>
   );
 }
