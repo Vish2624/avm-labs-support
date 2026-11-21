@@ -49,7 +49,10 @@ export async function findWebsiteSuggestions(
         matchedCount: matched.length,
         requestedCount: quoteTestIds.length,
         profileTestCount: testIds.length,
-        matchPercentage: testIds.length ? Math.round((matched.length / testIds.length) * 100) : 0,
+        // How much of the quote it takes over, as the website shows it: each test, or profile it wholly contains, counts once.
+        matchPercentage: Math.round(
+          ((s.replacesTestIds.length + s.replacesProfileIds.length) / (quoteTestIds.length + quoteProfileIds.length)) * 100
+        ),
         price: money(price.price),
         tatText: price.tatText,
         availability: price.availability,

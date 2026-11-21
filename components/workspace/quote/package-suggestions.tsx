@@ -55,6 +55,15 @@ function pitchOf(suggestion: ProfileSuggestion, lineItems: QuotationLineItem[]) 
 const useButtonClassName =
   "h-8 shrink-0 rounded-[9px] bg-primary px-3 text-[13px] font-medium whitespace-nowrap text-primary-foreground transition-[background,translate,scale,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_8px_18px_-10px_var(--primary)] active:scale-95";
 
+// "80% match": how much of the quote the profile takes over (the website's cards show the same).
+function MatchChip({ percentage }: { percentage: number }) {
+  return (
+    <span className="rounded-full bg-success/15 px-2 py-px text-[11px] font-semibold whitespace-nowrap text-success-foreground">
+      {percentage}% match
+    </span>
+  );
+}
+
 function Pill({ text, save }: { text: string; save: boolean }) {
   return save ? (
     <span className="rounded-full bg-success/15 px-2 py-px text-[11px] font-semibold whitespace-nowrap text-success-foreground">{text}</span>
@@ -118,6 +127,7 @@ export function PackageSuggestions({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold">{suggestion.name}</span>
+                    <MatchChip percentage={suggestion.matchPercentage} />
                     {pitch && (
                       <span className="rounded-full bg-primary/10 px-2 py-px text-[11px] font-semibold text-primary">{pitch.label}</span>
                     )}
@@ -174,6 +184,7 @@ export function PackageSuggestions({
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[15px] font-semibold">{suggestion.name}</span>
+                        <MatchChip percentage={suggestion.matchPercentage} />
                         {pitch && (
                           <span className="rounded-full bg-primary/10 px-2 py-px text-[11px] font-semibold text-primary">{pitch.label}</span>
                         )}

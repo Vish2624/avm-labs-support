@@ -65,7 +65,7 @@ export interface ProfileSuggestion {
   matchedCount: number;
   requestedCount: number;
   profileTestCount: number;
-  /** matchedCount / requestedCount, 0-100. */
+  /** matchedCount / requestedCount, 0-100. On the Quote's suggestions: the share of quote items it takes over, as on the website. */
   matchPercentage: number;
   price: Money;
   tatText: string;
