@@ -146,6 +146,25 @@ test("a profile with everything on the quote comes before one saving more on onl
   assert.equal(first.profileId, "whole");
 });
 
+test("the profile taking the most of the quote comes first however much more it costs; on a tie, the cheapest", () => {
+  // a, c on the quote (8000). "all" has both plus b, d (worth 14000) for 13000 more: past 1.5x the quote, still first.
+  const out = websiteSuggestions({
+    quoteTestIds: ["a", "c"],
+    quoteProfileIds: [],
+    tests: TESTS,
+    profiles: [profile("c-dear", 9000, ["c", "b", "d"]), profile("all", 21000, ["a", "b", "c", "d"]), profile("c-cheap", 6000, ["c", "b"])],
+    rules: { minBill: 1500, homeCollectionFreeFrom: 0 },
+  });
+  assert.deepEqual(
+    out.map((s) => [s.profileId, s.pick]),
+    [
+      ["all", true],
+      ["c-cheap", true],
+      ["c-dear", true],
+    ]
+  );
+});
+
 const SEXED_TESTS: SuggestionTest[] = [
   ...TESTS,
   { id: "psa", websiteId: "psa", price: 6000, categories: ["tumour"] },

@@ -7,16 +7,15 @@
  *
  * A profile qualifies when it replaces something on the quote (tests, or a
  * smaller profile it wholly contains) and either costs less, or adds tests
- * worth more than the difference, for a difference in scale with the quote.
- * Worked out from prices and tests only, never a health judgement.
+ * worth more than the difference, however big the difference. The one taking
+ * the most of the quote comes first (each test, or each profile it wholly
+ * contains, counts once), so one with everything leads; on a tie, the
+ * cheapest. Worked out from prices and tests only, never a health judgement.
  *
  * Additions to the website's rules (from the Nov 2026 app check against the
  * website, where 7 of 26 profiles' own tests got another profile first):
  * - a profile that has every test on the quote and costs the same is a pick
  *   too (one line instead of several; the website skips it as no gain);
- * - a profile with everything on the quote that saves (or costs the same)
- *   comes first, the biggest saving first — ahead of one that saves by
- *   replacing only part of the quote, or adds tests for a bit more;
  * - a men's profile is never suggested for a woman's quote, or the reverse,
  *   and one that would add tests for its sex only (PSA, AMH…) isn't
  *   suggested while the quote doesn't show whose it is;
@@ -27,19 +26,6 @@
 // Profile categories for one purpose (school, hair fall, screening): only
 // suggested when they cost less. Must match PURPOSE_CATS in the website's src/logic/01-data.js.
 const PURPOSE_CATEGORIES = ["kids", "hair", "screening"];
-
-// Which profile categories are about each test category, to rank the
-// closest match first. Must match TEST_THEMES in the website's src/logic/01-data.js.
-const TEST_THEMES: Record<string, string[]> = {
-  routine: ["wellness", "organs"],
-  diabetes: ["diabetes"],
-  thyroid: ["thyroid"],
-  vitamins: ["vitamins"],
-  heart: ["heart"],
-  hormones: ["women", "men"],
-  infections: ["screening"],
-  tumour: [],
-};
 
 // Tests that can't be booked together, by website id: a profile with one of
 // them isn't suggested while another stays on the quote. Must match EXCLUSIVE
@@ -124,7 +110,6 @@ export function websiteSuggestions({
   const inQuote = quoteProfileIds.flatMap((id) => profileById.get(id) ?? []);
   const have = new Set([...quoteTestIds, ...inQuote.flatMap((q) => q.testIds)]);
   const total = sum(quoteTestIds) + inQuote.reduce((t, q) => t + q.price, 0);
-  const stretch = Math.max(total * 1.5, rules.homeCollectionFreeFrom);
   // Which EXCLUSIVE_TESTS set each test is in, by its id here.
   const exclusiveSet = new Map(
     tests.flatMap((t) => {
@@ -153,15 +138,8 @@ export function websiteSuggestions({
       (!quoteSexes.has(p.category) && others.some((id) => sexOfTest.get(id) === p.category)));
   // A profile on the quote that already has every test of `p`.
   const coveredByQuote = (p: SuggestionProfile) => inQuote.some((q) => covers(q, p));
-  // How close a profile is to some tests: about the same thing 1, a general check-up 0.5, anything else 0.25.
-  const theme = (p: SuggestionProfile, ts: SuggestionTest[]) =>
-    ts.some((t) => t.categories.some((c) => (TEST_THEMES[c] ?? []).includes(p.category)))
-      ? 1
-      : p.category === "wellness"
-        ? 0.5
-        : 0.25;
 
-  const out: { suggestion: WebsiteSuggestion; rank: number; value: number }[] = [];
+  const out: { suggestion: WebsiteSuggestion; covered: number }[] = [];
   const rest: { suggestion: WebsiteSuggestion; covered: number }[] = [];
   for (const p of profiles) {
     if (!(p.price > 0) || inQuote.includes(p) || coveredByQuote(p)) continue;
@@ -183,7 +161,7 @@ export function websiteSuggestions({
     const wholeQuote = ovT.length === quoteTestIds.length && ovP.length === inQuote.length;
     const pick =
       !(extra >= 0 && PURPOSE_CATEGORIES.includes(p.category)) &&
-      !(extra > 0 && (worth <= extra || extra > stretch)) &&
+      !(extra > 0 && worth <= extra) &&
       !(extra === 0 && !others.length && !wholeQuote);
     const suggestion: WebsiteSuggestion = {
       profileId: p.id,
@@ -196,26 +174,15 @@ export function websiteSuggestions({
       recommended: p.recommended,
       pick,
     };
-    if (!pick) {
-      rest.push({ suggestion, covered: ovT.length + ovP.length });
-      continue;
-    }
-    const covered = [...ovT, ...ovP.flatMap((q) => q.testIds)].flatMap((id) => testById.get(id) ?? []);
-    const fit = covered.length / p.testIds.length;
-    out.push({
-      suggestion,
-      // Everything on the quote for less (or the same) first, then saving on part of it, then the same price, then more tests for more.
-      rank: wholeQuote && extra <= 0 ? 0 : extra < 0 ? 1 : extra === 0 ? 2 : 3,
-      value: extra > 0 ? (worth / extra) * (0.5 + fit) * (0.5 + theme(p, covered)) : worth - extra,
-    });
+    (pick ? out : rest).push({ suggestion, covered: ovT.length + ovP.length });
   }
+  // The most of the quote first, then the cheapest; a tie on price: recommended first, then fewer extra tests.
   out.sort(
     (a, b) =>
-      a.rank - b.rank ||
-      (a.rank === 0 ? a.suggestion.extra - b.suggestion.extra : 0) ||
+      b.covered - a.covered ||
+      a.suggestion.extra - b.suggestion.extra ||
       Number(b.suggestion.recommended) - Number(a.suggestion.recommended) ||
-      b.value - a.value ||
-      a.suggestion.extra - b.suggestion.extra
+      a.suggestion.extraTestIds.length - b.suggestion.extraTestIds.length
   );
   rest.sort((a, b) => b.covered - a.covered || a.suggestion.extra - b.suggestion.extra);
   return [...out, ...rest].map((entry) => entry.suggestion);
